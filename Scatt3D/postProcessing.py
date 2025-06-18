@@ -13,6 +13,7 @@ import sys
 from scipy.constants import c as c0, mu_0 as mu0, epsilon_0 as eps0, pi
 from matplotlib import pyplot as plt
 import h5py
+#import elem
 
 def testSVD(problemName): ## Takes data files saved from a problem after running makeOptVectors, does stuff on it
     ## load in all the data
@@ -59,6 +60,9 @@ def testSVD(problemName): ## Takes data files saved from a problem after running
         A_inv = np.linalg.pinv(A)
         x[idx] = np.dot(A_inv, b)
         #x[idx] = np.linalg.lstsq(A, b)
+        
+    #### alternatively, try elemental?
+    #with dolfinx.io.XDMFFile(MPI.COMM_WORLD, problemName+'output-qs.h5', 'r') as f:
     
                 
     with dolfinx.io.XDMFFile(MPI.COMM_WORLD, problemName+'testoutput.xdmf', 'w') as f:

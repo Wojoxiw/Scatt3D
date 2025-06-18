@@ -101,11 +101,11 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1): ## Testing toward a full example, including postprocessing stuff
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=7, order=degree)
-        dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=7, order=degree)
+        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=3, order=degree)
+        dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=3, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 40, fem_degree=degree)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 2, fem_degree=degree)
         prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
         postProcessing.testSVD(prob.dataFolder+prob.name)
@@ -125,7 +125,7 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(3, 14, 22)
+            ks = np.linspace(3, 10, 22)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
@@ -283,10 +283,10 @@ if __name__ == '__main__':
     #testRun(h=1/20)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    #testFullExample(h=1/15)
-    testSphereScattering(h=1/30, degree=1, showPlots=False)
+    #testFullExample(h=1/4)
+    #testSphereScattering(h=1/30, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
-    #convergenceTestPlots('meshsize', deg=3)
+    convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/15)
     
