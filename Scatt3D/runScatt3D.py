@@ -132,7 +132,7 @@ if __name__ == '__main__':
         elif(convergence == 'dxquaddeg'): ## Result of this showed a large increase in time near the end, and an accuracy improvement for increasing from 2 to 3. Not sending any value causes a huge memory cost/error (process gets killed).
             ks = np.arange(1, 20)
         elif(convergence == 'dxquaddeg2'):
-            ks = np.arange(1, 4)
+            ks = np.arange(1, 40)
             
         ndofs = np.zeros_like(ks) ## to hold problem size
         calcT = np.zeros_like(ks) ## to hold problem size
@@ -190,7 +190,7 @@ if __name__ == '__main__':
                 ax1 = plt.subplot(1, 1, 1)
                 ax1.grid(True)
                 ax1.set_title('Convergence of Different Values')
-                
+                idx = np.argsort(ks) ## ordered increasing
                 if(convergence == 'meshsize'):
                     if(i==0):
                         ax1.set_xlabel(r'Inverse mesh size ($\lambda / h$)')
@@ -198,11 +198,9 @@ if __name__ == '__main__':
                     elif(i==1):
                         ax1.set_xlabel(r'Calculation Time [s]')
                         ks = calcT
-                        idx = np.argsort(ks)
                     else:
                         ax1.set_xlabel(r'# of dofs')
                         ks = ndofs
-                        idx = np.argsort(ks)
                 elif(convergence == 'pmlR0'):
                     ax1.set_xlabel(r'R0')
                     ax1.set_xscale('log')
