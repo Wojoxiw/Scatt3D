@@ -1,0 +1,11 @@
+*.h5
+*.xdmf
+*.msh
+*.prefs
+*.pyc
+*.png
+*.info
+*.efe
+*/data3DLUNARC
+*/.settings
+*/.cache
