@@ -125,12 +125,14 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(4, 29, 7)
+            ks = np.linspace(3, 15, 22)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
         elif(convergence == 'dxquaddeg'): ## Result of this showed a large increase in time near the end, and an accuracy improvement for increasing from 2 to 3. Not sending any value causes a huge memory cost/error (process gets killed).
             ks = np.arange(1, 20)
+        elif(convergence == 'dxquaddeg2'):
+            ks = np.arange(1, 4)
             
         ndofs = np.zeros_like(ks) ## to hold problem size
         calcT = np.zeros_like(ks) ## to hold problem size
@@ -151,6 +153,8 @@ if __name__ == '__main__':
                 probOptions = dict(PML_R0 = ks[i])
             elif(convergence == 'dxquaddeg'):
                 probOptions = dict(quaddeg = ks[i])
+            elif(convergence == 'dxquaddeg2'):
+                probOptions = dict(quaddeg2 = ks[i])
                 
             refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', order=deg, FF_surface = True, **meshOptions)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, **probOptions)
@@ -167,7 +171,8 @@ if __name__ == '__main__':
                 FFvrelativeErrors = np.abs( (intenss - mies) ) / np.max(np.abs(mies)) ## relative to the max. mie intensity, to make it even more relative
                 FFrmsveryRelErrs[i] = np.sqrt(np.sum(FFvrelativeErrors**2)/np.size(FFvrelativeErrors)) ## absolute error, scaled by the max. mie value
                 FFmaxRelErrs[i] = np.max(FFrelativeErrors)
-                FFforwardrelErr[i] = np.abs( (intenss[int(360/4)] - mies[int(360/4)])) / np.abs(mies[int(360/4)])
+                idxfw = int(np.shape(intenss)[0]/4) ## index of the forward-direction, taken as halfway through the first sweep
+                FFforwardrelErr[i] = np.abs( (intenss[idxfw] - mies[idxfw])) / np.abs(mies[idxfw])
                 if(verbosity>1):
                     print(f'Run {i+1}/{len(ks)} completed')
         if(comm.rank == model_rank): ## only needed for main process
@@ -203,18 +208,20 @@ if __name__ == '__main__':
                     ax1.set_xscale('log')
                 elif(convergence == 'dxquaddeg'):
                     ax1.set_xlabel(r'dx Quadrature Degree')
+                elif(convergence == 'dxquaddeg'):
+                    ax1.set_xlabel(r'ds/dS Quadrature Degree')
                 
                 ax1.plot(ks[idx], np.abs((real_area-areaVals)/real_area)[idx], marker='o', linestyle='--', label = r'area - rel. error')
                 ax1.plot(ks[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'khat integral - max. abs. error')
                 ax1.plot(ks[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'khat integral - RMS error')
                 ax1.plot(ks[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
-                ax1.plot(ks[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS. veryrel. error')
+                ax1.plot(ks[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts normalized RMS. error')
                 ax1.plot(ks[idx], FFforwardrelErr[idx], marker='o', linestyle='--', label = r'Farfield forward rel. error')
                 
                 ax1.set_yscale('log')
                 ax1.legend()
                 fig1.tight_layout()
-                plt.savefig(prob.dataFolder+prob.name+convergence+'clustermeshconvergence'+i+'.png')
+                plt.savefig(prob.dataFolder+prob.name+convergence+f'meshconvergence{i}.png')
                 i+=1
                 if(MPInum == 1):
                     plt.show()
@@ -285,10 +292,11 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     #testFullExample(h=1/15)
-    testSphereScattering(h=1/6, degree=3, showPlots=True)
+    #testSphereScattering(h=1/4, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize')
     #convergenceTestPlots('dxquaddeg')
+    convergenceTestPlots('dxquaddeg2')
     #testSolverSettings(h=1/15)
     
     #===========================================================================

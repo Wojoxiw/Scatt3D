@@ -67,6 +67,7 @@ class Scatt3DProblem():
                  computeBoth = False, ## if True and computeImmediately is True, computes both ref and dut cases.
                  PML_R0 = 1e-11, ## 'intended damping for reflections from the PML', or something similar...
                  quaddeg = 5, ## quadrature degree for dx, default to 5 to avoid slowdown with pml if it defaults to higher?
+                 quaddeg2 = 5, ## quadrature degree for dS and ds
                  solver_settings = {}, ## dictionary of additional solver settings
                  max_solver_time = -1, ## If an iteration finishes after this time, the solver aborts - only used for tests, currently. Disabled if negative
                  ):
@@ -97,6 +98,7 @@ class Scatt3DProblem():
             
         self.PML_R0 = PML_R0
         self.dxquaddeg = quaddeg
+        self.dxquaddeg2 = quaddeg2
         self.solver_settings = solver_settings
         self.max_solver_time = max_solver_time
             
@@ -177,8 +179,8 @@ class Scatt3DProblem():
         self.dx = ufl.Measure('dx', domain=meshData.mesh, subdomain_data=meshData.subdomains, metadata={'quadrature_degree': self.dxquaddeg})
         self.dx_dom = self.dx((meshData.domain_marker, meshData.mat_marker, meshData.defect_marker))
         self.dx_pml = self.dx(meshData.pml_marker)
-        self.ds = ufl.Measure('ds', domain=meshData.mesh, subdomain_data=meshData.boundaries)
-        self.dS = ufl.Measure('dS', domain=meshData.mesh, subdomain_data=meshData.boundaries) ## capital S for internal facets (shared between two cells?)
+        self.ds = ufl.Measure('ds', domain=meshData.mesh, subdomain_data=meshData.boundaries, metadata={'quadrature_degree': self.dxquaddeg2})
+        self.dS = ufl.Measure('dS', domain=meshData.mesh, subdomain_data=meshData.boundaries, metadata={'quadrature_degree': self.dxquaddeg2}) ## capital S for internal facets (shared between two cells?)
         self.ds_antennas = [self.ds(m) for m in meshData.antenna_surface_markers]
         self.ds_pec = self.ds(meshData.pec_surface_marker)
         self.Ezero = dolfinx.fem.Function(self.Vspace)
@@ -818,9 +820,9 @@ class Scatt3DProblem():
                 x = 2*pi*meshData.object_radius/lambdat
                 for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
                     if(angles[i, 0] == 90): ## if theta=90, then this is H-plane/perpendicular
-                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 1]*pi/180+pi)), norm='qsca')*pi*meshData.object_radius**2 ## +pi since it seems backwards => forwards
+                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 1]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi since it seems backwards => forwards
                     else: ## if not, we are changing theta angles and in the parallel plane
-                        mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180-pi/2)), norm='qsca')*pi*meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
+                        mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
                         
                 vals = areaResult, khatResults, farfields, mies # [FF surface area, khat integral], scattering along planes, mie intensities in the scattering directions
                 return vals
@@ -855,6 +857,11 @@ class Scatt3DProblem():
                     
                     ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
                     ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = 1.2, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
+                    
+                    ##plot error
+                    ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = 1.2, color = 'blue', linestyle = ':')
+                    ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = 1.2, color = 'red', linestyle = ':')
+                    print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
                     plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/meshData.h:.1f})')
                     ax1.legend()
                     #ax1.set_yscale('log')
