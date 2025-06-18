@@ -284,9 +284,9 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     #testFullExample(h=1/15)
-    #testSphereScattering(h=1/20, degree=1, showPlots=True)
+    testSphereScattering(h=1/30, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
-    convergenceTestPlots('meshsize', deg=3)
+    #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/15)
     
