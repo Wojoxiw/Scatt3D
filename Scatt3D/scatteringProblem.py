@@ -67,7 +67,6 @@ class Scatt3DProblem():
                  computeBoth = False, ## if True and computeImmediately is True, computes both ref and dut cases.
                  PML_R0 = 1e-11, ## 'intended damping for reflections from the PML', or something similar...
                  quaddeg = 5, ## quadrature degree for dx, default to 5 to avoid slowdown with pml if it defaults to higher?
-                 quaddeg2 = 5, ## quadrature degree for dS and ds
                  solver_settings = {}, ## dictionary of additional solver settings
                  max_solver_time = -1, ## If an iteration finishes after this time, the solver aborts - only used for tests, currently. Disabled if negative
                  ):
@@ -98,7 +97,6 @@ class Scatt3DProblem():
             
         self.PML_R0 = PML_R0
         self.dxquaddeg = quaddeg
-        self.dxquaddeg2 = quaddeg2
         self.solver_settings = solver_settings
         self.max_solver_time = max_solver_time
             
@@ -179,8 +177,8 @@ class Scatt3DProblem():
         self.dx = ufl.Measure('dx', domain=meshData.mesh, subdomain_data=meshData.subdomains, metadata={'quadrature_degree': self.dxquaddeg})
         self.dx_dom = self.dx((meshData.domain_marker, meshData.mat_marker, meshData.defect_marker))
         self.dx_pml = self.dx(meshData.pml_marker)
-        self.ds = ufl.Measure('ds', domain=meshData.mesh, subdomain_data=meshData.boundaries, metadata={'quadrature_degree': self.dxquaddeg2})
-        self.dS = ufl.Measure('dS', domain=meshData.mesh, subdomain_data=meshData.boundaries, metadata={'quadrature_degree': self.dxquaddeg2}) ## capital S for internal facets (shared between two cells?)
+        self.ds = ufl.Measure('ds', domain=meshData.mesh, subdomain_data=meshData.boundaries) ## changing quadrature degree on ds/dS doesn't seem to have any effect
+        self.dS = ufl.Measure('dS', domain=meshData.mesh, subdomain_data=meshData.boundaries) ## capital S for internal facets (shared between two cells?)
         self.ds_antennas = [self.ds(m) for m in meshData.antenna_surface_markers]
         self.ds_pec = self.ds(meshData.pec_surface_marker)
         self.Ezero = dolfinx.fem.Function(self.Vspace)
@@ -369,7 +367,7 @@ class Scatt3DProblem():
         
         cache_dir = f"{str(Path.cwd())}/.cache"
         jit_options={}
-        jit_options= {"cffi_extra_compile_args": ['-Ofast', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little. not sure if cache dir will cause errors on cluster
+        jit_options= {"cffi_extra_compile_args": ['-O3', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little. not sure if cache dir will cause errors on cluster
         
         problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options)
         
