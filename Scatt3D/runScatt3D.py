@@ -203,8 +203,8 @@ if __name__ == '__main__':
                     ax1.set_xlabel(r'dx Quadrature Degree')
                 
                 ax1.plot(ks[idx], np.abs((real_area-areaVals)/real_area)[idx], marker='o', linestyle='--', label = r'$\int dS$ - rel. error')
-                ax1.plot(ks[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} dS$ - max. abs. error')
-                ax1.plot(ks[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} dS$ - RMS error')
+                ax1.plot(ks[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
+                ax1.plot(ks[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - RMS error')
                 ax1.plot(ks[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
                 ax1.plot(ks[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts normalized RMS. error')
                 ax1.plot(ks[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
