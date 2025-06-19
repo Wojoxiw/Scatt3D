@@ -125,7 +125,7 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(3, 25, 22)
+            ks = np.linspace(4, 25, 30)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
@@ -151,7 +151,7 @@ if __name__ == '__main__':
                 probOptions = dict(PML_R0 = ks[i])
             elif(convergence == 'dxquaddeg'):
                 probOptions = dict(quaddeg = ks[i])
-                
+            
             refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', FF_surface = True, order=deg, **meshOptions)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, **probOptions)
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
@@ -171,49 +171,49 @@ if __name__ == '__main__':
                 if(verbosity>1):
                     print(f'Run {i+1}/{len(ks)} completed')
                 ## Plot each iteration for case of OOM or such
-                areaVals = np.array(areaVals)
                 real_area = 4*pi*prob.refMeshdata.FF_surface_radius**2
                 
                 
                 if(convergence == 'meshsize'): ## plot 3 times - also vs time and ndofs
-                    i=0
+                    p=0
                 else:
-                    i=2
-                
-                while i<3: ## just to do the multiple plots
+                    p=2
+                    
+                while p<3: ## just to do the multiple plots
                     fig1 = plt.figure()
                     ax1 = plt.subplot(1, 1, 1)
                     ax1.grid(True)
                     ax1.set_title('Convergence of Different Values')
-                    idx = np.argsort(ks) ## ordered increasing
+                    idx = np.argsort(ks[:i]) ## ordered increasing
                     if(convergence == 'meshsize'):
-                        if(i==0):
+                        if(p==0):
                             ax1.set_xlabel(r'Inverse mesh size ($\lambda / h$)')
-                            idx = np.argsort(-ks)
-                        elif(i==1):
+                            idx = np.argsort(-ks[:i])
+                            xs = ks
+                        elif(p==1):
                             ax1.set_xlabel(r'Calculation Time [s]')
-                            ks = calcT
+                            xs = calcT
                         else:
                             ax1.set_xlabel(r'# of dofs')
-                            ks = ndofs
+                            xs = ndofs
                     elif(convergence == 'pmlR0'):
                         ax1.set_xlabel(r'R0')
                         ax1.set_xscale('log')
                     elif(convergence == 'dxquaddeg'):
                         ax1.set_xlabel(r'dx Quadrature Degree')
                     
-                    ax1.plot(ks[idx], np.abs((real_area-areaVals)/real_area)[idx], marker='o', linestyle='--', label = r'$\int dS$ - rel. error')
-                    ax1.plot(ks[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
-                    ax1.plot(ks[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - RMS error')
-                    ax1.plot(ks[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
-                    ax1.plot(ks[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts normalized RMS. error')
-                    ax1.plot(ks[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
+                    ax1.plot(xs[idx], np.abs((real_area-np.array(areaVals))/real_area)[idx], marker='o', linestyle='--', label = r'$\int dS$ - rel. error')
+                    ax1.plot(xs[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
+                    ax1.plot(xs[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - RMS error')
+                    ax1.plot(xs[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
+                    ax1.plot(xs[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts normalized RMS. error')
+                    ax1.plot(xs[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
                     
                     ax1.set_yscale('log')
                     ax1.legend()
                     fig1.tight_layout()
-                    plt.savefig(prob.dataFolder+prob.name+convergence+f'meshconvergence{i}deg{deg}.png')
-                    i+=1
+                    plt.savefig(prob.dataFolder+prob.name+convergence+f'meshconvergence{p}deg{deg}.png')
+                    p+=1
                     if(MPInum == 1 and i==len(ks-1)): ## only show the last one
                         plt.show()
             
