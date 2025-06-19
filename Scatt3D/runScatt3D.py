@@ -125,7 +125,7 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(3, 14, 22)
+            ks = np.linspace(3, 11, 22)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
@@ -285,7 +285,7 @@ if __name__ == '__main__':
     #testFullExample(h=1/16)
     #testSphereScattering(h=1/6, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
-    convergenceTestPlots('meshsize', deg=2)
+    convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/15)
     
