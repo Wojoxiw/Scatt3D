@@ -606,10 +606,13 @@ class Scatt3DProblem():
             return values
         xdmf.write_mesh(meshData.mesh)
         self.epsr.x.array[:] = cell_volumes
+        self.epsr.name = 'Cell Volumes'
         xdmf.write_function(self.epsr, -3)
         self.epsr.x.array[:] = self.epsr_array_ref
+        self.epsr.name = 'epsr_ref'
         xdmf.write_function(self.epsr, -2)
         self.epsr.x.array[:] = self.epsr_array_dut
+        self.epsr.name = 'epsr_dut'
         xdmf.write_function(self.epsr, -1)
         if(not DUTMesh):
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
@@ -627,6 +630,7 @@ class Scatt3DProblem():
                             En = self.solutions_ref[nf][n]
                         q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0))
                         # The function q is one row in the A-matrix, save it to file
+                        q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
                 if(meshData.N_antennas < 1): # if no antennas, still save something
                     q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))

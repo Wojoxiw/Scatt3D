@@ -57,7 +57,7 @@ def testSVD(problemName): ## Takes data files saved from a problem after running
         print('b', np.shape(b))
         print('in-object cells',np.size(idx))
         A = A[:, idx]
-        A_inv = np.linalg.pinv(A)
+        A_inv = np.linalg.pinv(A, rcond=1e-2)
         x[idx] = np.dot(A_inv, b)
         #x[idx] = np.linalg.lstsq(A, b)
         

@@ -173,13 +173,13 @@ class MeshData():
         gmsh.initialize()
         if self.comm.rank == self.model_rank: ## make all the definitions through the master-rank process
             gmsh.model.add('The Model') ## for the whole thing
+            #gmsh.model.mesh.setOrder(self.order) ## The default mesh order is 2... and it seems I get worse results when using other orders
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
             gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.h)
             gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.h)
-            gmsh.model.mesh.setOrder(self.order)
             gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
-            gmsh.logger.start()
+            gmsh.logger.start() ## I don't know what these logs are, or how to view them
              
             inPECSurface = []; inAntennaSurface = []; antennas_DimTags = []
             ## Make the antennas
@@ -266,8 +266,6 @@ class MeshData():
                 matDimTags = []
             else:
                 matDimTags = [x for x in outDimTagsMap[2] if x not in defectDimTags+removeDimTags]
-            if(self.FF_surface):
-                matDimTags = matDimTags
             domainDimTags = [x for x in outDimTagsMap[1] if x not in removeDimTags+matDimTags+defectDimTags]
             pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+matDimTags+removeDimTags]
             gmsh.model.occ.remove(removeDimTags)
@@ -275,10 +273,7 @@ class MeshData():
             
             # Make physical groups for domains and PML
             mat_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in matDimTags])
-            if(not self.reference):
-                defect_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags])
-            else:
-                defect_marker = -1 ## can't just put this as None, but presumably -1 will never affect anything
+            defect_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags])
             domain_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in domainDimTags])
             pml_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in pmlDimTags])
             
