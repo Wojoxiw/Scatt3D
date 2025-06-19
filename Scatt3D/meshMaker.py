@@ -173,7 +173,6 @@ class MeshData():
         gmsh.initialize()
         if self.comm.rank == self.model_rank: ## make all the definitions through the master-rank process
             gmsh.model.add('The Model') ## for the whole thing
-            #gmsh.model.mesh.setOrder(self.order) ## The default mesh order is 2... and it seems I get worse results when using other orders
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
             gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.h)
@@ -377,7 +376,7 @@ class MeshData():
         self.pec_surface_marker = self.comm.bcast(pec_surface_marker, root=self.model_rank)
         self.antenna_surface_markers = self.comm.bcast(antenna_surface_markers, root=self.model_rank)
         self.farfield_surface_marker = self.comm.bcast(farfield_surface_marker, root=self.model_rank)
-    
+        gmsh.model.mesh.setOrder(self.order) ## It seems I get worse results when using setting the order before generating the mesh... for higher degree FEM elements, need to set this to the degree?
         self.mesh, self.subdomains, self.boundaries = dolfinx.io.gmshio.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
         gmsh.finalize()
         
