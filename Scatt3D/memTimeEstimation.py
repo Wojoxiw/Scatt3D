@@ -119,10 +119,9 @@ class runTimesMems():
             fitVals = np.vstack((self.sizes, self.numProcesses))
             
             ## Assume computations time scales by problem size, Nfs, and Nants**2, and maybe 1/MPInum
-            self.timeFit = scipy.optimize.curve_fit(self.fitLine, fitVals, self.times)[0]
+            self.timeFit = scipy.optimize.curve_fit(self.fitLine, fitVals, self.times, sigma=self.times*.1+10, method='trf')[0]
             ## Assume memory cost scales just by problem size
-            self.memFit = scipy.optimize.curve_fit(self.fitLine, fitVals, self.mems)[0]
-
+            self.memFit = scipy.optimize.curve_fit(self.fitLine, fitVals, self.mems, sigma=.5)[0]
     def memTimeEstimation(self, size, Nf = 1, Nant = 1, MPInum = 1, doPrint = False):
         '''
         Returns an estimate of the memory and time requirements for a simulation, assuming some kind of polynomial dependence.
@@ -182,7 +181,7 @@ class runTimesMems():
         
     def makePlotsSTD(self):
         '''
-        Makes plots with standard deviation error bars for specific values (for DD2358). Here, specific sizes and MPInums are plotted (plots runs matching the runType)
+        Makes plots with standard deviation error bars for specific values. Here, specific sizes and MPInums are plotted (plots runs matching the runType)
         Does its own version of calcStats, and makes plots herein
         '''
         binVals = [109624, 143465, 189130, 233557, 290155, 355864, 430880, 512558, 609766, 707748, 825148] ## the size-values (# elements) that were used for calculations
