@@ -998,10 +998,10 @@ class Scatt3DProblem():
                 if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in)
                     print('onlyone', indices[b])
                     idx_found = idx_found + indices[b] ## add it to found list
-                    E_values[idx, :] = E_parts[b][:] ## use this value for the electric field
+                    E_values[indices[b][0], :] = E_parts[b][:] ## use this value for the electric field
                     print(E_parts[b])
-                elif(np.size(indices[b]) == 0): # if no elements
-                    print('zero elements', indices[b])
+                elif(np.size(indices[b]) == 0): # if no elements on a process
+                    pass
                 else:
                     for k in range(len(indices[b])): ## check each index in the list
                         idx = indices[b][k] # the index
