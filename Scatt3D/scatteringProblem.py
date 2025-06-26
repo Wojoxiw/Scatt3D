@@ -1110,3 +1110,5 @@ class Scatt3DProblem():
             Eimagsx = np.imag(E_values[:, 0])
             Ereturns = np.interp(FEKOpos, points[1], Erealsx) + 1j*np.interp(FEKOpos, points[1], Eimagsx)
             return Ereturns, FEKO_Es[:, 0]
+        elif(FEKOcomp and not showPlots): ## return NaNs to the other ranks
+            return np.nan, np.nan
