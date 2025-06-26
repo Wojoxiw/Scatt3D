@@ -995,11 +995,19 @@ class Scatt3DProblem():
         E_values = np.zeros((numpts*2, 3), dtype=complex)
         if (self.comm.rank == 0): ## use the first-found E_values where processes meet - discard any indices that have been found before
             for b in range(len(indices)): ## iterate over the lists of lists
-                for k in range(len(indices[b])): ## check each index in the list
-                    idx = indices[b][k] # the index
-                    if(idx not in idx_found): ## if the index had not already been found
-                        idx_found = idx_found + [idx] ## add it to found list
-                        E_values[idx, :] = E_parts[b][k][:] ## use this value for the electric field
+                if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in)
+                    print('onlyone', indices[b])
+                    idx_found = idx_found + indices[b] ## add it to found list
+                    E_values[idx, :] = E_parts[b][:] ## use this value for the electric field
+                    print(E_parts[b])
+                elif(np.size(indices[b]) == 0): # if no elements
+                    print('zero elements', indices[b])
+                else:
+                    for k in range(len(indices[b])): ## check each index in the list
+                        idx = indices[b][k] # the index
+                        if(idx not in idx_found): ## if the index had not already been found
+                            idx_found = idx_found + [idx] ## add it to found list
+                            E_values[idx, :] = E_parts[b][k][:] ## use this value for the electric field
                 
         #E_values2 = np.hstack((Ex.eval(points_on_proc, cells), Ey.eval(points_on_proc, cells), Ez.eval(points_on_proc, cells))) ## interpolated... this helps smooth, useful only for degree 1 elements. not used
         
