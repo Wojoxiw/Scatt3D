@@ -1,6 +1,5 @@
-## working example of a script that freezes when solving across 2 processors in a cluster
-## try to include all the imports to be sure the installation in complete for running scatt3D
-# from https://github.com/jorgensd/dolfinx-tutorial/blob/main/chapter1/complex_mode.py
+## Simple test that should require all packages used in Scatt3D to be installed - if this runs, so should the main script.
+# Adapted from an example in the dolfinx tutorial: https://github.com/jorgensd/dolfinx-tutorial/blob/main/chapter1/complex_mode.py
 
 import os
 import numpy as np

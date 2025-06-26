@@ -115,7 +115,7 @@ if __name__ == '__main__':
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsr=2.0, fem_degree=degree)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsr=2.0*(1-0.01j), fem_degree=degree)
         prob.saveDofsView(prob.refMeshdata)
         #prob.saveEFieldsForAnim()
         if(showPlots):
@@ -125,7 +125,7 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(4, 11, 30)
+            ks = np.linspace(4, 12, 22)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
@@ -140,10 +140,12 @@ if __name__ == '__main__':
         FFrmsveryRelErrs = np.zeros(len(ks))
         FFmaxRelErrs = np.zeros(len(ks))
         FFmaxErrRel = np.zeros(len(ks))
+        NFrmsErrs = np.zeros(len(ks))
         khatRmsErrs = np.zeros(len(ks))
         khatMaxErrs = np.zeros(len(ks))
         meshOptions = dict()
         probOptions = dict()
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         for i in range(len(ks)):
             if(convergence == 'meshsize'):
                 meshOptions = dict(h = 1/ks[i])
@@ -153,8 +155,10 @@ if __name__ == '__main__':
                 probOptions = dict(quaddeg = ks[i])
             
             refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', FF_surface = True, order=deg, **meshOptions)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, **probOptions)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1-0.01j), Nf=1, fem_degree=deg, **probOptions)
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
+            simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
+            prevRuns.memTimeAppend(prob)
             if(comm.rank == model_rank): ## only needed for main process
                 areaVals.append(newval)
                 ndofs[i] = prob.ndofs
@@ -167,7 +171,8 @@ if __name__ == '__main__':
                 FFvrelativeErrors = np.abs( (intenss - mies) ) / np.max(np.abs(mies)) ## relative to the max. mie intensity, to make it even more relative
                 FFrmsveryRelErrs[i] = np.sqrt(np.sum(FFvrelativeErrors**2)/np.size(FFvrelativeErrors)) ## absolute error, scaled by the max. mie value
                 FFmaxRelErrs[i] = np.max(FFrelativeErrors)
-                FFmaxErrRel[i] = np.abs( np.max(intenss - mies)) / np.max(mies)
+                FFmaxErrRel[i] = np.abs( np.max(intenss - mies)) / np.max(np.abs(mies))
+                NFrmsErrs[i] = np.sqrt(np.sum(np.abs(simNF-FEKONF)**2)/np.size(simNF)) / np.max(np.abs(FEKONF))
                 if(verbosity>1):
                     print(f'Run {i+1}/{len(ks)} completed')
                 ## Plot each iteration for case of OOM or such
@@ -181,14 +186,15 @@ if __name__ == '__main__':
                     
                 while p<3: ## just to do the multiple plots
                     fig1 = plt.figure()
+                    fig1.set_size_inches(8, 6)
                     ax1 = plt.subplot(1, 1, 1)
                     ax1.grid(True)
                     ax1.set_title('Convergence of Different Values')
-                    idx = np.argsort(ks[:i]) ## ordered increasing
+                    idx = np.argsort(ks[:i+1]) ## ordered increasing
                     if(convergence == 'meshsize'):
                         if(p==0):
                             ax1.set_xlabel(r'Inverse mesh size ($\lambda / h$)')
-                            idx = np.argsort(-ks[:i])
+                            idx = np.argsort(-ks[:i+1])
                             xs = ks
                         elif(p==1):
                             ax1.set_xlabel(r'Calculation Time [s]')
@@ -208,14 +214,16 @@ if __name__ == '__main__':
                     ax1.plot(xs[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
                     ax1.plot(xs[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts normalized RMS. error')
                     ax1.plot(xs[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
+                    ax1.plot(xs[idx], NFrmsErrs[idx], marker='o', linestyle='--', label = r'Nearfield-FEKO error norm, rel.')
                     
                     ax1.set_yscale('log')
                     ax1.legend()
                     fig1.tight_layout()
                     plt.savefig(prob.dataFolder+prob.name+convergence+f'meshconvergence{p}deg{deg}.png')
                     p+=1
-                    if(MPInum == 1 and i==len(ks-1)): ## only show the last one
+                    if(MPInum == 1 and i==len(ks)-1): ## only show the last one
                         plt.show()
+                    plt.close()
             
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', order=deg, FF_surface = True)
@@ -283,7 +291,7 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     #testFullExample(h=1/16)
-    #testSphereScattering(h=1/6, degree=3, showPlots=True)
+    #testSphereScattering(h=1/7, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')

@@ -714,6 +714,7 @@ class Scatt3DProblem():
         xdmf.close()
         if(self.verbosity>0 & self.comm.rank == self.model_rank):
             print(self.name+' DoFs view saved')
+            sys.stdout.flush()
             
     def calcFarField(self, reference, compareToMie = False, showPlots=False, returnConvergenceVals=False, angles = None):
         '''
@@ -727,7 +728,7 @@ class Scatt3DProblem():
         '''
         t1 = timer()
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
-                print(f'Calculating farfield values...')
+                print(f'Calculating farfield values... ', end='')
                 sys.stdout.flush()
         if(reference):
             meshData = self.refMeshdata
@@ -792,7 +793,8 @@ class Scatt3DProblem():
                     farfields[b, i] = sum(farfieldparts)
         if(self.comm.rank == 0): ## plotting and returning
             if(self.verbosity > 1):
-                print(f'Farfields calculated in {timer()-t1:.3f} s')
+                print(f'done, in {timer()-t1:.3f} s')
+                sys.stdout.flush()
                     
         if(returnConvergenceVals): ## calculate and print some tests
             khatResults = np.zeros((numAngles), dtype=complex) ## should really be a real number, but somehow isnt?
@@ -821,8 +823,8 @@ class Scatt3DProblem():
                 lambdat = c0/freq
                 x = 2*pi*meshData.object_radius/lambdat
                 for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
-                    if(angles[i, 0] == 90): ## if theta=90, then this is H-plane/perpendicular
-                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 1]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi since it seems backwards => forwards
+                    if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
+                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi since it seems backwards => forwards
                     else: ## if not, we are changing theta angles and in the parallel plane
                         mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
                         
@@ -901,15 +903,17 @@ class Scatt3DProblem():
         else: ## return nan for non-main processes, just in case
             return np.nan
         
-    def calcNearField(self, reference=True, direction = 'forward', FEKOcomp=True):
+    def calcNearField(self, reference=True, direction = 'forward', FEKOcomp=True, showPlots = True):
         '''
         Computes + plots the near-field along a line, using interpolation. Compares to miepython's e_near, which is untested. Should still be similar (for farfield test case)
+        Returns array of near-field values calculated and corresponding FEKO values. For epsr = 2 and other matching settings
         :param reference: Whether this is being computed for the DUT case or the reference
         :param direction: 'forward' for on-axis (z) scattering, 'side' for sideways (y) scattering
         :param FEKOcomp: Also plots a comparison with FEKO results
         '''
+        t1 = timer()
         if( (self.verbosity > 1 and self.comm.rank == self.model_rank)):
-                print(f'Calculating near-field values...')
+                print(f'Calculating near-field values... ', end='')
                 sys.stdout.flush()
         if(reference):
             meshData = self.refMeshdata
@@ -919,15 +923,6 @@ class Scatt3DProblem():
             sols = self.solutions_dut
 
         ## also compare internal electric fields inside the sphere, at distances rs
-        fig1 = plt.figure()
-        ax1 = plt.subplot(1, 1, 1)
-        ax1.grid(True)
-        fig2 = plt.figure()
-        ax2 = plt.subplot(1, 1, 1)
-        ax2.grid(True)
-        fig3 = plt.figure()
-        ax3 = plt.subplot(1, 1, 1)
-        ax3.grid(True)
         numpts = 1001
         rs = np.linspace(0, meshData.PML_radius*.99, numpts)
         negrs = np.linspace(-1*meshData.PML_radius*.99, 0, numpts)
@@ -946,21 +941,24 @@ class Scatt3DProblem():
             if(FEKOcomp):
                 FEKOdat = np.loadtxt('TestStuff/SidewaysScatt.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
                 FEKOpos = FEKOdat[:, 1]
-                
+        
         if(FEKOcomp):
             FEKO_Es = np.zeros((np.shape(FEKOdat)[0], 3), dtype=complex)
             FEKO_Es[:, 0] = FEKOdat[:, 3] + 1j*FEKOdat[:, 4] - 1 ## minus 1 to remove incident field?
             FEKO_Es[:, 1] = FEKOdat[:, 5] + 1j*FEKOdat[:, 6]
             FEKO_Es[:, 2] = FEKOdat[:, 7] + 1j*FEKOdat[:, 8]
+        
             
         bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
         cells = []
         points_on_proc = [] ## points on this processor
         cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, points.T) # Find cells whose bounding-box collide with the the points
         colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, points.T) # Choose one of the cells that contains the point
+        idx_on_proc_list = [] ## list of indices on the MPI process
         for i, point in enumerate(points.T):
             if len(colliding_cells.links(i)) > 0:
                 points_on_proc.append(point)
+                idx_on_proc_list.append(i)
                 cells.append(colliding_cells.links(i)[0])
         ###############
         ############### interpolating
@@ -990,97 +988,125 @@ class Scatt3DProblem():
         Ez.interpolate(functools.partial(q_abs, Es=sol, pol='z'))
         ###############
         ###############
-        E_values = self.solutions_ref[0][0].eval(points_on_proc, cells) ## less/non-interpolated
-        E_values2 = np.hstack((Ex.eval(points_on_proc, cells), Ey.eval(points_on_proc, cells), Ez.eval(points_on_proc, cells))) ## interpolated... this helps smooth for elements of order 1. not used...
-        
-        m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
-        freq = self.fvec[0]
-        lambdat = c0/freq
-        k = 2*pi/lambdat
-        x = k*meshData.object_radius
-        coefs = miepython.core.coefficients(m, x, internal=True)
-        def planeWaveSph(x):
-            '''
-            Plane wave to be subtracted from miepython, so only the scattered field is left. Converts to r-, theta-, phi- pols
-            :param x: some given position you want to find the field on
-            :param k: wavenumber
-            '''
-            if(direction == 'forward'): ## along the z-axis
-                E_pw = np.array([self.PW_pol[1], self.PW_pol[2], self.PW_pol[0]])
-            elif(direction == 'side'): ## along x
-                E_pw = np.array([self.PW_pol[2], self.PW_pol[1], self.PW_pol[0]])
-            k_pw = k*self.PW_dir ## z-directed
-            E_pw = E_pw*np.exp(-1j*np.dot(k_pw, x))
-            return E_pw
-        
-        for q in range(len(rs)):
-            r = rs[q]
-            nr = -1*negrs[q] ## still positive, just in other direction due to angle
-            if(np.abs(r)<meshData.object_radius): ## miepython seems to include the incident field inside the sphere
-                t = 1
-            else:
-                t = 0
-            if(np.abs(nr)<meshData.object_radius): ## miepython seems to include the incident field inside the sphere
-                t2 = 1
-            else:
-                t2 = 0
-            if(direction == 'forward'):
-                enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
-                enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
-            elif(direction == 'side'):
-                enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
-                enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+        E_part = self.solutions_ref[0][0].eval(points_on_proc, cells) ## less/non-interpolated
+        E_parts = self.comm.gather(E_part, root=self.model_rank) ### list of lists of E-fields at the indices
+        indices = self.comm.gather(idx_on_proc_list, root=self.model_rank) ## list of lists of indices of contained points
+        idx_found = [] ## indices that have already been found
+        E_values = np.zeros((numpts*2, 3), dtype=complex)
+        if (self.comm.rank == 0): ## use the first-found E_values where processes meet - discard any indices that have been found before
+            for b in range(len(indices)): ## iterate over the lists of lists
+                for k in range(len(indices[b])): ## check each index in the list
+                    idx = indices[b][k] # the index
+                    if(idx not in idx_found): ## if the index had not already been found
+                        idx_found = idx_found + [idx] ## add it to found list
+                        E_values[idx, :] = E_parts[b][k][:] ## use this value for the electric field
                 
-        enears = np.vstack((enearsbw, enears))
-        ## plot components
-        ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 0]), label='r-comp. miepython', linestyle = ':', color = 'red')
-        ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 1]), label='theta-comp. miepython', linestyle = ':', color = 'blue')
-        ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 2]), label='phi-comp. miepython', linestyle = ':', color = 'green')
-        ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 0]), label='x-comp.', color = 'red')
-        ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 1]), label='y-comp.', color = 'blue')
-        ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 2]), label='z-comp.', color = 'green')
-        ## plot magnitudes
-        ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(enears[:, 0])**2+np.abs(enears[:, 1])**2+np.abs(enears[:, 2])**2), label='miepython')
-        ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(E_values[:, 0])**2+np.abs(E_values[:, 1])**2+np.abs(E_values[:, 2])**2), label='simulation')
-        #ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(E_values2[:, 0])**2+np.abs(E_values2[:, 1])**2+np.abs(E_values2[:, 2])**2), label='simulation, interpolated')
-        ## plot real/imags
-        ax3.plot(np.hstack((negrs, rs)), np.real(E_values[:, 0]), label='sim., x-pol real')
-        ax3.plot(np.hstack((negrs, rs)), np.imag(E_values[:, 0]), label='sim., x-pol imag.')
-        if(direction == 'forward'):
-            ax3.plot(np.hstack((negrs, rs)), np.real(enears[:, 2]), label='miepython, phi-pol real', linestyle = ':')
-            ax3.plot(np.hstack((negrs, rs)), np.imag(enears[:, 2]), label='miepython, phi-pol imag.', linestyle = ':')
-        elif(direction == 'side'):
-            ax3.plot(np.hstack((negrs, rs)), np.real(enears[:, 2]), label='miepython, phi-pol real', linestyle = ':')
-            ax3.plot(np.hstack((negrs, rs)), np.imag(enears[:, 2]), label='miepython, phi-pol imag.', linestyle = ':')
-        ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label='FEKO, x-pol imag.', linestyle = '--')
-        ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO, x-pol real', linestyle = '--')
-
-        ax1.legend()
-        ax2.legend()
-        ax3.legend()
-        ax1.set_xlabel('Radius [m]')
-        ax2.set_xlabel('Radius [m]')
-        ax3.set_xlabel('Radius [m]')
-        ax1.set_ylabel('E-field Components')
-        ax2.set_ylabel('E-field Magnitude')
-        ax3.set_ylabel('E-field Components')
-        ax1.set_title('Absolute values of components')
-        ax2.set_title('E-field magnitudes')
-        ax3.set_title('Real/imag. parts of incident pol.')
+        #E_values2 = np.hstack((Ex.eval(points_on_proc, cells), Ey.eval(points_on_proc, cells), Ez.eval(points_on_proc, cells))) ## interpolated... this helps smooth, useful only for degree 1 elements. not used
         
-        ax1.axvline(meshData.object_radius, label = 'radius', color = 'black')
-        ax1.axvline(-1*meshData.object_radius, color = 'black')
-        ax2.axvline(meshData.object_radius, label = 'radius', color = 'black')
-        ax2.axvline(-1*meshData.object_radius, color = 'black')
-        ax3.axvline(meshData.object_radius, label = 'radius', color = 'black')
-        ax3.axvline(-1*meshData.object_radius, color = 'black')
-        ax1.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
-        ax1.axvline(-1*meshData.domain_radius, color = 'gray')
-        ax2.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
-        ax2.axvline(-1*meshData.domain_radius, color = 'gray')
-        ax3.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
-        ax3.axvline(-1*meshData.domain_radius, color = 'gray')
-        fig1.tight_layout()
-        fig2.tight_layout()
-        fig3.tight_layout()
-        #plt.show()
+        if(self.comm.rank == 0 and self.verbosity>1):
+            print(f'done, in {timer()-t1:.3f} s')
+            sys.stdout.flush()
+        
+        if(showPlots and self.comm.rank == self.model_rank): ## generate miepython values if necessary
+            fig1 = plt.figure()
+            ax1 = plt.subplot(1, 1, 1)
+            ax1.grid(True)
+            fig2 = plt.figure()
+            ax2 = plt.subplot(1, 1, 1)
+            ax2.grid(True)
+            fig3 = plt.figure()
+            ax3 = plt.subplot(1, 1, 1)
+            ax3.grid(True)
+            
+            m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
+            freq = self.fvec[0]
+            lambdat = c0/freq
+            k = 2*pi/lambdat
+            x = k*meshData.object_radius
+            coefs = miepython.core.coefficients(m, x, internal=True)
+            def planeWaveSph(x):
+                '''
+                Plane wave to be subtracted from miepython, so only the scattered field is left. Converts to r-, theta-, phi- pols
+                :param x: some given position you want to find the field on
+                :param k: wavenumber
+                '''
+                if(direction == 'forward'): ## along the z-axis
+                    E_pw = np.array([self.PW_pol[1], self.PW_pol[2], self.PW_pol[0]])
+                elif(direction == 'side'): ## along x
+                    E_pw = np.array([self.PW_pol[2], self.PW_pol[1], self.PW_pol[0]])
+                k_pw = k*self.PW_dir ## z-directed
+                E_pw = E_pw*np.exp(-1j*np.dot(k_pw, x))
+                return E_pw
+            for q in range(len(rs)):
+                r = rs[q]
+                nr = -1*negrs[q] ## still positive, just in other direction due to angle
+                if(np.abs(r)<meshData.object_radius): ## miepython seems to include the incident field inside the sphere
+                    t = 1
+                else:
+                    t = 0
+                if(np.abs(nr)<meshData.object_radius): ## miepython seems to include the incident field inside the sphere
+                    t2 = 1
+                else:
+                    t2 = 0
+                if(direction == 'forward'):
+                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
+                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+                elif(direction == 'side'):
+                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
+                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+                
+            enears = np.vstack((enearsbw, enears))
+            ## plot components
+            ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 0]), label='r-comp. miepython', linestyle = ':', color = 'red')
+            ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 1]), label='theta-comp. miepython', linestyle = ':', color = 'blue')
+            ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 2]), label='phi-comp. miepython', linestyle = ':', color = 'green')
+            ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 0]), label='x-comp.', color = 'red')
+            ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 1]), label='y-comp.', color = 'blue')
+            ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 2]), label='z-comp.', color = 'green')
+            ## plot magnitudes
+            ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(enears[:, 0])**2+np.abs(enears[:, 1])**2+np.abs(enears[:, 2])**2), label='miepython')
+            ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(E_values[:, 0])**2+np.abs(E_values[:, 1])**2+np.abs(E_values[:, 2])**2), label='simulation')
+            #ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(E_values2[:, 0])**2+np.abs(E_values2[:, 1])**2+np.abs(E_values2[:, 2])**2), label='simulation, interpolated')
+            ## plot real/imags
+            ax3.plot(np.hstack((negrs, rs)), np.real(E_values[:, 0]), label='sim., x-pol real')
+            ax3.plot(np.hstack((negrs, rs)), np.imag(E_values[:, 0]), label='sim., x-pol imag.')
+            ax3.plot(np.hstack((negrs, rs)), np.real(enears[:, 2]), label='miepython, phi-pol real', linestyle = ':')
+            ax3.plot(np.hstack((negrs, rs)), np.imag(enears[:, 2]), label='miepython, phi-pol imag.', linestyle = ':')
+            ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label='FEKO, x-pol imag.', linestyle = '--')
+            ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO, x-pol real', linestyle = '--')
+            
+            ax1.legend()
+            ax2.legend()
+            ax3.legend()
+            ax1.set_xlabel('Radius [m]')
+            ax2.set_xlabel('Radius [m]')
+            ax3.set_xlabel('Radius [m]')
+            ax1.set_ylabel('E-field Components')
+            ax2.set_ylabel('E-field Magnitude')
+            ax3.set_ylabel('E-field Components')
+            ax1.set_title('Absolute values of components')
+            ax2.set_title('E-field magnitudes')
+            ax3.set_title('Real/imag. parts of incident pol.')
+            
+            ax1.axvline(meshData.object_radius, label = 'radius', color = 'black')
+            ax1.axvline(-1*meshData.object_radius, color = 'black')
+            ax2.axvline(meshData.object_radius, label = 'radius', color = 'black')
+            ax2.axvline(-1*meshData.object_radius, color = 'black')
+            ax3.axvline(meshData.object_radius, label = 'radius', color = 'black')
+            ax3.axvline(-1*meshData.object_radius, color = 'black')
+            ax1.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
+            ax1.axvline(-1*meshData.domain_radius, color = 'gray')
+            ax2.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
+            ax2.axvline(-1*meshData.domain_radius, color = 'gray')
+            ax3.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
+            ax3.axvline(-1*meshData.domain_radius, color = 'gray')
+            fig1.tight_layout()
+            fig2.tight_layout()
+            fig3.tight_layout()
+            #plt.show()
+            
+        if(FEKOcomp and not showPlots and self.comm.rank==self.model_rank): ## can't find bounding boxes for the exact points in the FEKO values, so interpolate
+            Erealsx = np.real(E_values[:, 0])
+            Eimagsx = np.imag(E_values[:, 0])
+            Ereturns = np.interp(FEKOpos, points[1], Erealsx) + 1j*np.interp(FEKOpos, points[1], Eimagsx)
+            return Ereturns, FEKO_Es[:, 0]
