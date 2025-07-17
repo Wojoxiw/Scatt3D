@@ -228,7 +228,7 @@ if __name__ == '__main__':
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', order=deg, FF_surface = True)
         settings = [] ## list of solver settings
-        maxTime = 10 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
+        maxTime = 20 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
         for nsmooths in [0, 1, 2]:
             for sqg in [True, False]:
@@ -258,11 +258,8 @@ if __name__ == '__main__':
             if(comm.rank == model_rank):
                 print('\033[94m' + f'Run {i}/{num} with settings:' + '\033[0m', settings[i])
             try:
-                time = 0
-                for i in range(3): ## average over a few runs
-                    prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
-                    time += prob.calcTime
-                ts[i] = time/3
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
+                ts[i] = prob.calcTime
                 its[i] = prob.solver_its
                 norms[i] = prob.solver_norm
             except Exception as error: ## if the solver isn't defined or something, try skipping it
