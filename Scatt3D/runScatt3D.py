@@ -228,7 +228,7 @@ if __name__ == '__main__':
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', order=deg, FF_surface = True)
         settings = [] ## list of solver settings
-        maxTime = 10 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
+        maxTime = 20 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
         for nsmooths in [0, 1, 2]:
             for sqg in [True, False]:
@@ -256,7 +256,7 @@ if __name__ == '__main__':
         norms = np.zeros(num)
         for i in range(num):
             if(comm.rank == model_rank):
-                print('\033[94m'+f'Run {i}/{num} with settings:',settings[i],'\033[0m')
+                print('\033[94m' + f'Run {i}/{num} with settings:' + '\033[0m', settings[i])
             try:
                 time = 0
                 for i in range(3): ## average over a few runs
@@ -312,7 +312,7 @@ if __name__ == '__main__':
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/14)
+    testSolverSettings(h=1/10)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
