@@ -243,9 +243,12 @@ if __name__ == '__main__':
                                                     settings.append( {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': nsmooths, 'pc_mg_cycle_type': cycletype, 'pc_gamg_aggressive_coarsening': aggcn, 'pc_gamg_theshold': thresh, 'mg_levels_ksp_max_it': kspmaxit,'mg_levels_ksp_type': ksptype, 'pc_gamg_repartition': rep, 'pc_gamg_square_graph': sqg, **tryit, **mgtype} )
                                                     
         num = len(settings)
-        for i in [1405, 2507, 2519, 3051, 4838, 5819]:#range(num):
-            print(i, settings[i])
-        exit()
+        
+        #=======================================================================
+        # for i in [1405, 2507, 2519, 3051, 4838, 5819]:#range(num):
+        #     print(i, settings[i])
+        # exit()
+        #=======================================================================
         
         omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
         ts = np.zeros(num)
