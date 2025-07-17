@@ -69,7 +69,7 @@ if __name__ == '__main__':
     if(verbosity>2):
         print(f"{comm.rank=} {comm.size=}, {MPI.COMM_SELF.rank=} {MPI.COMM_SELF.size=}, {MPI.Get_processor_name()=}")
     if(comm.rank == model_rank):
-        print(f'runScatt3D starting with {MPInum} MPI process(es):')
+        print(f'runScatt3D starting with {MPInum} MPI process(es) (main process on {MPI.Get_processor_name()=}):')
     sys.stdout.flush()
     
     def profilingMemsTimes(): ## as used to make plots for the report
@@ -209,11 +209,11 @@ if __name__ == '__main__':
                         ax1.set_xlabel(r'dx Quadrature Degree')
                     
                     ax1.plot(xs[idx], np.abs((real_area-np.array(areaVals))/real_area)[idx], marker='o', linestyle='--', label = r'$\int dS$ - rel. error')
-                    ax1.plot(xs[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
+                    #ax1.plot(xs[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
                     ax1.plot(xs[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - RMS error')
                     ax1.plot(xs[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
-                    ax1.plot(xs[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts normalized RMS. error')
-                    ax1.plot(xs[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
+                    ax1.plot(xs[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS. error, normalized')
+                    #ax1.plot(xs[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
                     ax1.plot(xs[idx], NFrmsErrs[idx], marker='o', linestyle='--', label = r'Nearfield-FEKO error norm, rel.')
                     
                     ax1.set_yscale('log')
@@ -228,19 +228,24 @@ if __name__ == '__main__':
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', order=deg, FF_surface = True)
         settings = [] ## list of solver settings
-        maxTime = 600 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
+        maxTime = 10 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
-        for eql in [400, 650, 1000, 1500, 2000]:
-            for nsmooths in [1, 2, 3]:
-                for thresh in [0.005, 0.01, 0.02, 0.05, 0.1, 0.15]:
-                    settings.append( {"pc_gamg_coarse_eq_limit": eql, "pc_gamg_agg_nsmooths": nsmooths, "pc_gamg_threshold": thresh} )
+        for nsmooths in [0, 1, 2]:
+            for sqg in [True, False]:
+                    for rep in [True, False]:
+                        for ksptype in ['chebyshev', 'richardson']:
+                            for tryit in [{'mg_coarse_pc_type': 'redundant', 'mg_coarse_redundant_pc_type': 'lu'}, {}]:
+                                for mgtype in [{'pc_mg_type': 'additive'}, {'pc_mg_type': 'multiplicative'}]:
+                                    for cycletype in ['v', 'w']:
+                                        for aggcn in [0, 1, 2]:
+                                            for thresh in [0.01, 0.02, 0.05]:
+                                                for kspmaxit in [1, 2, 3, 5]:
+                                                    settings.append( {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': nsmooths, 'pc_mg_cycle_type': cycletype, 'pc_gamg_aggressive_coarsening': aggcn, 'pc_gamg_theshold': thresh, 'mg_levels_ksp_max_it': kspmaxit,'mg_levels_ksp_type': ksptype, 'pc_gamg_repartition': rep, 'pc_gamg_square_graph': sqg, **tryit, **mgtype} )
+                                                    
         num = len(settings)
-        
-        #=======================================================================
-        # for i in range(num):
-        #     print(i, settings[i])
-        # exit()
-        #=======================================================================
+        for i in [1405, 2507, 2519, 3051, 4838, 5819]:#range(num):
+            print(i, settings[i])
+        exit()
         
         omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
         ts = np.zeros(num)
@@ -248,11 +253,20 @@ if __name__ == '__main__':
         norms = np.zeros(num)
         for i in range(num):
             if(comm.rank == model_rank):
-                print('\033[94m'+f'Run {i} with settings:',settings[i],'\033[0m')
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
-            ts[i] = prob.calcTime
-            its[i] = prob.solver_its
-            norms[i] = prob.solver_norm
+                print('\033[94m'+f'Run {i}/{num} with settings:',settings[i],'\033[0m')
+            try:
+                time = 0
+                for i in range(3): ## average over a few runs
+                    prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
+                    time += prob.calcTime
+                ts[i] = time/3
+                its[i] = prob.solver_its
+                norms[i] = prob.solver_norm
+            except Exception as error: ## if the solver isn't defined or something, try skipping it
+                print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
+                ts[i] = np.nan
+                its[i] = np.nan
+                norms[i] = np.nan
         fig, ax1 = plt.subplots()
         fig.subplots_adjust(right=0.45)
         fig.set_size_inches(29.5, 14.5)
@@ -293,9 +307,9 @@ if __name__ == '__main__':
     #testFullExample(h=1/16)
     #testSphereScattering(h=1/7, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
-    convergenceTestPlots('meshsize', deg=3)
+    #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/15)
+    testSolverSettings(h=1/14)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

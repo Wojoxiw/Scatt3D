@@ -140,7 +140,6 @@ class Scatt3DProblem():
         Sets up and runs the simulation. All the setup is set to reflect the current mesh, reference or dut. Solutions are saved.
         :param computeRef: If True, computes on the reference mesh
         '''
-        t1 = timer()
         if(computeRef):
             meshData = self.refMeshdata
         else:
@@ -149,12 +148,10 @@ class Scatt3DProblem():
         self.InitializeFEM(meshData)
         self.InitializeMaterial(meshData)
         self.CalculatePML(meshData, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
+        t1 = timer()
         mem_usage = memory_usage((self.ComputeSolutions, (meshData,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
         #self.ComputeSolutions(meshData, computeRef=True)
         self.calcTime = timer()-t1 ## Time it took to solve the problem. Given to mem-time estimator 
-        if(makeOptVects):
-            self.makeOptVectors()
-        
         if(self.verbosity > 2):
             print(f'Max. memory: {mem_usage:.3f} GiB -- '+f"{self.comm.rank=} {self.comm.size=}")
         mems = self.comm.gather(mem_usage, root=self.model_rank)
@@ -162,9 +159,10 @@ class Scatt3DProblem():
             self.memCost = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             if(self.verbosity>0):
                 print(f'Total memory: {self.memCost:.3f} GiB ({mem_usage*self.MPInum:.3f} GiB for this process, MPInum={self.MPInum} times)')
-                print(f'Computations for {self.name} completed in {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours)')
+                print(f'Computations for {self.name} completed in ' + '\033[31m' + f'{self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours)' + '\033[0m')
         sys.stdout.flush()
-                
+        if(makeOptVects):
+            self.makeOptVectors()
                 
     def InitializeFEM(self, meshData):
         # Set up some FEM function spaces and boundary condition stuff.
@@ -357,23 +355,26 @@ class Scatt3DProblem():
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
-        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory. try the last option for ordering?
+        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
         #petsc_options={"ksp_type": "lgmres", 'pc_type': 'asm', 'sub_pc_type': 'sor', **conv_sets} ## is okay
         #petsc_options={**conv_sets, **self.solver_settings}
         #petsc_options={"ksp_type": "lgmres", "pc_type": "ksp", "pc_ksp_type":"gmres", 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor", **conv_sets}
         #petsc_options={'ksp_type': 'fgmres','ksp_gmres_restart': 1000, 'pc_type': 'ksp', "ksp_ksp_type": 'bcgs', "ksp_ksp_max_it": 100, 'ksp_pc_type': 'jacobi', **conv_sets, **self.solver_settings} ## best so far... tfqmr or bcgs
         #petsc_options={'ksp_type': 'gmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', 'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1, **conv_sets, **self.solver_settings}
+        #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', 'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive', **conv_sets, **self.solver_settings}
+        
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', **conv_sets, **self.solver_settings}
+        
         
         cache_dir = f"{str(Path.cwd())}/.cache"
         jit_options={}
-        jit_options= {"cffi_extra_compile_args": ['-O3', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little. not sure if cache dir will cause errors on cluster
+        jit_options= {"cffi_extra_compile_args": ['-O3', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little.
         
         problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options)
         
         ksp = problem.solver
         pc = ksp.getPC()
-        time1 = timer()
         
         class TimeAbortMonitor:
             def __init__(self, max_time, comm):
@@ -389,10 +390,8 @@ class Scatt3DProblem():
                     if(self.comm.rank == 0):
                         PETSc.Sys.Print(f"Aborting solve after {its} iterations due to maximum solver time ({self.maxT} s).")
                     ksp.setConvergedReason(PETSc.KSP.ConvergedReason.DIVERGED_NULL)
-                    
-                        
+                                  
         ksp.setMonitor(TimeAbortMonitor(self.max_solver_time, self.comm))
-        
         
         #=======================================================================
         # ### try nullspace stuff
@@ -434,58 +433,44 @@ class Scatt3DProblem():
         #=======================================================================
         
         #=======================================================================
-        # ###HYPRE TRY
-        # Freal = ufl.real(F)
-        # Fimag = ufl.imag(F)
-        # lhs_real, rhs_real = dolfinx.fem.form(ufl.lhs(Freal)), dolfinx.fem.form(ufl.rhs(Freal))
-        # lhs_imag, rhs_imag = dolfinx.fem.form(ufl.lhs(Fimag)), dolfinx.fem.form(ufl.rhs(Fimag))
-        # A_r = dolfinx.fem.petsc.assemble_matrix(lhs_real, bcs)
-        # A_i = dolfinx.fem.petsc.assemble_matrix(lhs_imag, bcs)
-        # A_r.assemble()
-        # A_i.assemble()
-        # A = PETSc.Mat().createNest([[A_r, -1*A_i.duplicate(copy=True)], ##  Ar -Ai
-        #                     [-1*A_i, -1*A_r.duplicate(copy=True)]])     ## -Ai  Ar
+        # ## save bilinear/linear parts to try with real solvers - takes too much memory to save/load like this, also strange mem maxing when using discrete gradient
+        # a = dolfinx.fem.form(problem.a)
+        # A = dolfinx.fem.petsc.assemble_matrix(a, bcs=bcs)
         # A.assemble()
-        # 
-        # b_real = dolfinx.fem.petsc.assemble_vector(rhs_real)
-        # b_imag = dolfinx.fem.petsc.assemble_vector(rhs_imag)
-        # b_real.ghostUpdate()
-        # b_imag.ghostUpdate()
-        # b = PETSc.Vec().createNest([b_real, -1*b_imag])
-        # 
-        # ksp = PETSc.KSP().create(self.comm)
-        # ksp.setType("fgmres")
-        # ksp.setTolerances(rtol=1e-6, atol=1e-12)
-        # ksp.setOperators(A, b)
-        # pc = ksp.getPC()
-        # pc.setType('hypre')
-        # pc.setHYPREType('ams')
-        # ### HYPRE AMS attempt
-        # self.Vspace_H1 = dolfinx.fem.functionspace(meshData.mesh, basix.ufl.element("Lagrange", meshData.mesh.basix_cell(), self.fem_degree, dtype=dolfinx.default_real_type))
-        # self.Vspace_curl = dolfinx.fem.functionspace(meshData.mesh, basix.ufl.element("N1curl", meshData.mesh.basix_cell(), self.fem_degree, dtype=dolfinx.default_real_type))
-        # G = dolfinx.fem.petsc.discrete_gradient(self.Vspace_H1, self.Vspace_curl)
-        # G1 = G.copy()
-        # G_realified = PETSc.Mat().createNest([[G, None],
-        #                                      [None, G1]])
-        # G_realified.assemble()
-        # pc.setHYPREDiscreteGradient(G_realified)
-        # if self.fem_degree == 1:
-        #     # For the lowest order base (k=1), we can supply interpolation
-        #     # of the '1' vectors in the space self.Vspace. Hypre can then construct
-        #     # the required operators from G and the '1' vectors.
-        #     
-        #     cvec0, cvec1, cvec2 = dolfinx.fem.Function(self.Vspace), dolfinx.fem.Function(self.Vspace), dolfinx.fem.Function(self.Vspace)
-        #     cvec0.interpolate(lambda x: np.vstack((np.ones_like(x[0]), np.zeros_like(x[1]), np.zeros_like(x[2]))))
-        #     cvec1.interpolate(lambda x: np.vstack((np.zeros_like(x[0]), np.ones_like(x[1]), np.zeros_like(x[2]))))
-        #     cvec2.interpolate(lambda x: np.vstack((np.zeros_like(x[0]), np.zeros_like(x[1]), np.ones_like(x[2]))))
-        #     
-        #     vec_x = PETSc.Vec().createWithArray(np.concatenate([cvec0.x.array, cvec0.x.array]), comm=self.comm)
-        #     vec_y = PETSc.Vec().createWithArray(np.concatenate([cvec1.x.array, cvec1.x.array]), comm=self.comm)
-        #     vec_z = PETSc.Vec().createWithArray(np.concatenate([cvec2.x.array, cvec2.x.array]), comm=self.comm)
-        #     
-        #     pc.setHYPRESetEdgeConstantVectors(vec_x, vec_y, vec_z)
-        # ###
+        # b = dolfinx.fem.petsc.assemble_vector(dolfinx.fem.form(problem.L))
+        # dolfinx.fem.petsc.apply_lifting(b, [a], [bcs])
+        # b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+        # dolfinx.fem.petsc.set_bc(b, bcs)
+        #  
+        # indptr, indices, data = A.getValuesCSR() ## hopefully the correct way to get the data
+        # np.savez("realTest/A.npz", indptr=indptr, indices=indices, data=data, shape=A.getSize()) ## save with numpy since otherwise it would be PETSc complex, not sure if there's a better way
+        # np.savez("realTest/b.npz", data=b.getArray(), shape=b.getSize())
+        # # need coords and discrete gradient also for hypre ams
+        # coords = meshData.mesh.geometry.x
+        # np.savez("realTest/coords.npz", coords=coords)
+        # G = dolfinx.fem.petsc.discrete_gradient(self.ScalarSpace, self.Vspace)
+        # G.assemble()
+        # indptr, indices, data = G.getValuesCSR()
+        # np.savez("realTest/G.npz", indptr=indptr, indices=indices, data=data, shape=G.getSize())
+        # exit()
+        # ##
         #=======================================================================
+        
+        #=======================================================================
+        # ## try plotting the array, just to see it. This... may require only 1 MPI process as is?
+        # A_dense = A.convert('dense')
+        # if(self.comm.rank == 0):
+        #     rows, cols = A_dense.getSize()
+        #     A_np = np.zeros((rows, cols))
+        #     for i in range(rows):
+        #         row_vals = A_dense.getRow(i)[1]  # getRow returns (cols, values)
+        #         A_np[i, :len(row_vals)] = row_vals
+        # plt.imshow(np.log10(np.abs(A_np)), cmap="inferno")
+        # plt.colorbar()
+        # plt.title('log10(Abs. of problem matrix)')
+        # plt.show()
+        #=======================================================================
+        
             
         def ComputeFields():
             '''
@@ -960,40 +945,13 @@ class Scatt3DProblem():
                 points_on_proc.append(point)
                 idx_on_proc_list.append(i)
                 cells.append(colliding_cells.links(i)[0])
-        ###############
-        ############### interpolating
-        Ex = dolfinx.fem.Function(self.ScalarSpace)
-        Ey = dolfinx.fem.Function(self.ScalarSpace)
-        Ez = dolfinx.fem.Function(self.ScalarSpace)
-        def q_abs(x, Es, pol = 'z'): ## similar to the one in makeOptVectors
-            cells = []
-            cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, x.T)
-            colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, x.T)
-            for i, point in enumerate(x.T):
-                if len(colliding_cells.links(i)) > 0:
-                    cells.append(colliding_cells.links(i)[0])
-            if(pol == 'z'): ## it is not simple to save the vector itself for some reason...
-                E_vals = Es.eval(x.T, cells)[:, 2]
-            elif(pol == 'x'):
-                E_vals = Es.eval(x.T, cells)[:, 0]
-            elif(pol == 'y'):
-                E_vals = Es.eval(x.T, cells)[:, 1]
-            else:
-                E_vals = Es.eval(x.T, cells)
-            return E_vals
-        
-        sol = sols[0][0] ## fields for the first frequency
-        Ex.interpolate(functools.partial(q_abs, Es=sol, pol='x'))
-        Ey.interpolate(functools.partial(q_abs, Es=sol, pol='y'))
-        Ez.interpolate(functools.partial(q_abs, Es=sol, pol='z'))
-        ###############
-        ###############
+
         E_part = self.solutions_ref[0][0].eval(points_on_proc, cells) ## less/non-interpolated
         E_parts = self.comm.gather(E_part, root=self.model_rank) ### list of lists of E-fields at the indices
         indices = self.comm.gather(idx_on_proc_list, root=self.model_rank) ## list of lists of indices of contained points
         idx_found = [] ## indices that have already been found
         E_values = np.zeros((numpts*2, 3), dtype=complex)
-        if (self.comm.rank == 0): ## use the first-found E_values where processes meet - discard any indices that have been found before
+        if (self.comm.rank == 0): ## use the first-found E_values where processes meet (have not checked, but presumably the values should be the same for all processes) - discard any indices that have been found before
             for b in range(len(indices)): ## iterate over the lists of lists
                 if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in, and not sure how the list of E-fields would look like, might not need this conditional - never seen it yet)
                     print('onlyone', indices[b])
@@ -1008,8 +966,6 @@ class Scatt3DProblem():
                     if(idx not in idx_found): ## if the index had not already been found
                         idx_found = idx_found + [idx] ## add it to found list
                         E_values[idx, :] = E_parts[b][k][:] ## use this value for the electric field
-                
-        #E_values2 = np.hstack((Ex.eval(points_on_proc, cells), Ey.eval(points_on_proc, cells), Ez.eval(points_on_proc, cells))) ## interpolated... this helps smooth, useful only for degree 1 elements. not used
         
         if(self.comm.rank == 0 and self.verbosity>1):
             print(f'done, in {timer()-t1:.3f} s')

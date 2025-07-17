@@ -98,7 +98,7 @@ class MeshData():
         self.tdim = 3 ## Tetrahedra dimensionality - 3D
         self.fdim = self.tdim - 1 ## Facet dimensionality - 2D
         self.FF_surface = FF_surface
-        self.order = np.clip(order, 1, 2) ## only 1 or 2, since 3 gives some error
+        self.order = order
         
         
         if(PML_thickness == 0): ## if not specified, calculate it

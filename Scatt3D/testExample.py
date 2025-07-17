@@ -35,7 +35,7 @@ u_c.interpolate(lambda x:0.5*x[0]**2 + 1j*x[1]**2)
 from petsc4py import PETSc
 from dolfinx.fem.petsc import assemble_vector
 #print(PETSc.ScalarType)
-assert np.dtype(PETSc.ScalarType).kind == 'c'
+assert np.dtype(PETSc.ScalarType).kind == 'c' ## require complex mode
 
 
 import ufl
