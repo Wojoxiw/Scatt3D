@@ -46,7 +46,7 @@ with scalapack(b'C', nprow, npcol) as context: ## b'C' for column-major, b'R' fo
     xnp = np.random.randn(*x.data.shape) + 1j*np.random.randn(*x.data.shape)
     bnp = np.dot(Anp, xnp)
     
-    xnplstsq = np.linalg.lstsq(Anp, bnp[:m, 0])[0]
+    xnplstsq = np.linalg.lstsq(Anp, bnp)[0]
     
     A.data[:] = Anp
     b.data[:m] = bnp
