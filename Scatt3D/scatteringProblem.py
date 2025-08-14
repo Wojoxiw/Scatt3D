@@ -393,6 +393,23 @@ class Scatt3DProblem():
                                   
         ksp.setMonitor(TimeAbortMonitor(self.max_solver_time, self.comm))
         
+        
+        
+        ### try Laguerre transform stuff (https://arxiv.org/pdf/2309.11023)
+        #Assemble K, M
+        
+        #Laguerre Setup Stuff
+        eta = 1
+        M_lag = 8
+        beta1 = mu0/(4*eps0) * self.epsr*eta0**2
+        
+        # for m in N, build then solve elliptic systems/operators
+        
+        # Then sum them to obtain the actual solution
+        
+        ###
+        
+        
         #=======================================================================
         # ### try nullspace stuff
         # nullvec = dolfinx.fem.Function(self.Vspace)

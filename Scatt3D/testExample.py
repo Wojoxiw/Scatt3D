@@ -21,6 +21,89 @@ import meshMaker
 import scatteringProblem
 import memTimeEstimation
 
+import ctypes.util
+from ctypes import c_double, c_int
+
+#print(ctypes.util.find_library("scalapack"))
+#print(ctypes.util.find_library("blacs"))
+#print(ctypes.util.find_library("blas"))
+MPInum = MPI.COMM_WORLD.size
+
+import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
+
+# Setup
+m, n, nrhs = 100, 1000, 1 ## rows, columns, rhs columns
+nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum
+
+scalapack = PyScalapack(ctypes.util.find_library("scalapack"), ctypes.util.find_library("blas"), ctypes.util.find_library("scalapack"))
+with scalapack(b'C', nprow, npcol) as context: ## b'C' for column-major, b'R' for row-major
+    A = context.array(m, n, mb=128, nb=128, dtype=np.complex128)
+    x = context.array(n, nrhs, mb=128, nb=128, dtype=np.complex128)
+    b = context.array(max(m, n), nrhs, mb=128, nb=1, dtype=np.complex128) ## must be larger to... contain space for computations?
+
+    # Fill A/b: each rank can write to A.data locally
+    Anp = np.random.randn(*A.data.shape) + 1j*np.random.randn(*A.data.shape)
+    xnp = np.random.randn(*x.data.shape) + 1j*np.random.randn(*x.data.shape)
+    bnp = np.dot(Anp, xnp)
+    
+    xnplstsq = np.linalg.lstsq(Anp, bnp[:m, 0])[0]
+    
+    A.data[:] = Anp
+    b.data[:m] = bnp
+    
+    print(np.linalg.norm(np.dot(Anp, xnplstsq) - bnp), 'numpy norm')
+
+    if context.rank.value == 0:
+        print(f"Matrix dimension is ({A.m}, {A.n})")
+    print(f"Matrix local dimension at process " +  #
+          f"({context.myrow.value}, {context.mycol.value})" +  #
+          f" is ({A.local_m}, {A.local_n})")
+    if context.rank.value == 0:
+        print(f"Vector dimension is ({b.m}, {b.n})")
+    print(f"Vector local dimension at process " +  #
+          f"({context.myrow.value}, {context.mycol.value})" +  #
+          f" is ({b.local_m}, {b.local_n})")
+    
+    # Workspace query
+    work_query = np.empty(1, dtype=np.float64)
+    lwork = c_int(-1) ## -1 to query for optimal size
+    info = c_int(0)
+    scalapack.pzgels( # see documentation for pzgels: https://www.netlib.org/scalapack/explore-html/d2/dcf/pzgels_8f_aad4aa6a5bf9443ac8be9dc92f32d842d.html#aad4aa6a5bf9443ac8be9dc92f32d842d
+        b'N', ## for solve A x = b, T for trans A^T x = b
+        A.m, A.n, nrhs, # rows, columns, rhs columns
+        *A.scalapack_params(),
+        *b.scalapack_params(),
+        work_query.ctypes.data_as(ctypes.POINTER(c_double)), lwork, info) ## workspace??, size of work?, output code??  
+    
+    if context.rank.value == 0:
+        print("work query info =", info, work_query, lwork)
+    
+    lwork = int(work_query[0]) ## size of workspace?
+    info = c_int(0)
+    work = np.empty(lwork, dtype=np.float64)
+    # Solve
+    scalapack.pzgels(
+        b'N',
+        A.m, A.n, nrhs,
+        *A.scalapack_params(),
+        *b.scalapack_params(),
+        work.ctypes.data_as(ctypes.POINTER(c_double)), lwork, info) 
+    
+    if context.rank.value == 0:
+        print("pdgels returned info =", info)
+        x = b.data[:n, :].copy()  # minimum 2-norm solution
+        print(np.shape(x[:, 0]))
+        print(np.shape(Anp), np.shape(bnp[:m,0]))
+        lsts = np.linalg.lstsq(Anp, bnp[:m, 0])[0]
+        #print(x[:, 0], lsts)
+        print('error:', np.linalg.norm(x[:, 0]-lsts))
+
+
+
+
+print('PyScalapack test done')
+exit()
+
 print(f"{MPI.COMM_WORLD.rank=} {MPI.COMM_WORLD.size=}, {MPI.COMM_SELF.rank=} {MPI.COMM_SELF.size=}, {MPI.Get_processor_name()=}")
 sys.stdout.flush()
 mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)
