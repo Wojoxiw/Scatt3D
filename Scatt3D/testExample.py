@@ -21,6 +21,8 @@ import meshMaker
 import scatteringProblem
 import memTimeEstimation
 
+
+
 import ctypes.util
 from ctypes import c_double, c_int
 
@@ -32,18 +34,48 @@ MPInum = MPI.COMM_WORLD.size
 import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 
 # Setup
-m, n, nrhs = 100, 1000, 1 ## rows, columns, rhs columns
+m, n, nrhs = 4, 4, 1 ## rows, columns, rhs columns
 nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum
 
-scalapack = PyScalapack(ctypes.util.find_library("scalapack"), ctypes.util.find_library("blas"), ctypes.util.find_library("scalapack"))
+scalapack = PyScalapack(ctypes.util.find_library("scalapack"), ctypes.util.find_library("blas"))
+
+## other test
 with scalapack(b'C', nprow, npcol) as context: ## b'C' for column-major, b'R' for row-major
-    A = context.array(m, n, mb=128, nb=128, dtype=np.complex128)
-    x = context.array(n, nrhs, mb=128, nb=128, dtype=np.complex128)
-    b = context.array(max(m, n), nrhs, mb=128, nb=1, dtype=np.complex128) ## must be larger to... contain space for computations?
+    A = context.array(m, n, mb=2, nb=2, dtype=np.complex128)
+    tau = np.empty(min(m, n), dtype=np.complex128)
+    work = np.empty(1, dtype=np.complex128)
+    lwork = -1
+    info = ctypes.c_int(0)
+
+    # Fill A with random complex values
+    if context:
+        A.data[:] = np.random.randn(*A.data.shape) + 1j*np.random.randn(*A.data.shape)
+    
+    # Workspace query
+    scalapack.pzgeqrf(
+        m, n,
+        *A.scalapack_params(),
+        tau.ctypes.data_as(ctypes.c_void_p),
+        work.ctypes.data_as(ctypes.c_void_p), lwork, info
+    )
+
+    print("pzgeqrf workspace query result:", work[0])
+    print("pzgeqrf info:", info.value)
+
+
+exit()
+
+
+
+
+with scalapack(b'C', nprow, npcol) as context: ## b'C' for column-major, b'R' for row-major
+    A = context.array(m, n, mb=5, nb=5, dtype=np.complex128)
+    x = context.array(n, nrhs, mb=5, nb=5, dtype=np.complex128)
+    b = context.array(max(m, n), nrhs, mb=5, nb=5, dtype=np.complex128) ## must be larger to... contain space for computations?
 
     # Fill A/b: each rank can write to A.data locally
-    Anp = np.random.randn(*A.data.shape) + 1j*np.random.randn(*A.data.shape)
-    xnp = np.random.randn(*x.data.shape) + 1j*np.random.randn(*x.data.shape)
+    Anp = np.array(np.random.randn(*A.data.shape) + 1j*np.random.randn(*A.data.shape), order = 'F')
+    xnp = np.array(np.random.randn(*x.data.shape) + 1j*np.random.randn(*x.data.shape), order = 'F')
     bnp = np.dot(Anp, xnp)
     
     xnplstsq = np.linalg.lstsq(Anp, bnp)[0]
@@ -51,7 +83,16 @@ with scalapack(b'C', nprow, npcol) as context: ## b'C' for column-major, b'R' fo
     A.data[:] = Anp
     b.data[:m] = bnp
     
-    print(np.linalg.norm(np.dot(Anp, xnplstsq) - bnp), 'numpy norm')
+    A_params = A.scalapack_params()
+    b_params = b.scalapack_params()
+    
+    # Usually looks like (pointer_to_data, ia, ja, desca)
+    _, ia_A, ja_A, desca = A_params
+    _, ia_B, ja_B, descb = b_params
+    
+    if context.rank.value == 0:
+        print("DESCA:", np.ctypeslib.as_array(desca, shape=(9,)))
+        print("DESCB:", np.ctypeslib.as_array(descb, shape=(9,)))
 
     if context.rank.value == 0:
         print(f"Matrix dimension is ({A.m}, {A.n})")
@@ -65,38 +106,40 @@ with scalapack(b'C', nprow, npcol) as context: ## b'C' for column-major, b'R' fo
           f" is ({b.local_m}, {b.local_n})")
     
     # Workspace query
-    work_query = np.empty(1, dtype=np.float64)
-    lwork = c_int(-1) ## -1 to query for optimal size
+    work = np.zeros(1, dtype=np.complex128, order = 'F')
+    lwork = -1 #c_int(-1) ## -1 to query for optimal size
     info = c_int(0)
     scalapack.pzgels( # see documentation for pzgels: https://www.netlib.org/scalapack/explore-html/d2/dcf/pzgels_8f_aad4aa6a5bf9443ac8be9dc92f32d842d.html#aad4aa6a5bf9443ac8be9dc92f32d842d
         b'N', ## for solve A x = b, T for trans A^T x = b
         A.m, A.n, nrhs, # rows, columns, rhs columns
         *A.scalapack_params(),
         *b.scalapack_params(),
-        work_query.ctypes.data_as(ctypes.POINTER(c_double)), lwork, info) ## workspace??, size of work?, output code??  
+        work.ctypes.data_as(ctypes.c_void_p), lwork, info) ## pointer to the workspace data??, size of work?, output code??  
     
     if context.rank.value == 0:
-        print("work query info =", info, work_query, lwork)
+        print(work)
+        print("Work queried as:", work, ', info:' , info.value)
+        print('reaL:', work.real)
     
-    lwork = int(work_query[0]) ## size of workspace?
+    lwork = 0 #int(work[0]) ## size of workspace?
     info = c_int(0)
-    work = np.empty(lwork, dtype=np.float64)
+    work = np.zeros(lwork, dtype=np.complex128, order='F')
     # Solve
     scalapack.pzgels(
         b'N',
         A.m, A.n, nrhs,
         *A.scalapack_params(),
         *b.scalapack_params(),
-        work.ctypes.data_as(ctypes.POINTER(c_double)), lwork, info) 
+        work.ctypes.data_as(ctypes.POINTER(c_double)), c_int(lwork), info) 
     
     if context.rank.value == 0:
-        print("pdgels returned info =", info)
+        print("pzgels returned info =", info)
         x = b.data[:n, :].copy()  # minimum 2-norm solution
         print(np.shape(x[:, 0]))
         print(np.shape(Anp), np.shape(bnp[:m,0]))
-        lsts = np.linalg.lstsq(Anp, bnp[:m, 0])[0]
         #print(x[:, 0], lsts)
-        print('error:', np.linalg.norm(x[:, 0]-lsts))
+        print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(Anp, xnplstsq) - bnp))
+        print('pzgels norm |Ax-b|:', np.linalg.norm(np.dot(Anp, x) - bnp))
 
 
 
