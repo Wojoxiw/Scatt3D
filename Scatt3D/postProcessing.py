@@ -15,6 +15,8 @@ from matplotlib import pyplot as plt
 import h5py
 #import elem
 
+def testLSTQ(problemName): ## Try least squares using scalapack
+
 def testSVD(problemName): ## Takes data files saved from a problem after running makeOptVectors, does stuff on it
     ## load in all the data
     data = np.load(problemName+'output.npz')
