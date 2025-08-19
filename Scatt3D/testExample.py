@@ -16,90 +16,14 @@ from memory_profiler import memory_usage
 from timeit import default_timer as timer
 import time
 import sys
+import ctypes.util
+import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
+
 import meshMaker
 import scatteringProblem
 import memTimeEstimation
+import postProcessing
 
-
-
-
-#===============================================================================
-# ### scalapack4py trying
-# from scalapack4py import ScaLAPACK4py
-# import ctypes.util
-# from ctypes import CDLL, RTLD_GLOBAL, POINTER, c_int, c_double
-# 
-# 
-# comm = MPI.COMM_WORLD
-# MPInum = comm.size
-# scalapath = ctypes.util.find_library("scalapack") ## auto-find the path
-# sl = ScaLAPACK4py(CDLL(scalapath, mode=RTLD_GLOBAL))
-# 
-# m, n, nrhs = 5, 5, 1 ## rows, columns, rhs columns
-# dtype=np.complex128 ### using complex doubles
-# 
-# A_np = np.array(np.random.randn(m, n) + 1j*np.random.randn(m, n), dtype=dtype, order = 'F') if comm.rank==0 else None
-# A_np = np.array(np.identity(n, dtype=dtype), dtype=dtype, order = 'F') if comm.rank==0 else None
-# x_np = np.array(np.random.randn(n) + 1j*np.random.randn(n), dtype=dtype, order = 'F') if comm.rank==0 else None
-# x_np = np.ones(n, dtype=dtype, order = 'F') if comm.rank==0 else None
-# b_np = np.zeros((max(m, n), nrhs), dtype=dtype, order = 'F') if comm.rank==0 else None
-# if(comm.rank == 0):
-#     b_np[:, 0] = np.dot(A_np, x_np)
-#     x_nplstsq = np.linalg.lstsq(A_np, b_np)[0]
-# 
-# print('Comm', comm.rank, 'a:', A_np)
-# print('Comm', comm.rank, 'b:', b_np)
-# 
-# MP, NP = 1, MPInum ## process grid rows, columns (product should be num processes)
-# ctx = sl.make_blacs_context(sl.get_default_system_context(), MP, NP)
-# 
-# ## make the local input versions
-# descr_A = sl.make_blacs_desc(ctx, m, n)
-# descr_b = sl.make_blacs_desc(ctx, max(m, n), nrhs) ## max(m, n) since it maybe needs extra space to use for calculations...?
-# 
-# A_scala = np.zeros((descr_A.locrow, descr_A.loccol), dtype=dtype, order='F')
-# sl.scatter_numpy(A_np, POINTER(c_int)(descr_A), A_scala.ctypes.data_as(POINTER(c_double)), A_scala.dtype)
-# b_scala = np.zeros((descr_b.locrow, descr_b.loccol), dtype=dtype, order='F')
-# sl.scatter_numpy(b_np, POINTER(c_int)(descr_b), b_scala.ctypes.data_as(POINTER(c_double)), b_scala.dtype)
-# 
-# work = np.zeros(1, dtype=dtype, order='F')
-# lwork = -1
-# info = -1 
-# ## workspace query first
-# sl.pzgels('N', m, n, nrhs,
-#           A_scala, 1, 1, descr_A,
-#           b_scala, 1, 1, descr_b,
-#           work, lwork, info) 
-# print('Work query result:', work, lwork, info) ## info doesn't seem to be written
-# ## actual work
-# lwork = int(work[0])
-# work = np.zeros((lwork), dtype=dtype, order='F')
-# sl.pzgels('N', m, n, nrhs,
-#           A_scala, 1, 1, descr_A,
-#           b_scala, 1, 1, descr_b,
-#           work, lwork, info)
-# # transform local results into global
-# 
-# A_gather = sl.gather_numpy(POINTER(c_int)(descr_A), A_scala.ctypes.data_as(POINTER(c_double)), (m, n))
-# b_gather = sl.gather_numpy(POINTER(c_int)(descr_b), b_scala.ctypes.data_as(POINTER(c_double)), (nrhs, n))
-# 
-# print(f'A: {A_gather}')
-# print(f'b: {b_gather}')
-# 
-# print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np)) if comm.rank==0 else None
-# print('pzgels norm |Ax-b|:', np.linalg.norm(np.dot(A_np, b_gather) - b_np)) if comm.rank==0 else None
-# 
-# 
-# exit()
-#===============================================================================
-
-###
-###
-from mpi4py import MPI
-import numpy as np
-import ctypes.util
-from ctypes import c_double, c_int
-  
 #===============================================================================
 # print(ctypes.util.find_library("scalapack"))
 # print(ctypes.util.find_library("blacs"))
@@ -107,17 +31,17 @@ from ctypes import c_double, c_int
 #===============================================================================
 comm = MPI.COMM_WORLD
 MPInum = comm.size
-  
-import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
+print(f"{MPI.COMM_WORLD.rank=} {MPI.COMM_WORLD.size=}, {MPI.COMM_SELF.rank=} {MPI.COMM_SELF.size=}, {MPI.Get_processor_name()=}")
+sys.stdout.flush()
+
+
   
 # Setup
-m, n, nrhs = 55, 480, 1 ## rows, columns, rhs columns
+m, n, nrhs = 400, 20000, 1 ## rows, columns, rhs columns
 nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum
   
 scalapack = PyScalapack(ctypes.util.find_library("scalapack"), ctypes.util.find_library("blas"))
 
-
-m, n, nrhs = 128, 128, 1
 mb, nb = 1, 1 ## block size for the arrays. I guess 1 is fine?
 with (
         scalapack(b'C', nprow, npcol) as context, ## computational context
@@ -134,10 +58,13 @@ with (
         A_np = np.array(np.random.randn(*A0.data.shape) + 1j*np.random.randn(*A0.data.shape), order = 'F')
         x_np = np.array(np.random.randn(*x0.data.shape) + 1j*np.random.randn(*x0.data.shape), order = 'F')
         b_np = np.dot(A_np, x_np)
+        t1 = timer()
         x_nplstsq = np.linalg.lstsq(A_np, b_np)[0]
+        nptime = timer() - t1
     
         A0.data[...] = A_np
         b0.data[:m] = b_np
+        t2 = timer()
     ## make the computational context's arrays, then redistribute the feeder's arrays over to them
     A = context.array(m, n, mb, nb, dtype=np.complex128)
     scalapack.pgemr2d["Z"]( # Z for complex double
@@ -193,11 +120,11 @@ with (
     )
     
     if context0: ## print a check of the results
+        scalatime = timer() - t2
+        print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
         print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
         print('pzgels norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x0.data) - b_np))
 
-print(f"{MPI.COMM_WORLD.rank=} {MPI.COMM_WORLD.size=}, {MPI.COMM_SELF.rank=} {MPI.COMM_SELF.size=}, {MPI.Get_processor_name()=}")
-sys.stdout.flush()
 mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)
 V = dolfinx.fem.functionspace(mesh, ("Lagrange", 1))
 u_r = dolfinx.fem.Function(V, dtype=np.float64) 
