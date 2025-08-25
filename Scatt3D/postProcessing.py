@@ -15,13 +15,14 @@ from matplotlib import pyplot as plt
 import h5py
 import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import ctypes.util
+from numba.core.types import none
 
-def scalapackLeastSquares(prob, A_np, b_np, checkVsNp):
+def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
     # Setup
     m, n = A_np.shape ## rows, columns
     nrhs = 1 ## rhs columns
-    nprow, npcol = 1, prob.MPInum ## MPI grid - number of process row*col must be <= MPInum. Using many columns since I expect few rows in A
-    mb, nb = 1, 1 ## block size for the arrays. I guess 1 is fine?
+    nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum. Using many columns since I expect few rows in A
+    mb, nb = 16, 16 ## block size for the arrays. Apparently 2^5-9 are standard. Larger seems to increase work size (and so mem cost?) - but 16x16 is faster than 1x1
     scalapack = PyScalapack(ctypes.util.find_library("scalapack"), ctypes.util.find_library("blas"))
 
     with (
@@ -36,6 +37,7 @@ def scalapackLeastSquares(prob, A_np, b_np, checkVsNp):
         if context0: ## give numpy values to the feeder context's arrays
             A0.data[...] = A_np
             b0.data[:m] = b_np
+            t1 = timer()
         ## make the computational context's arrays, then redistribute the feeder's arrays over to them
         A = context.array(m, n, mb, nb, dtype=np.complex128)
         scalapack.pgemr2d["Z"]( # Z for complex double
@@ -45,7 +47,7 @@ def scalapackLeastSquares(prob, A_np, b_np, checkVsNp):
             context.ictxt,
         )
         b = context.array(max(m, n), nrhs, mb, nb, dtype=np.complex128)
-        scalapack.pgemr2d["Z"](
+        scalapack.pgemr2d["Z"]( ## read more https://info.gwdg.de/wiki/doku.php?id=wiki:hpc:scalapack
             *(max(m, n), nrhs), ## matrix dimensions
             *b0.scalapack_params(),
             *b.scalapack_params(),
@@ -91,15 +93,94 @@ def scalapackLeastSquares(prob, A_np, b_np, checkVsNp):
         )
         
         if context0: ## print a check of the results
-            print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
+            scalatime = timer() - t1
             print('pzgels norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x0.data) - b_np))
             
-        if(checkVsNp):
-            x_nplstsq = np.linalg.lstsq(A_np, b_np)[0]
-            print('difference:', np.linalg.norm(x0.data-x_nplstsq))
+            if(checkVsNp):
+                t1 = timer()
+                x_nplstsq = np.linalg.lstsq(A_np, b_np)[0]
+                nptime = timer() - t1
+                print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
+                print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
+                print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
 
-def testLSTQ(problemName): ## Try least squares using scalapack
-    pass
+def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
+    comm = MPI.COMM_WORLD
+    ## load in all the data with the main process
+    if(comm.rank == 0):
+        data = np.load(problemName+'output.npz')
+        b = data['b']
+        fvec = data['fvec']
+        S_ref = data['S_ref']
+        S_dut = data['S_dut']
+        epsr_mat = data['epsr_mat']
+        epsr_defect = data['epsr_defect']
+        N_antennas = data['N_antennas']
+        Nf = len(fvec)
+        Np = S_ref.shape[-1]
+        Nb = len(b)
+    
+    ## mesh stuff on each process?
+    with dolfinx.io.XDMFFile(comm, problemName+'output-qs.xdmf', 'r') as f:
+        mesh = f.read_mesh()
+    Wspace = dolfinx.fem.functionspace(mesh, ('DG', 0))
+    cells = dolfinx.fem.Function(Wspace)
+    idx = mesh.topology.original_cell_index
+    dofs = Wspace.dofmap.index_map ## has info about dofs on each process
+    
+    ## load in the problem data
+    if(comm.rank == 0):
+        with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
+            cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+            cell_volumes[:] = cell_volumes[idx]
+            epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+            epsr_array_ref = epsr_array_ref[idx]
+            epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+            epsr_array_dut = epsr_array_dut[idx]
+            N = len(cell_volumes)
+            A = np.zeros((Nb, N), dtype=complex) ## the matrix of scaled E-field stuff
+            for n in range(Nb):
+                A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
+                A[n,:] = A[n,idx]
+        
+        ## non a-priori
+        #A_inv = np.linalg.pinv(A, rcond=1e-3)
+        x = scalapackLeastSquares(MPInum, A, b, True) #np.dot(A_inv, b) 
+        if (True): ## a priori
+            idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
+            x_ap = np.zeros(np.shape(A)[1])
+            print('A:', np.shape(A))
+            print('b:', np.shape(b))
+            print('in-object cells:', np.size(idx_ap))
+            A = A[:, idx_ap]
+            
+            if(False): ## solve with numpy
+                A_inv = np.linalg.pinv(A, rcond=1e-3)
+                x_ap[idx_ap] = np.dot(A_inv, b)
+                #x[idx_ap] = np.linalg.lstsq(A, b)
+            else: ## solve with scalapack
+                x_ap[idx_ap] = scalapackLeastSquares(MPInum, A, b, True)
+    else: ## distribute the solution to all ranks (not sure if the None is needed)
+        x = None
+        x_ap = None
+    x = comm.bcast(x, root=0)
+    x_ap = comm.bcast(x_ap, root=0)
+        
+    ## write back the result      
+    with dolfinx.io.XDMFFile(comm, problemName+'testoutput.xdmf', 'w') as f:
+        f.write_mesh(mesh)
+        cells.x.array[:] = epsr_array_dut + 0j
+        f.write_function(cells, 0)
+        cells.x.array[:] = epsr_array_ref + 0j
+        f.write_function(cells, -1)
+        
+        ## non a-priori
+        cells.x.array[:] = x[dofs.local_range[0]:dofs.local_range[1]] + 0j ## this should give the local values into each process (hopefully the ones that get written)
+        f.write_function(cells, 1)  
+        
+        ## a-priori
+        cells.x.array[:] = x_ap[dofs.local_range[0]:dofs.local_range[1]] + 0j
+        f.write_function(cells, 2)            
 
 def testSVD(problemName): ## Takes data files saved from a problem after running makeOptVectors, does stuff on it
     ## load in all the data
@@ -159,6 +240,4 @@ def testSVD(problemName): ## Takes data files saved from a problem after running
         f.write_function(cells, -1)
         
         cells.x.array[:] = x + 0j
-        f.write_function(cells, 1)            
-    
-    print('do SVD now')
+        f.write_function(cells, 1)     

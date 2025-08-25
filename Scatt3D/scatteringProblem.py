@@ -13,6 +13,7 @@ import gmsh
 import sys
 from scipy.constants import c as c0, mu_0 as mu0, epsilon_0 as eps0, pi
 from petsc4py import PETSc
+from slepc4py import SLEPc
 import memTimeEstimation
 from pathlib import Path
 from matplotlib import pyplot as plt
@@ -46,7 +47,7 @@ class Scatt3DProblem():
                  mur_bkg=1,           # Permeability of the background medium
                  material_epsr=3.0*(1 - 0.01j),  # Permittivity of object
                  material_mur=1+0j,   # Permeability of object
-                 defect_epsr=3.5*(1 - 0.01j),      # Permittivity of defect
+                 defect_epsr=6.5*(1 - 0.01j),      # Permittivity of defect
                  defect_mur=1+0j,       # Permeability of defect
                  fem_degree=1,            # Degree of finite elements
                  model_rank=0,        # Rank of the master model - for saving, plotting, etc.
@@ -364,7 +365,7 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'gmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', 'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1, **conv_sets, **self.solver_settings}
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', 'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive', **conv_sets, **self.solver_settings}
         
-        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', **conv_sets, **self.solver_settings}
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', **conv_sets, **self.solver_settings}
         
         
         cache_dir = f"{str(Path.cwd())}/.cache"
@@ -572,13 +573,16 @@ class Scatt3DProblem():
         :param meshData: Should be the refMeshData, since that is what the reconstruction is on. If justMesh, can be the DUT mesh
         :param justMesh: No optimization vectors, just cell volumes and epsrs
         '''
+        ## First, save mesh to xdmf
         if(DUTMesh):
             meshData = self.DUTMeshdata
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'DUTmesh.xdmf', file_mode='w')
         else:
             meshData = self.refMeshdata
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
+        xdmf.write_mesh(meshData.mesh)
         
+        ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
             print(f'Rank {self.comm.rank}: Computing optimization vectors')
             sys.stdout.flush()
@@ -606,7 +610,9 @@ class Scatt3DProblem():
             En_vals = En.eval(x.T, cells)
             values = -1j*k0/eta0/2*(Em_vals[:,0]*En_vals[:,0] + Em_vals[:,1]*En_vals[:,1] + Em_vals[:,2]*En_vals[:,2])*cell_volumes
             return values
-        xdmf.write_mesh(meshData.mesh)
+        
+        
+        ## save some problem/mesh data
         self.epsr.x.array[:] = cell_volumes
         self.epsr.name = 'Cell Volumes'
         xdmf.write_function(self.epsr, -3)
@@ -616,7 +622,9 @@ class Scatt3DProblem():
         self.epsr.x.array[:] = self.epsr_array_dut
         self.epsr.name = 'epsr_dut'
         xdmf.write_function(self.epsr, -1)
-        if(not DUTMesh):
+        
+        
+        if(not DUTMesh): ## Do the interpolation to find qs, then save them
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
             for nf in range(self.Nf):
                 if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) and (meshData.N_antennas > 0) ):
@@ -631,22 +639,22 @@ class Scatt3DProblem():
                         else:
                             En = self.solutions_ref[nf][n]
                         q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0))
-                        # The function q is one row in the A-matrix, save it to file
+                        # Each function q is one row in the A-matrix, save it to file
                         q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
                 if(meshData.N_antennas < 1): # if no antennas, still save something
                     q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
                     xdmf.write_function(q, nf)
-            xdmf.close()
-            
-            if (self.comm.rank == self.model_rank): # Save global values for further postprocessing
-                if( hasattr(self, 'solutions_dut') and hasattr(self, 'solutions_ref')): ## need both computed - otherwise, do not save
-                    b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex) ## the array of S-parameters
-                    for nf in range(self.Nf):
-                        for m in range(meshData.N_antennas):
-                            for n in range(meshData.N_antennas):
-                                b[nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                    np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mat=self.material_epsr, epsr_defect=self.defect_epsr, N_antennas=meshData.N_antennas)     
+        xdmf.close()
+        
+        if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
+            if( hasattr(self, 'solutions_dut') and hasattr(self, 'solutions_ref')): ## need both computed - otherwise, do not save
+                b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex) ## the array of S-parameters
+                for nf in range(self.Nf):
+                    for m in range(meshData.N_antennas):
+                        for n in range(meshData.N_antennas):
+                            b[nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
+                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mat=self.material_epsr, epsr_defect=self.defect_epsr, N_antennas=meshData.N_antennas)    
     
     def saveEFieldsForAnim(self, Nframes = 50, removePML = True):
         '''

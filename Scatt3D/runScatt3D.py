@@ -101,14 +101,14 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1): ## Testing toward a full example, including postprocessing stuff
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=7, order=degree)
-        dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=7, order=degree)
+        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=2, order=degree)
+        dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=2, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 10, fem_degree=degree)
         prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
-        postProcessing.testSVD(prob.dataFolder+prob.name)
+        postProcessing.testLSTSQ(prob.dataFolder+prob.name, MPInum) #postProcessing.testSVD(prob.dataFolder+prob.name)
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -301,15 +301,15 @@ if __name__ == '__main__':
         plt.savefig(prob.dataFolder+prob.name+'gamg+agg_solversettingsplot.png')
         plt.show()
         
-    #testRun(h=1/20)
+    testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    #testFullExample(h=1/16)
+    #testFullExample(h=1/3)
     #testSphereScattering(h=1/7, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/10)
+    #testSolverSettings(h=1/10)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
