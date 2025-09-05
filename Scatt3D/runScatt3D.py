@@ -301,11 +301,11 @@ if __name__ == '__main__':
         plt.savefig(prob.dataFolder+prob.name+'gamg+agg_solversettingsplot.png')
         plt.show()
         
-    testRun(h=1/3)
+    #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
     #testFullExample(h=1/3)
-    #testSphereScattering(h=1/7, degree=1, showPlots=True)
+    testSphereScattering(h=1/3, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
