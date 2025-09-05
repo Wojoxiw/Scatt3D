@@ -13,7 +13,6 @@ import gmsh
 import sys
 from scipy.constants import c as c0, mu_0 as mu0, epsilon_0 as eps0, pi
 from petsc4py import PETSc
-from slepc4py import SLEPc
 import memTimeEstimation
 from pathlib import Path
 from matplotlib import pyplot as plt

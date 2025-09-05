@@ -30,7 +30,6 @@ import postProcessing
 pc = PETSc.PC().create()
 pc.setType("hpddm")
 print("HPDDM loaded OK")
-exit()
 
 #===============================================================================
 # print(ctypes.util.find_library("scalapack"))
