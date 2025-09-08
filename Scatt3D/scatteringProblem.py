@@ -159,7 +159,7 @@ class Scatt3DProblem():
             self.memCost = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             if(self.verbosity>0):
                 print(f'Total memory: {self.memCost:.3f} GiB ({mem_usage*self.MPInum:.3f} GiB for this process, MPInum={self.MPInum} times)')
-                print(f'Computations for {self.name} completed in ' + '\033[31m' + f'{self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours)' + '\033[0m')
+                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours) ' + '\033[0m')
         sys.stdout.flush()
         if(makeOptVects):
             self.makeOptVectors()
@@ -365,7 +365,7 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', 'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive', **conv_sets, **self.solver_settings}
         
         
-        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'pc_gasm_total_subdomains': self.MPInum, 'pc_gasm_overlap': 3, 'sub_ksp_type': 'preonly', 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_pc_type': 'lu', 'sub_kcp_type': 'preonly', 'pc_hpddm_coarse_correction': 'deflated', 'pc_hpddm_levels_1_overlap': 2, 'coarse_pc_type': 'gamg', 'pc_hpddm_levels_1_eps_nev': 10, **conv_sets, **self.solver_settings}
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'pc_gasm_total_subdomains': self.MPInum, 'pc_gasm_overlap': 3, 'sub_ksp_type': 'preonly', 'sub_pc_type': 'lu',  'sub_pc_type': 'lu', 'sub_kcp_type': 'preonly', 'pc_hpddm_coarse_correction': 'deflated', 'pc_hpddm_levels_1_overlap': 2, 'coarse_pc_type': 'gamg', 'pc_hpddm_levels_1_eps_nev': 10, **conv_sets, **self.solver_settings}
 
 
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_kcp_type': 'preonly', 'pc_hpddm_coarse_correction': 'galerkin', 'pc_hpddm_levels_1_overlap': 2, **conv_sets, **self.solver_settings}
