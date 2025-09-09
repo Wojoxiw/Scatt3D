@@ -36,7 +36,7 @@ class MeshData():
                  object_geom = 'sphere',
                  defect_geom = 'cylinder',
                  domain_radius = 1.8,
-                 domain_height = 0.88,
+                 domain_height = 1.88,
                  PML_thickness = 0,
                  dome_height = 0.5,
                  antenna_width = 0.7625, 
@@ -45,10 +45,11 @@ class MeshData():
                  N_antennas = 10,
                  antenna_radius = 0,
                  antenna_z_offset = 0,
-                 object_radius = 0.76,
+                 object_radius = 0.66,
+                 object_height = 1.76,
                  defect_radius = 0.4,
                  defect_height = 0.5,
-                 defect_angles = [45, 67, 32],
+                 defect_angles = [0, 0, 0],
                  viewGMSH = False,
                  FF_surface = False,
                  order = 1,
@@ -76,6 +77,7 @@ class MeshData():
         :param antenna_radius: Radius at which antennas are placed
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
         :param object_radius: If object is a sphere (or cylinder), the radius
+        :param object_height: If object is a cylinder, the height
         :param defect_radius: If defect is a sphere (or cylinder), the radius
         :param defect_height: If defect is a cylinder, the height
         :param defect_angles: [x, y, z] angles to rotate about these axes
@@ -146,6 +148,9 @@ class MeshData():
         ## Object + defect(s) parameters
         if(object_geom == 'sphere'):
             self.object_radius = object_radius * self.lambda0
+        elif(object_geom == 'cylinder'):
+            self.object_radius = object_radius * self.lambda0
+            self.object_height = object_height * self.lambda0
         elif(object_geom == 'None'):
             pass
         else:
@@ -205,6 +210,9 @@ class MeshData():
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
                 obj = gmsh.model.occ.addSphere(0,0,0, self.object_radius) ## add it to the origin
+                matDimTags.append((self.tdim, obj)) ## the material fills the object
+            elif(self.object_geom == 'cylinder'):
+                obj = gmsh.model.occ.addCylinder(0,0,-self.object_height/2,0,0,self.object_height, self.object_radius) ## add it to the origin
                 matDimTags.append((self.tdim, obj)) ## the material fills the object
             if(self.defect_geom == 'cylinder'):
                 def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too
