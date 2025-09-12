@@ -252,7 +252,7 @@ if __name__ == '__main__':
         norms = np.zeros(num)
         for i in range(num):
             if(comm.rank == model_rank):
-                print('\033[94m' + f'Run {i}/{num} with settings:' + '\033[0m', settings[i])
+                print('\033[94m' + f'Run {i+1}/{num} with settings:' + '\033[0m', settings[i])
             try:
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
                 ts[i] = prob.calcTime
@@ -294,7 +294,7 @@ if __name__ == '__main__':
         
         fig.tight_layout()
         fig.tight_layout() ## need both of these for some reason
-        plt.savefig(prob.dataFolder+prob.name+'gamg+agg_solversettingsplot.png')
+        plt.savefig(prob.dataFolder+prob.name+'gasm_48_solversettingsplot.png')
         plt.show()
         
     #testRun(h=1/3)
