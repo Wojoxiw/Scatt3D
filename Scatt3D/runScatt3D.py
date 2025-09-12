@@ -233,7 +233,7 @@ if __name__ == '__main__':
         for subDs in [MPInum*1, MPInum*2, MPInum*3]:
             for overlap in [1, 2, 3, 4, 5]:
                     for pc in ['ilu', 'lu']:
-                            for tryit in [{'sub_pc_type':'lu'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3}]:
+                            for tryit in [{'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3}]:
                                 for try2 in [{'sub_pc_factor_mat_ordering_type': 'nd'}, {}]:
                                     settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
                                                     
@@ -254,7 +254,7 @@ if __name__ == '__main__':
             if(comm.rank == model_rank):
                 print('\033[94m' + f'Run {i}/{num} with settings:' + '\033[0m', settings[i])
             try:
-                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
                 ts[i] = prob.calcTime
                 its[i] = prob.solver_its
                 norms[i] = prob.solver_norm
