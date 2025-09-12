@@ -230,17 +230,12 @@ if __name__ == '__main__':
         settings = [] ## list of solver settings
         maxTime = 20 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
-        for nsmooths in [0, 1, 2]:
-            for sqg in [True, False]:
-                    for rep in [True, False]:
-                        for ksptype in ['chebyshev', 'richardson']:
-                            for tryit in [{'mg_coarse_pc_type': 'redundant', 'mg_coarse_redundant_pc_type': 'lu'}, {}]:
-                                for mgtype in [{'pc_mg_type': 'additive'}, {'pc_mg_type': 'multiplicative'}]:
-                                    for cycletype in ['v', 'w']:
-                                        for aggcn in [0, 1, 2]:
-                                            for thresh in [0.01, 0.02, 0.05]:
-                                                for kspmaxit in [1, 2, 3, 5]:
-                                                    settings.append( {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': nsmooths, 'pc_mg_cycle_type': cycletype, 'pc_gamg_aggressive_coarsening': aggcn, 'pc_gamg_theshold': thresh, 'mg_levels_ksp_max_it': kspmaxit,'mg_levels_ksp_type': ksptype, 'pc_gamg_repartition': rep, 'pc_gamg_square_graph': sqg, **tryit, **mgtype} )
+        for subDs in [MPInum*1, MPInum*2, MPInum*3]:
+            for overlap in [1, 2, 3, 4, 5]:
+                    for pc in ['ilu', 'lu']:
+                            for tryit in [{'sub_pc_type':'lu'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3}]:
+                                for try2 in [{'sub_pc_factor_mat_ordering_type': 'nd'}, {}]:
+                                    settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
                                                     
         num = len(settings)
         if(comm.rank == model_rank):
@@ -305,12 +300,12 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/18)
+    #testFullExample(h=1/18)
     #testSphereScattering(h=1/20, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/10)
+    testSolverSettings(h=1/10)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

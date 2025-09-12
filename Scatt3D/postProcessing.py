@@ -130,6 +130,8 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
     
     ## load in the problem data
     if(comm.rank == 0):
+        print('data loaded in')
+        sys.stdout.flush()
         with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
             cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
             cell_volumes[:] = cell_volumes[idx]
@@ -142,10 +144,13 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
             for n in range(Nb):
                 A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
                 A[n,:] = A[n,idx]
-        
+        print('all data loaded in')
+        sys.stdout.flush()
         ## non a-priori
         #A_inv = np.linalg.pinv(A, rcond=1e-3)
         x = scalapackLeastSquares(MPInum, A, b, True) #np.dot(A_inv, b) 
+        print('scalapack finished')
+        sys.stdout.flush()
         if (True): ## a priori
             idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
             x_ap = np.zeros(np.shape(A)[1])
@@ -165,7 +170,7 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
         x_ap = None
     x = comm.bcast(x, root=0)
     x_ap = comm.bcast(x_ap, root=0)
-        
+    
     ## write back the result      
     with dolfinx.io.XDMFFile(comm, problemName+'testoutput.xdmf', 'w') as f:
         f.write_mesh(mesh)

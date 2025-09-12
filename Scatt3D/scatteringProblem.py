@@ -274,6 +274,7 @@ class Scatt3DProblem():
             z_pml = ufl.conditional(ufl.ge(abs(r), meshData.domain_radius), z_stretched, z) ## stretch when outside radius of the domain
         else:
             print('nonvalid meshData.domain_geom')
+            exit()
         pml_coords = ufl.as_vector((x_pml, y_pml, z_pml))
         self.epsr_pml, self.murinv_pml = pml_epsr_murinv(pml_coords)
     
@@ -366,6 +367,7 @@ class Scatt3DProblem():
         
         
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'pc_gasm_total_subdomains': self.MPInum, 'pc_gasm_overlap': 3, 'sub_ksp_type': 'preonly', 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps', **conv_sets, **self.solver_settings}
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'sub_ksp_type': 'preonly', 'sub_pc_factor_mat_solver_type': 'mumps', **conv_sets, **self.solver_settings}
 
 
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_kcp_type': 'preonly', 'pc_hpddm_coarse_correction': 'galerkin', 'pc_hpddm_levels_1_overlap': 2, **conv_sets, **self.solver_settings}
@@ -393,7 +395,7 @@ class Scatt3DProblem():
                         print(f'Iteration {its}, norm {rnorm:.3e}...')
                 if (self.maxT>0) and (timer() - self.start_time > self.maxT): ## if using a max time, call out when it is reached
                     if(self.comm.rank == 0):
-                        PETSc.Sys.Print(f"Aborting solve after {its} iterations due to maximum solver time ({self.maxT} s).")
+                        PETSc.Sys.Print(f"Aborting solve after {its} iterations due to maximum solver time ({self.maxT} s). Norm: {rnorm:.3e}")
                     ksp.setConvergedReason(PETSc.KSP.ConvergedReason.DIVERGED_NULL)
                                   
         ksp.setMonitor(TimeAbortMonitor(self.max_solver_time, self.comm))
@@ -702,7 +704,7 @@ class Scatt3DProblem():
                 E.x.array[:] = E.x.array*np.exp(1j*2*pi/Nframes)
                 xdmf.write_function(E, i)
         xdmf.close()
-        if(self.verbosity>0 & self.comm.rank == self.model_rank):
+        if(self.verbosity>0 and self.comm.rank == self.model_rank):
             print(self.name+' E-fields animation complete')
             sys.stdout.flush()
         
