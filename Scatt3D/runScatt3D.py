@@ -297,7 +297,7 @@ if __name__ == '__main__':
             
             fig.tight_layout()
             fig.tight_layout() ## need both of these for some reason
-            plt.savefig(prob.dataFolder+prob.name+'gasm_48_solversettingsplot.png')
+            plt.savefig(prob.dataFolder+prob.name+'gasm_24_solversettingsplot.png')
             
             if(num>9):
                 print('Top 10 Options #s:') ## fastest options that seemed to converge
