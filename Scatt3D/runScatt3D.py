@@ -255,47 +255,58 @@ if __name__ == '__main__':
                 print('\033[94m' + f'Run {i+1}/{num} with settings:' + '\033[0m', settings[i])
             try:
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
-                ts[i] = prob.calcTime
-                its[i] = prob.solver_its
-                norms[i] = prob.solver_norm
+                if(comm.rank == model_rank):
+                    ts[i] = prob.calcTime
+                    its[i] = prob.solver_its
+                    norms[i] = prob.solver_norm
             except Exception as error: ## if the solver isn't defined or something, try skipping it
-                print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
-                ts[i] = np.nan
-                its[i] = np.nan
-                norms[i] = np.nan
-        fig, ax1 = plt.subplots()
-        fig.subplots_adjust(right=0.45)
-        fig.set_size_inches(29.5, 14.5)
-        ax2 = ax1.twinx()
-        ax3 = ax1.twinx()
-        ax3.spines.right.set_position(("axes", 1.2))
-        ax3.set_yscale('log')
-        ax1.grid()
-        
-        l1, = ax1.plot(omegas, its, label = 'Iterations', linewidth = 2, color='tab:red')
-        l2, = ax2.plot(omegas, ts, label = 'Time [s]', linewidth = 2, color='tab:blue')
-        l3, = ax3.plot(omegas, norms, label = 'norms', linewidth = 2, color = 'orange')
-        
-        plt.title(f'Solver Time by Setting (fem_degree=1, h={h:.2f}, dofs={prob.ndofs:.2e})')
-        ax1.set_xlabel(r'Setting (composite try #)')
-        ax1.set_ylabel('#')
-        ax2.set_ylabel('Time [s]')
-        ax3.set_ylabel('log10(Norms)')
-        
-        ax1.yaxis.label.set_color(l1.get_color())
-        ax2.yaxis.label.set_color(l2.get_color())
-        ax3.yaxis.label.set_color(l3.get_color())
-        tkw = dict(size=4, width=1.5)
-        ax1.tick_params(axis='y', colors=l1.get_color(), **tkw)
-        ax2.tick_params(axis='y', colors=l2.get_color(), **tkw)
-        ax3.tick_params(axis='y', colors=l3.get_color(), **tkw)
-        ax1.tick_params(axis='x', **tkw)
-        ax1.legend(handles=[l1, l2, l3])
-        
-        fig.tight_layout()
-        fig.tight_layout() ## need both of these for some reason
-        plt.savefig(prob.dataFolder+prob.name+'gasm_48_solversettingsplot.png')
-        plt.show()
+                if(comm.rank == model_rank):
+                    print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
+                    ts[i] = np.nan
+                    its[i] = np.nan
+                    norms[i] = np.nan
+        if(comm.rank == model_rank):
+            fig, ax1 = plt.subplots()
+            fig.subplots_adjust(right=0.45)
+            fig.set_size_inches(29.5, 14.5)
+            ax2 = ax1.twinx()
+            ax3 = ax1.twinx()
+            ax3.spines.right.set_position(("axes", 1.2))
+            ax3.set_yscale('log')
+            ax1.grid()
+            
+            l1, = ax1.plot(omegas, its, label = 'Iterations', linewidth = 2, color='tab:red')
+            l2, = ax2.plot(omegas, ts, label = 'Time [s]', linewidth = 2, color='tab:blue')
+            l3, = ax3.plot(omegas, norms, label = 'norms', linewidth = 2, color = 'orange')
+            
+            plt.title(f'Solver Time by Setting (fem_degree=1, h={h:.2f}, dofs={prob.ndofs:.2e})')
+            ax1.set_xlabel(r'Setting (composite try #)')
+            ax1.set_ylabel('#')
+            ax2.set_ylabel('Time [s]')
+            ax3.set_ylabel('log10(Norms)')
+            
+            ax1.yaxis.label.set_color(l1.get_color())
+            ax2.yaxis.label.set_color(l2.get_color())
+            ax3.yaxis.label.set_color(l3.get_color())
+            tkw = dict(size=4, width=1.5)
+            ax1.tick_params(axis='y', colors=l1.get_color(), **tkw)
+            ax2.tick_params(axis='y', colors=l2.get_color(), **tkw)
+            ax3.tick_params(axis='y', colors=l3.get_color(), **tkw)
+            ax1.tick_params(axis='x', **tkw)
+            ax1.legend(handles=[l1, l2, l3])
+            
+            fig.tight_layout()
+            fig.tight_layout() ## need both of these for some reason
+            plt.savefig(prob.dataFolder+prob.name+'gasm_48_solversettingsplot.png')
+            
+            if(num>9):
+                print('Top 10 Options #s:') ## fastest options that seemed to converge
+                ts[norms>4e-4] = 10000
+                idxsort = np.argsort(ts)
+                for k in range(10):
+                    print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, norm={norms[idxsort[k]]}')
+            
+            plt.show()
         
     #testRun(h=1/3)
     #profilingMemsTimes()
