@@ -504,7 +504,7 @@ class Scatt3DProblem():
             S = np.zeros((self.Nf, meshData.N_antennas, meshData.N_antennas), dtype=complex)
             solutions = []
             for nf in range(self.Nf):
-                if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                     print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
                 sys.stdout.flush()
                 k0 = 2*np.pi*self.fvec[nf]/c0
@@ -543,13 +543,13 @@ class Scatt3DProblem():
             return S, solutions
         
         if(computeRef):
-            if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+            if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                 print(f'Rank {self.comm.rank}: Computing REF solutions (ndofs={self.ndofs})')
             sys.stdout.flush()
             self.epsr.x.array[:] = self.epsr_array_ref
             self.S_ref, self.solutions_ref = ComputeFields()    
         else:
-            if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+            if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                 print(f'Rank {self.comm.rank}: Computing DUT solutions')
             sys.stdout.flush()
             self.epsr.x.array[:] = self.epsr_array_dut
