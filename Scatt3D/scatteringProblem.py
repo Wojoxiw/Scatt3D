@@ -152,6 +152,7 @@ class Scatt3DProblem():
         t1 = timer()
         #mem_usage = memory_usage((self.ComputeSolutions, (meshData,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
         self.ComputeSolutions(meshData, computeRef=True)
+        mem_usage = 0
         self.calcTime = timer()-t1 ## Time it took to solve the problem. Given to mem-time estimator 
         if(self.verbosity > 2):
             print(f'Max. memory: {mem_usage:.3f} GiB -- '+f"{self.comm.rank=} {self.comm.size=}")
