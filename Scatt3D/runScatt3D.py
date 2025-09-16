@@ -314,11 +314,11 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     #testFullExample(h=1/3)
-    #testSphereScattering(h=1/6, degree=1, showPlots=False)
+    testSphereScattering(h=1/6, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/23)
+    #testSolverSettings(h=1/3)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

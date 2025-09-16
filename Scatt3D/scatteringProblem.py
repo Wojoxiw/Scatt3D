@@ -150,8 +150,8 @@ class Scatt3DProblem():
         self.InitializeMaterial(meshData)
         self.CalculatePML(meshData, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
         t1 = timer()
-        mem_usage = memory_usage((self.ComputeSolutions, (meshData,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
-        #self.ComputeSolutions(meshData, computeRef=True)
+        #mem_usage = memory_usage((self.ComputeSolutions, (meshData,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
+        self.ComputeSolutions(meshData, computeRef=True)
         self.calcTime = timer()-t1 ## Time it took to solve the problem. Given to mem-time estimator 
         if(self.verbosity > 2):
             print(f'Max. memory: {mem_usage:.3f} GiB -- '+f"{self.comm.rank=} {self.comm.size=}")
@@ -367,9 +367,12 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gamg', 'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive', **conv_sets, **self.solver_settings}
         
         ## GASM attempts
-        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'gasm', **conv_sets, **self.solver_settings}
+        #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'gasm', **conv_sets, **self.solver_settings}
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': self.MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd', **conv_sets, **self.solver_settings}
-
+        
+        ## BDDC
+        #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'bddc', **conv_sets, **self.solver_settings}
+        
         ## HPDDM stuff
         #petsc_options={'ksp_type': 'hpddm', 'ksp_hpddm_type': 'gmres', **conv_sets, **self.solver_settings}
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_ksp_type': 'preonly', 'pc_hpddm_coarse_correction': 'galerkin', 'pc_hpddm_levels_1_overlap': 2, **conv_sets, **self.solver_settings}
@@ -382,6 +385,9 @@ class Scatt3DProblem():
         jit_options= {"cffi_extra_compile_args": ['-O3', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little.
         
         problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options)
+        
+        print(problem.solver.getOptionsPrefix())
+        print(problem.A.getOptionsPrefix())
         
         ksp = problem.solver
         pc = ksp.getPC()
