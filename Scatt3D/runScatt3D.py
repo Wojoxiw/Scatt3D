@@ -101,11 +101,11 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1): ## Testing toward a full example, including postprocessing stuff
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=11, order=degree)
-        dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=11, order=degree)
+        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=3, order=degree)
+        dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=3, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 15, fem_degree=degree)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 2, fem_degree=degree)
         prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
         postProcessing.testLSTSQ(prob.dataFolder+prob.name, MPInum) #postProcessing.testSVD(prob.dataFolder+prob.name)
@@ -240,16 +240,14 @@ if __name__ == '__main__':
         num = len(settings)
         if(comm.rank == model_rank):
             print(f'Expected max time: approximately {num*maxTime} seconds')
-        #=======================================================================
-        # for i in [1405, 2507, 2519, 3051, 4838, 5819]:#range(num):
-        #     print(i, settings[i])
-        # exit()
-        #=======================================================================
+            for i in range(num):
+                print(f'Settings {i}:', settings[i])
         
         omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
         ts = np.zeros(num)
         its = np.zeros(num)
         norms = np.zeros(num)
+        mems = np.zeros(num)
         for i in range(num):
             if(comm.rank == model_rank):
                 print('\033[94m' + f'Run {i+1}/{num} with settings:' + '\033[0m', settings[i])
@@ -259,12 +257,14 @@ if __name__ == '__main__':
                     ts[i] = prob.calcTime
                     its[i] = prob.solver_its
                     norms[i] = prob.solver_norm
+                    mems[i] = prob.memCost
             except Exception as error: ## if the solver isn't defined or something, try skipping it
                 if(comm.rank == model_rank):
                     print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
                     ts[i] = np.nan
                     its[i] = np.nan
                     norms[i] = np.nan
+                    mems[i] = np.nan
         if(comm.rank == model_rank):
             fig, ax1 = plt.subplots()
             fig.subplots_adjust(right=0.45)
@@ -304,19 +304,22 @@ if __name__ == '__main__':
                 ts[norms>4e-4] = 10000
                 idxsort = np.argsort(ts)
                 for k in range(10):
-                    print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, norm={norms[idxsort[k]]}')
+                    print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, norm={norms[idxsort[k]]}, mem={mems[idxsort[k]]:.3e}GiB --- ')
+                    print(settings[idxsort[k]])
+                    print()
+                    
             
             plt.show()
-        
+            
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    #testFullExample(h=1/18)
-    #testSphereScattering(h=1/20, degree=1, showPlots=False)
+    #testFullExample(h=1/3)
+    testSphereScattering(h=1/20, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/10)
+    #testSolverSettings(h=1/10)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

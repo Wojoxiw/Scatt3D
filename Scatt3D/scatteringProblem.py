@@ -127,7 +127,8 @@ class Scatt3DProblem():
             if(computeBoth): ## compute both cases, then opt vectors if asked for
                 self.compute(False, makeOptVects=False)
                 self.makeOptVectors(True) ## makes an xdmf of the DUT mesh/epsrs
-                self.saveDofsView(self.DUTMeshdata) ## to see that all groups are assigned appropriately
+                self.saveDofsView(self.DUTMeshdata, self.dataFolder+self.name+'DUTDofsview.xdmf') ## to see that all groups are assigned appropriately
+                self.saveDofsView(self.refMeshdata, self.dataFolder+self.name+'RefDofsview.xdmf')
                 self.compute(True, makeOptVects=self.makeOptVects)
             else: ## just compute the ref case, and make opt vects if asked for
                 self.compute(computeRef, makeOptVects=self.makeOptVects)
@@ -159,7 +160,7 @@ class Scatt3DProblem():
             self.memCost = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             if(self.verbosity>0):
                 print(f'Total memory: {self.memCost:.3f} GiB ({mem_usage*self.MPInum:.3f} GiB for this process, MPInum={self.MPInum} times)')
-                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours) ' + '\033[0m')
+                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours, or {self.calcTime/self.Nf:.2e} s/freq) ' + '\033[0m')
         sys.stdout.flush()
         if(makeOptVects):
             self.makeOptVectors()
@@ -356,7 +357,7 @@ class Scatt3DProblem():
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
-        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
         #petsc_options={"ksp_type": "lgmres", 'pc_type': 'asm', 'sub_pc_type': 'sor', **conv_sets} ## is okay
         #petsc_options={**conv_sets, **self.solver_settings}
@@ -367,7 +368,7 @@ class Scatt3DProblem():
         
         
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'pc_gasm_total_subdomains': self.MPInum, 'pc_gasm_overlap': 3, 'sub_ksp_type': 'preonly', 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps', **conv_sets, **self.solver_settings}
-        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'sub_ksp_type': 'preonly', **conv_sets, **self.solver_settings}
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': 1, 'pc_gasm_overlap': 2, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd', **conv_sets, **self.solver_settings}
 
 
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_kcp_type': 'preonly', 'pc_hpddm_coarse_correction': 'galerkin', 'pc_hpddm_levels_1_overlap': 2, **conv_sets, **self.solver_settings}
@@ -620,13 +621,13 @@ class Scatt3DProblem():
         
         ## save some problem/mesh data
         self.epsr.x.array[:] = cell_volumes
-        self.epsr.name = 'Cell Volumes'
+        #self.epsr.name = 'Cell Volumes' ## can use names, but makes looking in paraview more annoying
         xdmf.write_function(self.epsr, -3)
         self.epsr.x.array[:] = self.epsr_array_ref
-        self.epsr.name = 'epsr_ref'
+        #self.epsr.name = 'epsr_ref'
         xdmf.write_function(self.epsr, -2)
         self.epsr.x.array[:] = self.epsr_array_dut
-        self.epsr.name = 'epsr_dut'
+        #self.epsr.name = 'epsr_dut'
         xdmf.write_function(self.epsr, -1)
         
         
@@ -646,7 +647,7 @@ class Scatt3DProblem():
                             En = self.solutions_ref[nf][n]
                         q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0))
                         # Each function q is one row in the A-matrix, save it to file
-                        q.name = f'freq{nf}m={m}n={n}'
+                        #q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
                 if(meshData.N_antennas < 1): # if no antennas, still save something
                     q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
@@ -708,7 +709,7 @@ class Scatt3DProblem():
             print(self.name+' E-fields animation complete')
             sys.stdout.flush()
         
-    def saveDofsView(self, meshData):
+    def saveDofsView(self, meshData, fname):
         '''
         Saves the dofs with different numbers for viewing in ParaView. This hangs on the cluster, for unknown reasons
         :param meshData: Whichever meshData to use
@@ -716,7 +717,7 @@ class Scatt3DProblem():
         self.InitializeFEM(meshData) ## so that this can be done before calculations
         self.InitializeMaterial(meshData) ## so that this can be done before calculations
         vals = dolfinx.fem.Function(self.Wspace)
-        xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'Dofsview.xdmf', file_mode='w')
+        xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=fname, file_mode='w')
         xdmf.write_mesh(meshData.mesh)
         pec_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.fdim, entities=meshData.boundaries.find(meshData.pec_surface_marker)) ## should be empty since these surfaces are not 3D, I think
         vals.x.array[:] = np.nan
@@ -729,7 +730,7 @@ class Scatt3DProblem():
         xdmf.write_function(vals, 0)
         xdmf.close()
         if(self.verbosity>0 and self.comm.rank == self.model_rank):
-            print(self.name+' DoFs view saved')
+            print(fname+' saved')
             sys.stdout.flush()
             
     def calcFarField(self, reference, compareToMie = False, showPlots=False, returnConvergenceVals=False, angles = None):

@@ -49,6 +49,8 @@ A_np = np.array(np.random.randn(m,n) + 1j*np.random.randn(m,n), order = 'F')
 x_np = np.array(np.random.randn(n, 1) + 1j*np.random.randn(n, 1), order = 'F')
 b_np = np.dot(A_np, x_np)
 
+b_np = np.array(b_np, order = 'F')
+
 postProcessing.scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=True)
 # scalapacktest
 
