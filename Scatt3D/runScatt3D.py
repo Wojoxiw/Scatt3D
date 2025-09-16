@@ -116,7 +116,7 @@ if __name__ == '__main__':
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsr=2.0*(1-0.01j), fem_degree=degree)
-        prob.saveDofsView(prob.refMeshdata)
+        prob.saveDofsView(prob.refMeshdata, prob.dataFolder+prob.name+'refDofsview.xdmf')
         #prob.saveEFieldsForAnim()
         if(showPlots):
             prob.calcNearField(direction='side')
@@ -226,16 +226,15 @@ if __name__ == '__main__':
                     plt.close()
             
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
-        refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', order=deg, FF_surface = True)
+        refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=5, object_radius = .73, domain_radius=1.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='cylinder', order=deg, FF_surface = False)
         settings = [] ## list of solver settings
-        maxTime = 55 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
+        maxTime = 155 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
         for subDs in [MPInum*1, MPInum*2, MPInum*3]:
-            for overlap in [1, 2, 3, 4, 5]:
-                    for pc in ['ilu', 'lu']:
-                            for tryit in [{'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3, 'sub_pc_factor_mat_solver_type': 'petsc'}]:
-                                for try2 in [{'sub_pc_factor_mat_ordering_type': 'nd'}, {}]:
-                                    settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
+            for overlap in [2, 3, 4, 5]:
+                for tryit in [{'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3, 'sub_pc_factor_mat_solver_type': 'petsc'}]:
+                    for try2 in [{'sub_pc_factor_mat_ordering_type': 'nd'}, {}]:
+                        settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
                                                     
         num = len(settings)
         if(comm.rank == model_rank):
@@ -315,11 +314,11 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     #testFullExample(h=1/3)
-    testSphereScattering(h=1/20, degree=1, showPlots=False)
+    #testSphereScattering(h=1/6, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/10)
+    testSolverSettings(h=1/23)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
