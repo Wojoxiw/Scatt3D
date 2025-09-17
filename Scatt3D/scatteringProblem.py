@@ -410,7 +410,8 @@ class Scatt3DProblem():
         # # ksp.solve(b, x)
         # 
         #=======================================================================
-        #ksp = problem.solver
+        
+        ksp = problem.solver
         pc = ksp.getPC()
         #print(ksp.view()) ## gives the settings
         class TimeAbortMonitor:
