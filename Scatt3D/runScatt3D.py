@@ -318,7 +318,7 @@ if __name__ == '__main__':
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/23)
+    testSolverSettings(h=1/18)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

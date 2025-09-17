@@ -372,7 +372,7 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': self.MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd', **conv_sets, **self.solver_settings}
         
         ## BDDC
-        #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'spai', **conv_sets, **self.solver_settings}
+        #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'bddc', **conv_sets, **self.solver_settings}
         
         ## HPDDM stuff
         #petsc_options={'ksp_type': 'hpddm', 'ksp_hpddm_type': 'gmres', **conv_sets, **self.solver_settings}
@@ -387,7 +387,30 @@ class Scatt3DProblem():
         
         problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options)
         
-        ksp = problem.solver
+        #=======================================================================
+        # a = dolfinx.fem.form(problem.a)
+        # A = dolfinx.fem.petsc.assemble_matrix(a, bcs=bcs)
+        # A.assemble()
+        # A_matis = PETSc.Mat().create(comm=A.getComm())
+        # A_matis.setSizes(A.getSizes())
+        # A_matis.setType('is')
+        # A_matis.setUp()
+        # A_matis.assemble()
+        # b = dolfinx.fem.petsc.assemble_vector(dolfinx.fem.form(problem.L))
+        # dolfinx.fem.petsc.apply_lifting(b, [a], [bcs])
+        # b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+        # dolfinx.fem.petsc.set_bc(b, bcs)
+        # ksp = PETSc.KSP().create(A_matis.getComm())
+        # ksp.setOperators(A_matis)
+        # ksp.setType("cg")
+        # pc = ksp.getPC()
+        # pc.setType("bddc")
+        # x = A_matis.createVecLeft()
+        # x.set(0)
+        # # ksp.solve(b, x)
+        # 
+        #=======================================================================
+        #ksp = problem.solver
         pc = ksp.getPC()
         #print(ksp.view()) ## gives the settings
         class TimeAbortMonitor:
