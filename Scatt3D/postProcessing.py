@@ -109,58 +109,61 @@ def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
                 print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
                 print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                 print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
-            return x0.data[:, 0]
+            return x0.data[:, 0], x_nplstsq
 
-def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
+def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keeping everything on one process
     comm = MPI.COMM_WORLD
-    ## load in all the data
-    data = np.load(problemName+'output.npz')
-    b = data['b']
-    fvec = data['fvec']
-    S_ref = data['S_ref']
-    S_dut = data['S_dut']
-    epsr_mat = data['epsr_mat']
-    epsr_defect = data['epsr_defect']
-    N_antennas = data['N_antennas']
-    Nf = len(fvec)
-    Np = S_ref.shape[-1]
-    Nb = len(b)
-    
-    ## mesh stuff on each process?
-    with dolfinx.io.XDMFFile(comm, problemName+'output-qs.xdmf', 'r') as f:
-        mesh = f.read_mesh()
-        Wspace = dolfinx.fem.functionspace(mesh, ('DG', 0))
-        cells = dolfinx.fem.Function(Wspace)
-        idx = mesh.topology.original_cell_index
-        dofs = Wspace.dofmap.index_map ## has info about dofs on each process
-        ##now load in data to rank 0
-        cells_vec = cells.x.array
-        if(comm.rank == 0):
-            global_size = cells_vec.getSize()  # total number of global dofs
-            A_array = np.empty((Nb, global_size), dtype=complex)
-        
-        for nf in range(Nf):
-            for m in range(N_antennas):
-                for n in range(N_antennas):
-                    f.read_function(cells, nf*N_antennas*N_antennas + m*N_antennas + n)
-
-                    ##now load in data to rank 0
-                    cells_vec = cells.x.array
-                    if(comm.rank == 0):
-                        global_size = cells_vec.getSize()  # total number of global dofs
-                        global_array = np.empty(global_size, dtype=complex)
-                
-                        cells_vec.copy().gather(global_array, root=0)
-                        A_array[nf*N_antennas*N_antennas + m*N_antennas + n, :] = global_array
-    
-    print('idxran', comm.rank, np.size(idx))
-    
-    ## load in the problem data
+    commself = MPI.COMM_SELF
     if(comm.rank == 0):
+    
+        ## load in all the data
+        data = np.load(problemName+'output.npz')
+        b = data['b']
+        fvec = data['fvec']
+        S_ref = data['S_ref']
+        S_dut = data['S_dut']
+        epsr_mat = data['epsr_mat']
+        epsr_defect = data['epsr_defect']
+        N_antennas = data['N_antennas']
+        Nf = len(fvec)
+        Np = S_ref.shape[-1]
+        Nb = len(b)
+        
+        ## mesh stuff on just one process?
+        with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
+            mesh = f.read_mesh()
+            Wspace = dolfinx.fem.functionspace(mesh, ('DG', 0))
+            cells = dolfinx.fem.Function(Wspace)
+            
+            idx = mesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
+            dofs = Wspace.dofmap.index_map ## has info about dofs on each process
+            
+        
+        ## load in the problem data
         print('data loaded in')
         sys.stdout.flush()
+        
+        
+        #=======================================================================
+        # f.read_function(cells, -3) ## I have not found a way to actually read a function back out like this
+        # cell_volumes = cells.x.array
+        # f.read_function(cells, -2)
+        # epsr_array_ref = cells.x.array
+        # f.read_function(cells, -1)
+        # epsr_array_dut = cells.x.array
+        # 
+        # N = len(cells.x.array) ## number of cells
+        # A = np.empty((Nb, N), dtype=complex)
+        # 
+        # for nf in range(Nf): ## for each row in the A matrix
+        #     for m in range(N_antennas):
+        #         for n in range(N_antennas):
+        #             f.read_function(cells, nf*N_antennas*N_antennas + m*N_antennas + n)
+        #             A[nf*N_antennas*N_antennas + m*N_antennas + n, :] = cells.x.array[:] ## take the row from the data
+        #=======================================================================
+        
         with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
-            cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze() ## real_f or such being the name as seen in paraview
+            cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze() ## f being the default name of the function as seen in paraview
             cell_volumes[:] = cell_volumes[idx]
             epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
             epsr_array_ref = epsr_array_ref[idx]
@@ -171,14 +174,16 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
             for n in range(Nb):
                 A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
                 A[n,:] = A[n,idx]
+                
         print('all data loaded in')
         sys.stdout.flush()
-        A = A_array
+        
+        
         ## non a-priori
         #A_inv = np.linalg.pinv(A, rcond=1e-3)
-        b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary
+        b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary, but reshape it to fit what scalapack expects
         b_now[:, 0] = b
-        x = scalapackLeastSquares(MPInum, A, b_now, True) #np.dot(A_inv, b) 
+        x, x_np = scalapackLeastSquares(MPInum, A, b_now, True) #np.dot(A_inv, b) 
         print('scalapack finished')
         sys.stdout.flush()
         if (True): ## a priori
@@ -189,35 +194,33 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack
             print('in-object cells:', np.size(idx_ap))
             A = A[:, idx_ap]
             
-            if(False): ## solve with numpy
-                A_inv = np.linalg.pinv(A, rcond=1e-3)
-                x_ap[idx_ap] = np.dot(A_inv, b)
-                #x[idx_ap] = np.linalg.lstsq(A, b)
-            else: ## solve with scalapack
-                x_ap[idx_ap] = scalapackLeastSquares(MPInum, A, b_now, True)
-    else: ## distribute the solution to all ranks (not sure if the None is needed)
-        x = None
-        x_ap = None
-    x = comm.bcast(x, root=0)
-    x_ap = comm.bcast(x_ap, root=0)
+            x_ap[idx_ap], x_np_ap = scalapackLeastSquares(MPInum, A, b_now, True)
+    #===========================================================================
+    # else: ## distribute the solution to all ranks (not sure if the None is needed)
+    #     x = None
+    #     x_ap = None
+    # x = comm.bcast(x, root=0)
+    # x_ap = comm.bcast(x_ap, root=0)
+    #===========================================================================
     
-    ## write back the result
-    localdofs = np.array(dofs.local_range)
-    print('localdofs for rank', comm.rank, localdofs[0], localdofs[1])
-    with dolfinx.io.XDMFFile(comm, problemName+'testoutput.xdmf', 'w') as f:
-        f.write_mesh(mesh)
-        cells.x.array[:] = epsr_array_dut + 0j
-        f.write_function(cells, 0)
-        cells.x.array[:] = epsr_array_ref + 0j
-        f.write_function(cells, -1)
-        
-        ## non a-priori
-        cells.x.array[:] = x[localdofs[0]:localdofs[1]] + 0j ## this should give the local values into each process (hopefully the ones that get written)
-        f.write_function(cells, 1)  
-        
-        ## a-priori
-        cells.x.array[:] = x_ap[localdofs[0]:localdofs[1]] + 0j
-        f.write_function(cells, 2)            
+        ## write back the result
+        with dolfinx.io.XDMFFile(comm, problemName+'testoutput.xdmf', 'w') as f:
+            f.write_mesh(mesh)
+            cells.x.array[:] = epsr_array_ref + 0j
+            f.write_function(cells, -1)
+            cells.x.array[:] = epsr_array_dut + 0j
+            f.write_function(cells, 0)
+            
+            ## non a-priori
+            cells.x.array[:] = x + 0j
+            f.write_function(cells, 1)  
+            cells.x.array[:] = x_np + 0j
+            f.write_function(cells, 2)  
+            ## a-priori
+            cells.x.array[:] = x_ap + 0j
+            f.write_function(cells, 3)    
+            cells.x.array[:] = x_np_ap + 0j
+            f.write_function(cells, 4)            
 
 def testSVD(problemName): ## Takes data files saved from a problem after running makeOptVectors, does stuff on it
     ## load in all the data

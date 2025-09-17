@@ -21,11 +21,13 @@ import time
 import sys
 import ctypes.util
 import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
+import resource
 
 import meshMaker
 import scatteringProblem
 import memTimeEstimation
 import postProcessing
+
 
 pc = PETSc.PC().create()
 pc.setType("hpddm")
@@ -112,3 +114,5 @@ if(comm.rank == 0):
     print('global, max erors (max seems to be around e-16, glob. e-3):', np.abs(global_error), max_error)
      
     print('done')
+    
+    print(f'Memory usage: {resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2} GB')
