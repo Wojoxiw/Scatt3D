@@ -109,7 +109,7 @@ def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
                 print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
                 print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                 print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
-            return x0.data[:, 0], x_nplstsq
+            return x0.data[:, 0], x_nplstsq[:, 0]
 
 def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keeping everything on one process
     comm = MPI.COMM_WORLD

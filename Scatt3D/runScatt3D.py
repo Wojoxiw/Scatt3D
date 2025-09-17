@@ -230,11 +230,21 @@ if __name__ == '__main__':
         settings = [] ## list of solver settings
         maxTime = 155 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
-        for subDs in [MPInum*1, MPInum*2, MPInum*3]:
+        #=======================================================================
+        # ## GASM tests
+        # for subDs in [MPInum*1, MPInum*2, MPInum*3]:
+        #     for overlap in [2, 3, 4, 5]:
+        #         for tryit in [{'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3, 'sub_pc_factor_mat_solver_type': 'petsc'}]:
+        #             for try2 in [{'sub_pc_factor_mat_ordering_type': 'nd'}, {}]:
+        #                 settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
+        #=======================================================================
+        
+        ## composite PC tests
+        for type in ['additive', 'mutiplicative']:
             for overlap in [2, 3, 4, 5]:
                 for tryit in [{'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 2, 'sub_pc_factor_mat_solver_type': 'petsc'}, {'sub_pc_type':'ilu', 'sub_pc_factor_levels': 3, 'sub_pc_factor_mat_solver_type': 'petsc'}]:
                     for try2 in [{'sub_pc_factor_mat_ordering_type': 'nd'}, {}]:
-                        settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
+                        settings.append( {'pc_composite_type': type, 'pc_gasm_overlap': overlap, **tryit, **try2} )
                                                     
         num = len(settings)
         if(comm.rank == model_rank):
@@ -318,7 +328,7 @@ if __name__ == '__main__':
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/18)
+    #testSolverSettings(h=1/14)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
