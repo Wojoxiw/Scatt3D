@@ -17,14 +17,31 @@ import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import ctypes.util
 from numba.core.types import none
 
-def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
+def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
+    '''
+    Uses pzgels to least-squares solve a problem
+    
+    :param MPInum: Number of MPI processes
+    :param A_np: Numpy matrix A. Defaults to None for non-master processes
+    :param b_np: numpy vector b
+    :param checkVsNp: If True, print some comparisons
+    '''
     A_np = np.array(A_np, order = 'F') ## put into fortran-major ordering
     b_np = np.array(b_np, order = 'F')
-    # Setup
-    m, n = A_np.shape ## rows, columns
-    nrhs = 1 ## rhs columns
-    nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum. Using many columns since I expect few rows in A
-    mb, nb = 16, 16 ## block size for the arrays. Apparently 2^5-9 are standard. Larger seems to increase work size (and so mem cost?) - but 16x16 is faster than 1x1
+    if(comm.rank == 0): ## setup, starting from master rank
+        m, n = A_np.shape ## rows, columns
+        nrhs = 1 ## rhs columns
+        nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum. Using many columns since I expect few rows in A
+        mb, nb = 16, 16 ## block size for the arrays. Apparently 2^5-9 are standard. Larger seems to increase work size (and so mem cost?) - but 16x16 is faster than 1x1
+    else:
+        m, n, nrhs, nprow, npcol, mb, nb = 0, 0, 0, 0, 0, 0, 0
+    m = comm.bcast(m, root=0)
+    n = comm.bcast(n, root=0)
+    nrhs = comm.bcast(nrhs, root=0)
+    nprow = comm.bcast(nprow, root=0)
+    npcol = comm.bcast(npcol, root=0)
+    mb = comm.bcast(mb, root=0)
+    nb = comm.bcast(nb, root=0)
     
     if(MPI.Get_processor_name() == 'eit000211'): ## for local runs, ctypes finds system libs but need spack's
         scalapack = PyScalapack('/mnt/d/spack/opt/spack/linux-x86_64_v4/netlib-scalapack-2.2.2-sdnhcgsm5j7ltwb4x75rp37l2hlbkdyy/lib/libscalapack.so', '/mnt/d/spack/opt/spack/linux-x86_64_v4/openblas-0.3.30-sftpa2a4yu5lt7aahe5nq2gp7zsnqryg/lib/libopenblas.so')
@@ -44,6 +61,8 @@ def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
             A0.data[...] = A_np
             b0.data[:m] = b_np
             t1 = timer()
+            print(f'numpy values set, starting timer: (rank {comm.rank})')
+            sys.stdout.flush()
         ## make the computational context's arrays, then redistribute the feeder's arrays over to them
         A = context.array(m, n, mb, nb, dtype=np.complex128)
         scalapack.pgemr2d["Z"]( # Z for complex double
@@ -65,14 +84,15 @@ def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
         work = (np.ctypeslib.as_ctypes_type(np.float64) * 2)() ## based on the example in observer.py in TNSP/tetragono/tetragono/sampling_lattice/observer.py
         lwork = scalapack.neg_one ## -1 to query for optimal size
         info = scalapack.ctypes.c_int() ## presumably this is changed to 0 on success... or changed away on failure. 
-        
+        print('starting pzgels', f"({A.local_m}, {A.local_n})")
+        sys.stdout.flush()
         scalapack.pzgels( # see documentation for pzgels: https://www.netlib.org/scalapack/explore-html/d2/dcf/pzgels_8f_aad4aa6a5bf9443ac8be9dc92f32d842d.html#aad4aa6a5bf9443ac8be9dc92f32d842d
             b'N', ## for solve A x = b, T for trans A^T x = b
             A.m, A.n, nrhs, # rows, columns, rhs columns
             *A.scalapack_params(), ## the array, row and column indices, and descriptor
             *b.scalapack_params(),
             work, lwork, info) ## pointer to the workspace data, size of workspace, output code  
-          
+        print("Work queried as:", int(work[0]), ', info:' , info.value, ', lwork:', lwork.value)
         if context.rank.value == 0:
             print("Work queried as:", int(work[0]), ', info:' , info.value, ', lwork:', lwork.value)
         if info.value != 0:
@@ -110,6 +130,8 @@ def scalapackLeastSquares(MPInum, A_np, b_np, checkVsNp=False):
                 print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                 print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
             return x0.data[:, 0], x_nplstsq[:, 0]
+        else:
+            return None, None
 
 def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keeping everything on one process
     comm = MPI.COMM_WORLD
@@ -183,10 +205,12 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
         #A_inv = np.linalg.pinv(A, rcond=1e-3)
         b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary, but reshape it to fit what scalapack expects
         b_now[:, 0] = b
-        x, x_np = scalapackLeastSquares(MPInum, A, b_now, True) #np.dot(A_inv, b) 
-        print('scalapack finished')
-        sys.stdout.flush()
-        if (True): ## a priori
+        x, x_np = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
+    else: ## on other processes, call it with nothing
+        scalapackLeastSquares(comm, MPInum)
+        
+    if (True): ## a priori
+        if(comm.rank == 0):
             idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
             x_ap = np.zeros(N)
             x_np_ap = np.zeros(N)
@@ -194,8 +218,10 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
             print('b:', np.shape(b))
             print('in-object cells:', np.size(idx_ap))
             A = A[:, idx_ap]
-            
-            x_ap[idx_ap], x_np_ap[idx_ap] = scalapackLeastSquares(MPInum, A, b_now, True)
+            x_ap[idx_ap], x_np_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
+        else: ## on other processes, call it with nothing
+            scalapackLeastSquares(comm, MPInum)
+    
     #===========================================================================
     # else: ## distribute the solution to all ranks (not sure if the None is needed)
     #     x = None
@@ -204,6 +230,7 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
     # x_ap = comm.bcast(x_ap, root=0)
     #===========================================================================
     
+    if(comm.rank == 0):
         ## write back the result
         with dolfinx.io.XDMFFile(comm, problemName+'testoutput.xdmf', 'w') as f:
             f.write_mesh(mesh)

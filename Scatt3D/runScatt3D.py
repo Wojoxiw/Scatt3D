@@ -246,11 +246,11 @@ if __name__ == '__main__':
                     if(pc1 != pc2):
                         def pc1stuff(pc1, pc2):
                             if(pc1 == 'gasm'):
-                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                                pc1t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                                pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+                                pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
                             elif(pc1 == 'asm'):
                                 pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
@@ -271,11 +271,11 @@ if __name__ == '__main__':
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
                                 
                         if(pc2 == 'gasm'):
-                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                            pc2t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                             pc1stuff(pc1, pc2)
-                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                            pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                             pc1stuff(pc1, pc2)
-                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+                            pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
                             pc1stuff(pc1, pc2)
                         elif(pc2 == 'asm'):
                             pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
@@ -379,12 +379,12 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/10)
+    #testFullExample(h=1/2)
     #testSphereScattering(h=1/6, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/14)
+    testSolverSettings(h=1/14)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
