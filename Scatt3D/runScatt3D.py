@@ -244,56 +244,56 @@ if __name__ == '__main__':
             for pc1 in ['gasm', 'asm', 'sor', 'bcgs', 'gmres', 'gamg']:
                 for pc2 in ['gasm', 'asm', 'sor', 'bcgs', 'gmres', 'gamg']:
                     if(pc1 != pc2):
-                        def pc1stuff(pc2):
+                        def pc1stuff(pc1, pc2):
                             if(pc1 == 'gasm'):
-                                pc1 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
-                                pc1 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
-                                pc1 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
+                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
                             elif(pc1 == 'asm'):
-                                pc1 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
+                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
                             elif(pc1 == 'sor'):
-                                pc1 = {}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
+                                pc1t = {}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
                             elif(pc1 == 'gamg'):
-                                pc1 = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
-                                pc1 = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1, **pc2} )
+                                pc1t = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+                                pc1t = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
                             elif(pc1 == 'bcgs'):
-                                pc1 = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1, **pc2} )
+                                pc1t = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
                             elif(pc1 == 'gmres'):
-                                pc1 = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1, **pc2} )
+                                pc1t = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
+                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
                                 
                         if(pc2 == 'gasm'):
-                            pc2 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                            pc1stuff(pc2)
-                            pc2 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                            pc1stuff(pc2)
-                            pc2 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                            pc1stuff(pc2)
+                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                            pc1stuff(pc1, pc2)
+                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                            pc1stuff(pc1, pc2)
+                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+                            pc1stuff(pc1, pc2)
                         elif(pc2 == 'asm'):
-                            pc1 = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                            pc1stuff(pc2)
+                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+                            pc1stuff(pc1, pc2)
                         elif(pc2 == 'sor'):
-                            pc2 = {}
-                            pc1stuff(pc2)
+                            pc2t = {}
+                            pc1stuff(pc1, pc2)
                         elif(pc2 == 'gamg'):
-                            pc2 = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
-                            pc1stuff(pc2)
-                            pc2 = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
-                            pc1stuff(pc2)
+                            pc2t = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
+                            pc1stuff(pc1, pc2)
+                            pc2t = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
+                            pc1stuff(pc1, pc2)
                         elif(pc2 == 'bcgs'):
-                            pc2 = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
-                            pc1stuff('ksp')
+                            pc2t = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
+                            pc1stuff(pc1, 'ksp')
                         elif(pc2 == 'gmres'):
-                            pc2 = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
-                            pc1stuff('ksp')
+                            pc2t = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
+                            pc1stuff(pc1, 'ksp')
                         
                         
                         
@@ -303,6 +303,7 @@ if __name__ == '__main__':
             print(f'Expected max time: approximately {num*maxTime} seconds')
             for i in range(num):
                 print(f'Settings {i}:', settings[i])
+        sys.stdout.flush()
         
         omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
         ts = np.zeros(num)
@@ -312,6 +313,7 @@ if __name__ == '__main__':
         for i in range(num):
             if(comm.rank == model_rank):
                 print('\033[94m' + f'Run {i+1}/{num} with settings:' + '\033[0m', settings[i])
+            sys.stdout.flush()
             try:
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
                 if(comm.rank == model_rank):
@@ -326,6 +328,8 @@ if __name__ == '__main__':
                     its[i] = np.nan
                     norms[i] = np.nan
                     mems[i] = np.nan
+                sys.stdout.flush()
+                    
         if(comm.rank == model_rank):
             fig, ax1 = plt.subplots()
             fig.subplots_adjust(right=0.45)

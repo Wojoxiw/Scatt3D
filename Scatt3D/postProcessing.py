@@ -188,13 +188,14 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
         sys.stdout.flush()
         if (True): ## a priori
             idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
-            x_ap = np.zeros(np.shape(A)[1])
+            x_ap = np.zeros(N)
+            x_np_ap = np.zeros(N)
             print('A:', np.shape(A))
             print('b:', np.shape(b))
             print('in-object cells:', np.size(idx_ap))
             A = A[:, idx_ap]
             
-            x_ap[idx_ap], x_np_ap = scalapackLeastSquares(MPInum, A, b_now, True)
+            x_ap[idx_ap], x_np_ap[idx_ap] = scalapackLeastSquares(MPInum, A, b_now, True)
     #===========================================================================
     # else: ## distribute the solution to all ranks (not sure if the None is needed)
     #     x = None
