@@ -376,7 +376,7 @@ class Scatt3DProblem():
         
         #petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", **conv_sets, **self.solver_settings}
         
-        petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'sor,gasm', **conv_sets, **self.solver_settings}
+        #petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'sor,gasm', **conv_sets, **self.solver_settings}
         #self.max_solver_time = 30
         
         ## BDDC
