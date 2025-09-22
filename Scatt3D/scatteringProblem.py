@@ -359,7 +359,7 @@ class Scatt3DProblem():
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
-        #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
         #petsc_options={"ksp_type": "lgmres", 'pc_type': 'asm', 'sub_pc_type': 'sor', **conv_sets} ## is okay
@@ -374,7 +374,10 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'gasm', 'sub_ksp_type': 'preonly', 'pc_gasm_total_subdomains': self.MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'ilu', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd', **conv_sets, **self.solver_settings}
         
         
-        petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", **conv_sets, **self.solver_settings}
+        #petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", **conv_sets, **self.solver_settings}
+        
+        petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'sor,gasm', **conv_sets, **self.solver_settings}
+        #self.max_solver_time = 30
         
         ## BDDC
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'bddc', **conv_sets, **self.solver_settings}

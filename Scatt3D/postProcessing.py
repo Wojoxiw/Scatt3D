@@ -17,7 +17,7 @@ import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import ctypes.util
 from numba.core.types import none
 
-def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
+def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False): ## pzgels seems to hang if I run this twice, or even if I send in two matrices and try the scalapack stuff twice
     '''
     Uses pzgels to least-squares solve a problem
     
@@ -83,20 +83,18 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
         # Workspace query
         work = (np.ctypeslib.as_ctypes_type(np.float64) * 2)() ## based on the example in observer.py in TNSP/tetragono/tetragono/sampling_lattice/observer.py
         lwork = scalapack.neg_one ## -1 to query for optimal size
-        info = scalapack.ctypes.c_int() ## presumably this is changed to 0 on success... or changed away on failure. 
-        print('starting pzgels', f"({A.local_m}, {A.local_n})")
-        sys.stdout.flush()
+        info = scalapack.ctypes.c_int() ## presumably this is changed to 0 on success... or changed away on failure.
         scalapack.pzgels( # see documentation for pzgels: https://www.netlib.org/scalapack/explore-html/d2/dcf/pzgels_8f_aad4aa6a5bf9443ac8be9dc92f32d842d.html#aad4aa6a5bf9443ac8be9dc92f32d842d
             b'N', ## for solve A x = b, T for trans A^T x = b
             A.m, A.n, nrhs, # rows, columns, rhs columns
             *A.scalapack_params(), ## the array, row and column indices, and descriptor
             *b.scalapack_params(),
             work, lwork, info) ## pointer to the workspace data, size of workspace, output code  
-        print("Work queried as:", int(work[0]), ', info:' , info.value, ', lwork:', lwork.value)
         if context.rank.value == 0:
-            print("Work queried as:", int(work[0]), ', info:' , info.value, ', lwork:', lwork.value)
+            print("Work queried as:", int(work[0]), f' for rank {context.rank.value}, info:' , info.value, ', lwork:', lwork.value, f'{context.rank.value=}', f'{comm.rank=}')
         if info.value != 0:
             raise RuntimeError(f"Error in pzgels with info = {info.value}")
+        sys.stdout.flush()
         lwork = int(work[0]) ## size of workspace
         
         work = np.zeros(lwork, dtype=np.complex128, order='F')
@@ -109,7 +107,6 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             scalapack.numpy_ptr(work), lwork, info)
         if info.value != 0:
             raise RuntimeError(f"Error in pzgels with info = {info.value}")
-        
         ## now redistribute the result into the feeder context
         scalapack.pgemr2d["Z"](
             *(n, nrhs),
@@ -129,9 +126,8 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                 print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
                 print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                 print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
+            sys.stdout.flush()
             return x0.data[:, 0], x_nplstsq[:, 0]
-        else:
-            return None, None
 
 def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keeping everything on one process
     comm = MPI.COMM_WORLD
@@ -232,7 +228,7 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
     
     if(comm.rank == 0):
         ## write back the result
-        with dolfinx.io.XDMFFile(comm, problemName+'testoutput.xdmf', 'w') as f:
+        with dolfinx.io.XDMFFile(commself, problemName+'testoutput.xdmf', 'w') as f:
             f.write_mesh(mesh)
             cells.x.array[:] = epsr_array_ref + 0j
             f.write_function(cells, -1)
@@ -244,6 +240,7 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
             f.write_function(cells, 1)  
             cells.x.array[:] = x_np + 0j
             f.write_function(cells, 2)  
+            
             ## a-priori
             cells.x.array[:] = x_ap + 0j
             f.write_function(cells, 3)    

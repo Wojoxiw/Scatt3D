@@ -108,7 +108,7 @@ if __name__ == '__main__':
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 2, fem_degree=degree)
         prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
-        postProcessing.testLSTSQ(prob.dataFolder+prob.name, MPInum) #postProcessing.testSVD(prob.dataFolder+prob.name)
+        postProcessing.testLSTSQ(prob.dataFolder+prob.name, MPInum)
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -379,12 +379,12 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    #testFullExample(h=1/2)
-    #testSphereScattering(h=1/6, degree=1, showPlots=False)
+    testFullExample(h=1/4)
+    #testSphereScattering(h=1/12, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/14)
+    #testSolverSettings(h=1/14)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
