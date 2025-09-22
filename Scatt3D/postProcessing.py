@@ -17,7 +17,7 @@ import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import ctypes.util
 from numba.core.types import none
 
-def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False): ## pzgels seems to hang if I run this twice, or even if I send in two matrices and try the scalapack stuff twice
+def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     '''
     Uses pzgels to least-squares solve a problem
     
@@ -121,13 +121,14 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False): 
             
             if(checkVsNp):
                 t1 = timer()
-                x_nplstsq = np.linalg.lstsq(A_np, b_np)[0]
+                x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-3) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
                 nptime = timer() - t1
                 print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
                 print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                 print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
             sys.stdout.flush()
             return x0.data[:, 0], x_nplstsq[:, 0]
+        
 
 def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keeping everything on one process
     comm = MPI.COMM_WORLD
