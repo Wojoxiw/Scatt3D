@@ -152,7 +152,7 @@ class Scatt3DProblem():
         self.CalculatePML(meshData, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
         t1 = timer()
         #mem_usage = memory_usage((self.ComputeSolutions, (meshData,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
-        self.ComputeSolutions(meshData, computeRef=True)
+        self.ComputeSolutions(meshData, computeRef)
         mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
         self.calcTime = timer()-t1 ## Time it took to solve the problem. Given to mem-time estimator 
         if(self.verbosity > 2):
@@ -359,7 +359,7 @@ class Scatt3DProblem():
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
-        #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
         #petsc_options={"ksp_type": "lgmres", 'pc_type': 'asm', 'sub_pc_type': 'sor', **conv_sets} ## is okay
@@ -376,7 +376,13 @@ class Scatt3DProblem():
         
         #petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", **conv_sets, **self.solver_settings}
         
-        petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'gamg,gasm', 'pc_gasm_overlap': 1, 'sub_pc_type': 'lu', "sub_pc_factor_mat_solver_type": "mumps", 'pc_gamg_type': 'agg', 'pc_gamg_coarse_eq_limit': 1000, 'pc_gamg_reuse_interpolation': 1, 'pc_gamg_agg_nsmooths': 1, **conv_sets, **self.solver_settings}
+        
+        #=======================================================================
+        # petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'gamg,gasm', 
+        #                  'pc_composite_sub_pc_1_pc_gasm_overlap': 1, 'pc_composite_sub_pc_1_sub_ksp_type': 'preonly', 
+        #                  'pc_composite_sub_pc_0_pc_gamg_type': 'agg', 'pc_composite_sub_pc_0_pc_gamg_coarse_eq_limit': 1000, 'pc_composite_sub_pc_0_pc_gamg_reuse_interpolation': 1, 'pc_composite_sub_pc_0_pc_gamg_agg_nsmooths': 1, **conv_sets, **self.solver_settings}
+        # petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'gamg,gasm', **conv_sets, **self.solver_settings}
+        #=======================================================================
         #self.max_solver_time = 30
         
         ## BDDC
@@ -426,6 +432,18 @@ class Scatt3DProblem():
         
         ksp = problem.solver
         pc = ksp.getPC()
+        
+        #=======================================================================
+        # pc1 = pc.getCompositePC(0)
+        # 
+        # pc1 = PETSc.PC().create()
+        # options = PETSc.Options()
+        # options['pc_gamg_coarse_eq_limit'] = 1000
+        # pc1.setFromOptions()
+        # 
+        # pc2 = pc.getCompositePC(0)
+        #=======================================================================
+        
         #print(ksp.view()) ## gives the settings
         class TimeAbortMonitor:
             def __init__(self, max_time, comm, MPInum):
@@ -699,7 +717,7 @@ class Scatt3DProblem():
         xdmf.close()
         
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
-            if( hasattr(self, 'solutions_dut') and hasattr(self, 'solutions_ref')): ## need both computed - otherwise, do not save
+            if( hasattr(self, 'S_dut') and hasattr(self, 'S_ref')): ## need both computed - otherwise, do not save
                 b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex) ## the array of S-parameters
                 for nf in range(self.Nf):
                     for m in range(meshData.N_antennas):
