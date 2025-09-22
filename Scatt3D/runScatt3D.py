@@ -9,7 +9,7 @@ import os
 import numpy as np
 import dolfinx, ufl, basix
 import dolfinx.fem.petsc
-#os.environ["OMP_NUM_THREADS"] = "1" # perhaps needed for MPI speedup if using many processes locally? These do not seem to matter on the cluster
+#os.environ["OMP_NUM_THREADS"] = "1" # perhaps needed for MPI speedup if using many processes locally? These do not seem to matter on the cluster, or locally with a spack installation
 #os.environ['MKL_NUM_THREADS'] = '1' # maybe also relevent
 #os.environ['NUMEXPR_NUM_THREADS'] = '1' # maybe also relevent
 from mpi4py import MPI
@@ -56,8 +56,6 @@ if __name__ == '__main__':
     model_rank = 0 ## rank for printing and definitions, etc.
     verbosity = 2 ## 3 will print everything. 2, most things. 1, just the main process stuff.
     MPInum = comm.size
-    print('test')
-    sys.stdout.flush()
     t1 = timer()
     
     
@@ -231,7 +229,7 @@ if __name__ == '__main__':
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=5, object_radius = .73, domain_radius=1.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='cylinder', order=deg, FF_surface = False)
         settings = [] ## list of solver settings
-        maxTime = 155 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
+        maxTime = 355 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
         #=======================================================================
         # ## GASM tests
@@ -244,14 +242,14 @@ if __name__ == '__main__':
         
         ## composite PC tests
         for type in ['additive', 'mutiplicative']:
-            for pc1 in ['gasm', 'asm', 'sor', 'bcgs', 'gmres', 'gamg']:
+            for pc1 in ['gamg', 'asm', 'sor', 'bcgs', 'gmres', 'gasm']:
                 for pc2 in ['gasm', 'asm', 'sor', 'bcgs', 'gmres', 'gamg']:
                     if(pc1 != pc2):
                         def pc1stuff(pc1, pc2):
                             if(pc1 == 'gasm'):
-                                pc1t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                                pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                                pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                                pc1t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
                                 pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
@@ -274,9 +272,9 @@ if __name__ == '__main__':
                                 settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
                                 
                         if(pc2 == 'gasm'):
-                            pc2t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                            pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                             pc1stuff(pc1, pc2)
-                            pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+                            pc2t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
                             pc1stuff(pc1, pc2)
                             pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
                             pc1stuff(pc1, pc2)
@@ -382,12 +380,12 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/10, degree=2)
-    #testSphereScattering(h=1/12, degree=1, showPlots=False)
+    #testFullExample(h=1/10, degree=2)
+    testSphereScattering(h=1/18, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/14)
+    #testSolverSettings(h=1/6.3)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

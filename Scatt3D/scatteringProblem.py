@@ -359,7 +359,7 @@ class Scatt3DProblem():
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
-        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
         #petsc_options={"ksp_type": "lgmres", 'pc_type': 'asm', 'sub_pc_type': 'sor', **conv_sets} ## is okay
@@ -376,7 +376,7 @@ class Scatt3DProblem():
         
         #petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", **conv_sets, **self.solver_settings}
         
-        #petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'sor,gasm', **conv_sets, **self.solver_settings}
+        petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'gamg,gasm', 'pc_gasm_overlap': 1, 'sub_pc_type': 'lu', "sub_pc_factor_mat_solver_type": "mumps", 'pc_gamg_type': 'agg', 'pc_gamg_coarse_eq_limit': 1000, 'pc_gamg_reuse_interpolation': 1, 'pc_gamg_agg_nsmooths': 1, **conv_sets, **self.solver_settings}
         #self.max_solver_time = 30
         
         ## BDDC
@@ -399,45 +399,51 @@ class Scatt3DProblem():
         # a = dolfinx.fem.form(problem.a)
         # A = dolfinx.fem.petsc.assemble_matrix(a, bcs=bcs)
         # A.assemble()
-        # A_matis = PETSc.Mat().create(comm=A.getComm())
+        # A_is = A.convert('is')
+        # A_matis = PETSc.Mat().create(comm=self.comm)
         # A_matis.setSizes(A.getSizes())
         # A_matis.setType('is')
+        # dofs = self.Vspace.dofmap.index_map.local_range
+        # local_dofs = np.arange(dofs[0], dofs[1], dtype=np.int32)
+        # #A_matis.setISLocal(local_dofs, local_dofs)
         # A_matis.setUp()
         # A_matis.assemble()
         # b = dolfinx.fem.petsc.assemble_vector(dolfinx.fem.form(problem.L))
         # dolfinx.fem.petsc.apply_lifting(b, [a], [bcs])
         # b.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
         # dolfinx.fem.petsc.set_bc(b, bcs)
-        # ksp = PETSc.KSP().create(A_matis.getComm())
+        # 
+        # ksp = PETSc.KSP().create(comm=self.comm)
         # ksp.setOperators(A_matis)
         # ksp.setType("cg")
         # pc = ksp.getPC()
         # pc.setType("bddc")
         # x = A_matis.createVecLeft()
         # x.set(0)
-        # # ksp.solve(b, x)
-        # 
+        # ksp.solve(b, x)
         #=======================================================================
+         
         
         ksp = problem.solver
         pc = ksp.getPC()
         #print(ksp.view()) ## gives the settings
         class TimeAbortMonitor:
-            def __init__(self, max_time, comm):
+            def __init__(self, max_time, comm, MPInum):
                 self.maxT = max_time
                 self.start_time = timer()
                 self.comm = comm
+                self.printn = 101#3*(MPInum+3)
             
             def __call__(self, ksp, its, rnorm):
                 if(self.comm.rank == 0):
-                    if(its%101 == 100): ## print some progress, in case a run is taking extremely long
+                    if(its%self.printn == self.printn-1): ## print some progress, in case a run is taking extremely long
                         print(f'Iteration {its}, norm {rnorm:.3e}...')
                 if (self.maxT>0) and (timer() - self.start_time > self.maxT): ## if using a max time, call out when it is reached
                     if(self.comm.rank == 0):
                         PETSc.Sys.Print(f"Aborting solve after {its} iterations due to maximum solver time ({self.maxT} s)")
                     ksp.setConvergedReason(PETSc.KSP.ConvergedReason.DIVERGED_NULL)
                                   
-        ksp.setMonitor(TimeAbortMonitor(self.max_solver_time, self.comm))
+        ksp.setMonitor(TimeAbortMonitor(self.max_solver_time, self.comm, self.MPInum))
         
         
         
