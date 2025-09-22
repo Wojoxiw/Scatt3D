@@ -56,8 +56,11 @@ if __name__ == '__main__':
     model_rank = 0 ## rank for printing and definitions, etc.
     verbosity = 2 ## 3 will print everything. 2, most things. 1, just the main process stuff.
     MPInum = comm.size
-    
+    print('test')
+    sys.stdout.flush()
     t1 = timer()
+    
+    
     
     if(len(sys.argv) == 1): ## assume computing on local computer, not cluster. In jobscript for cluster, give a dummy argument
         filename = 'localCompTimesMems.npz'
@@ -379,7 +382,7 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/15)
+    testFullExample(h=1/3)
     #testSphereScattering(h=1/12, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
