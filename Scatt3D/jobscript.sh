@@ -19,4 +19,4 @@ date ## prints current date/time
 echo ## newline
 ## if not using node-local disk, just run it and hopefully this is fine
 #time mpirun -n 1 python runScatt3D.py 'dummy' ## run the main process, and time it
-time mpirun --bind-to core python runScatt3D.py 'dummy'
+time mpirun --bind-to core python testExample.py#runScatt3D.py 'dummy'
