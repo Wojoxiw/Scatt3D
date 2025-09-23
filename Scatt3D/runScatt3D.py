@@ -4,7 +4,7 @@
 #
 # Adapted from 2D code started by Daniel Sjoberg, (https://github.com/dsjoberg-git/rotsymsca, https://github.com/dsjoberg-git/ekas3d) approx. 2024-12-13 
 # Alexandros Pallaris, after that
-
+print('testprint')
 import os
 import numpy as np
 import dolfinx, ufl, basix

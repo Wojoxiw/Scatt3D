@@ -728,7 +728,7 @@ class Scatt3DProblem():
                         
                         
                         
-                        q_cell = dolfinx.fem.form(ufl.dot(En, Em_ref)*ufl.dx)
+                        q_cell = dolfinx.fem.form(ufl.dot(En, Em_ref)* ufl.TestFunction(self.Wspace) *ufl.dx)
                         #qs = dolfinx.fem.assemble.assemble_scalar(q_cell)
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                         q.x.scatter_forward()
