@@ -47,7 +47,7 @@ class Scatt3DProblem():
                  mur_bkg=1,           # Permeability of the background medium
                  material_epsr=3.0*(1 - 0.01j),  # Permittivity of object
                  material_mur=1+0j,   # Permeability of object
-                 defect_epsr=6.5*(1 - 0.01j),      # Permittivity of defect
+                 defect_epsr=5.5*(1 - 0.01j),      # Permittivity of defect
                  defect_mur=1+0j,       # Permeability of defect
                  fem_degree=1,            # Degree of finite elements
                  model_rank=0,        # Rank of the master model - for saving, plotting, etc.
@@ -172,7 +172,7 @@ class Scatt3DProblem():
         curl_element = basix.ufl.element('N1curl', meshData.mesh.basix_cell(), self.fem_degree)
         self.Vspace = dolfinx.fem.functionspace(meshData.mesh, curl_element)
         self.ndofs = self.Vspace.dofmap.index_map.size_global * self.Vspace.dofmap.index_map_bs ## from https://github.com/jpdean/maxwell/blob/master/solver.py#L108-L162 - presumably this is accurate? Only the first coefficient is nonone
-        self.ScalarSpace = dolfinx.fem.functionspace(meshData.mesh, ('CG', 1)) ## this is just used for plotting+post-computations, so use degree... 1?
+        self.ScalarSpace = dolfinx.fem.functionspace(meshData.mesh, ('CG', meshData.order)) ## this is just used for plotting+post-computations, so use degree... 1?  Might need to be mesh degree (meshData.order) - but this gives an error
         self.Wspace = dolfinx.fem.functionspace(meshData.mesh, ("DG", 0))
         # Create measures for subdomains and surfaces
         self.dx = ufl.Measure('dx', domain=meshData.mesh, subdomain_data=meshData.subdomains, metadata={'quadrature_degree': self.dxquaddeg})
@@ -382,8 +382,8 @@ class Scatt3DProblem():
         #                  'pc_composite_sub_pc_1_pc_gasm_overlap': 1, 'pc_composite_sub_pc_1_sub_ksp_type': 'preonly', 
         #                  'pc_composite_sub_pc_0_pc_gamg_type': 'agg', 'pc_composite_sub_pc_0_pc_gamg_coarse_eq_limit': 1000, 'pc_composite_sub_pc_0_pc_gamg_reuse_interpolation': 1, 'pc_composite_sub_pc_0_pc_gamg_agg_nsmooths': 1, **conv_sets, **self.solver_settings}
         # petsc_options = {"ksp_type": "fgmres", 'ksp_gmres_restart': 1000, "pc_type": "composite", 'pc_composite_type': 'additive', 'pc_composite_pcs': 'gamg,gasm', **conv_sets, **self.solver_settings}
+        # #self.max_solver_time = 30
         #=======================================================================
-        #self.max_solver_time = 30
         
         ## BDDC
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'bddc', **conv_sets, **self.solver_settings}
@@ -438,7 +438,9 @@ class Scatt3DProblem():
         # 
         # pc1 = PETSc.PC().create()
         # options = PETSc.Options()
-        # options['pc_gamg_coarse_eq_limit'] = 1000
+        # options['pc_gamg_coarse_eq_limit'] = 10
+        # options['pc_gamg_type'] = 'agg'
+        # options['pc_gamg_reuse_interpolation'] = True
         # pc1.setFromOptions()
         # 
         # pc2 = pc.getCompositePC(0)
@@ -658,8 +660,9 @@ class Scatt3DProblem():
         
         # Create function space for temporary interpolation
         q = dolfinx.fem.Function(self.Wspace)
-        bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
         cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(self.Wspace))*ufl.dx)).array
+        
+        bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
         def q_func(x, Em, En, k0):
             '''
             Calculates the 'optimization vector' at each position in the reference meshData. Since the DUT mesh is different,
@@ -707,7 +710,35 @@ class Scatt3DProblem():
                             En = self.solutions_dut[nf][n] 
                         else:
                             En = self.solutions_ref[nf][n]
-                        q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0))
+                            
+                        #=======================================================
+                        # cell = meshData.mesh.topology.cell_type
+                        # quadrature_degree = 2 * self.fem_degree ## twice the degree, for some reason? Better interpolation??
+                        # quadrature_points, weights = basix.make_quadrature(cell, quadrature_degree)
+                        # q_cell = dolfinx.fem.Expression(ufl.dot(En, Em_ref)) ## integral of E_m dot E_n per cell    
+                        # 
+                        # 
+                        # for cell_index in range(meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local): ## iterate over every cell
+                        #     xq = q_cell.eval(cell_index)  ## values at quadrature points
+                        #     detJ = meshData.mseh.geometry.cmap.detJ(cell_index, quadrature_points)  ## jacobian determinant
+                        #     integral = np.sum(xq * weights * detJ)
+                        #     q.x.array[cell_index] = dolfinx.fem.assemble_local(ufl.dot(En, Em_ref) *self.dx, cell)#integral
+                        # q.x.scatter_forward()
+                        #=======================================================
+                        
+                        
+                        
+                        q_cell = dolfinx.fem.form(ufl.dot(En, Em_ref)*ufl.dx)
+                        #qs = dolfinx.fem.assemble.assemble_scalar(q_cell)
+                        dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
+                        q.x.scatter_forward()
+                        
+                        #qfunc = dolfinx.fem.assemble.assemble_scalar(-1j*k0/eta0/2*ufl.dot(En, Em_ref)*self.dx)
+                        #expr = dolfinx.fem.Expression(qfunc, self.ScalarSpace.element.interpolation_points())
+                        
+                        #q.interpolate(expr)
+                            
+                        #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0))
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
@@ -736,23 +767,26 @@ class Scatt3DProblem():
         '''
         ## This is presumably an overdone method of finding these already-computed fields - I doubt this is needed
         meshData = self.refMeshdata # use the ref case
-        
         E = dolfinx.fem.Function(self.ScalarSpace)
-        bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
-        def q_abs(x, Es, pol = 'z'): ## similar to the one in makeOptVectors
-            cells = []
-            cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, x.T)
-            colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, x.T)
-            for i, point in enumerate(x.T):
-                if len(colliding_cells.links(i)) > 0:
-                    cells.append(colliding_cells.links(i)[0])
-            if(pol == 'z-pol'): ## it is not simple to save the vector itself for some reason...
-                E_vals = Es.eval(x.T, cells)[:, 2]
-            elif(pol == 'x-pol'):
-                E_vals = Es.eval(x.T, cells)[:, 0]
-            elif(pol == 'y-pol'):
-                E_vals = Es.eval(x.T, cells)[:, 1]
-            return E_vals
+        
+        #=======================================================================
+        # bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
+        # def q_abs(x, Es, pol = 'z'): ## similar to the one in makeOptVectors
+        #     cells = []
+        #     cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, x.T)
+        #     colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, x.T)
+        #     for i, point in enumerate(x.T):
+        #         if len(colliding_cells.links(i)) > 0:
+        #             cells.append(colliding_cells.links(i)[0])
+        #     if(pol == 'z-pol'): ## it is not simple to save the vector itself for some reason...
+        #         E_vals = Es.eval(x.T, cells)[:, 2]
+        #     elif(pol == 'x-pol'):
+        #         E_vals = Es.eval(x.T, cells)[:, 0]
+        #     elif(pol == 'y-pol'):
+        #         E_vals = Es.eval(x.T, cells)[:, 1]
+        #     return E_vals
+        #=======================================================================
+        
         pols = ['x-pol', 'y-pol', 'z-pol']
         if(ref):
             sol = self.solutions_ref[0][0] ## fields for the first frequency/antenna combo
@@ -762,8 +796,25 @@ class Scatt3DProblem():
         pml_dofs = dolfinx.fem.locate_dofs_topological(self.ScalarSpace, entity_dim=self.tdim, entities=pml_cells)
         xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'outputPhaseAnimation.xdmf', file_mode='w')
         xdmf.write_mesh(meshData.mesh)
+        
+        xpart = dolfinx.fem.Constant(meshData.mesh, 0j)
+        ypart = dolfinx.fem.Constant(meshData.mesh, 0j)
+        zpart = dolfinx.fem.Constant(meshData.mesh, 0j)
+        polVec = ufl.as_vector([xpart, ypart, zpart])
         for pol in pols:
-            E.interpolate(functools.partial(q_abs, Es=sol, pol=pol))
+            #E.interpolate(functools.partial(q_abs, Es=sol, pol=pol))
+            xpart.value = 0
+            ypart.value = 0
+            zpart.value = 0
+            if(pol == 'z-pol'): ## it is not simple to save the vector itself for some reason...
+                zpart.value = 1
+            elif(pol == 'y-pol'): ## it is not simple to save the vector itself for some reason...
+                ypart.value = 1
+            elif(pol == 'x-pol'): ## it is not simple to save the vector itself for some reason...
+                xpart.value = 1
+            expr = dolfinx.fem.Expression(ufl.dot(sol, polVec), self.ScalarSpace.element.interpolation_points())
+            E.interpolate(expr)
+            
             E.name = pol
             if(removePML):
                 E.x.array[pml_dofs] = 0#np.nan ## use the ScalarSpace one
