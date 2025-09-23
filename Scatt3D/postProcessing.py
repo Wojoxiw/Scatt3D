@@ -193,6 +193,7 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
             for n in range(Nb):
                 A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
                 A[n,:] = A[n,idx]
+                ## remove the PML dofs
                 
         print('all data loaded in')
         sys.stdout.flush()

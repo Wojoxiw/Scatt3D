@@ -586,6 +586,7 @@ class Scatt3DProblem():
                         for m in range(meshData.N_antennas):
                             a[m].value = 0.0
                         a[n].value = 1.0
+                        top8 = timer() ## solve starting time
                         E_h = problem.solve()
                         for m in range(meshData.N_antennas):
                             factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*self.ds_antennas[m]))
@@ -604,6 +605,9 @@ class Scatt3DProblem():
                             b = self.comm.bcast(b, root=self.model_rank)
                             S[nf,m,n] = b
                         sols.append(E_h.copy())
+                        if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s)')
+                        sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
         
@@ -662,26 +666,28 @@ class Scatt3DProblem():
         q = dolfinx.fem.Function(self.Wspace)
         cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(self.Wspace))*ufl.dx)).array
         
-        bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
-        def q_func(x, Em, En, k0):
-            '''
-            Calculates the 'optimization vector' at each position in the reference meshData. Since the DUT mesh is different,
-            this requires interpolation to find the E-fields at each point
-            :param x: positions/points
-            :param Em: first E-field
-            :param En: second E-field
-            :param k0: wavenumber at this frequency
-            '''
-            cells = []
-            cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, x.T)
-            colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, x.T)
-            for i, point in enumerate(x.T):
-                if len(colliding_cells.links(i)) > 0:
-                    cells.append(colliding_cells.links(i)[0])
-            Em_vals = Em.eval(x.T, cells)
-            En_vals = En.eval(x.T, cells)
-            values = -1j*k0/eta0/2*(Em_vals[:,0]*En_vals[:,0] + Em_vals[:,1]*En_vals[:,1] + Em_vals[:,2]*En_vals[:,2])*cell_volumes
-            return values
+        #=======================================================================
+        # bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
+        # def q_func(x, Em, En, k0):
+        #     '''
+        #     Calculates the 'optimization vector' at each position in the reference meshData. Since the DUT mesh is different,
+        #     this requires interpolation to find the E-fields at each point
+        #     :param x: positions/points
+        #     :param Em: first E-field
+        #     :param En: second E-field
+        #     :param k0: wavenumber at this frequency
+        #     '''
+        #     cells = []
+        #     cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, x.T)
+        #     colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, x.T)
+        #     for i, point in enumerate(x.T):
+        #         if len(colliding_cells.links(i)) > 0:
+        #             cells.append(colliding_cells.links(i)[0])
+        #     Em_vals = Em.eval(x.T, cells)
+        #     En_vals = En.eval(x.T, cells)
+        #     values = -1j*k0/eta0/2*(Em_vals[:,0]*En_vals[:,0] + Em_vals[:,1]*En_vals[:,1] + Em_vals[:,2]*En_vals[:,2])*cell_volumes
+        #     return values
+        #=======================================================================
         
         
         ## save some problem/mesh data
@@ -707,7 +713,9 @@ class Scatt3DProblem():
                     Em_ref = self.solutions_ref[nf][m]
                     for n in range(meshData.N_antennas):
                         if(self.ErefEdut): ## only using Eref*Eref right now. Eref*Edut should provide a superior reconstruction with fully simulated data, though
-                            En = self.solutions_dut[nf][n] 
+                            En = dolfinx.fem.Function(Em_ref.function_space)  ## need to interpolate this onto the ref mesh
+                            En.interpolate(self.solutions_dut[nf][n])
+                            #En = self.solutions_dut[nf][n] 
                         else:
                             En = self.solutions_ref[nf][n]
                             
@@ -728,22 +736,51 @@ class Scatt3DProblem():
                         
                         
                         
-                        q_cell = dolfinx.fem.form(ufl.inner(En, ufl.conj(Em_ref))* ufl.TestFunction(self.Wspace) *ufl.dx) ## ufl.dx vs self.dx ????
-                        #qs = dolfinx.fem.assemble.assemble_scalar(q_cell)
+                        #=======================================================
+                        # for c in range(meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local):
+                        #     # Create a measure restricted to cell `c`
+                        #     dx_cell = ufl.dx(domain=meshData.mesh, subdomain_data=None, metadata={"cell_domains": np.array([c], dtype=np.int32)})
+                        #     
+                        #     # Form for that single cell
+                        #     v = ufl.TestFunction(self.Wspace)
+                        #     form_cell = -1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(v) * dx_cell
+                        # 
+                        #     # Assemble the scalar for this cell
+                        #     vec = dolfinx.fem.Function(self.Wspace)
+                        #     dolfinx.fem.petsc.assemble_vector(vec.x.petsc_vec, form_cell)
+                        #     vec.x.scatter_forward()
+                        #     
+                        #     # Store the value (the only DOF in DG0 corresponds to this cell)
+                        #     dofs = self.Wspace.dofmap.list[c]
+                        #     q[c] = vec.x.array[dofs[0]]
+                        #=======================================================
+                        
+                        qs = dolfinx.fem.Function(self.Wspace)
+                        for c in range(meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local):
+                            dx_cell = ufl.dx(domain=meshData.mesh, subdomain_data=None, metadata={"cell_domains": np.array([c], dtype=np.int32)})
+                            q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(self.Wspace)) *dx_cell)
+                            dolfinx.fem.petsc.assemble_vector(qs.x.petsc_vec, q_cell)
+                            qs.x.scatter_forward()
+                            
+                            q.x.array = q.x.array + qs.x.array
+                            
+                            
+                            
+                            
+                        q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(self.Wspace)) *ufl.dx)
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                         q.x.scatter_forward()
-                        
-                        #qfunc = dolfinx.fem.assemble.assemble_scalar(-1j*k0/eta0/2*ufl.dot(En, Em_ref)*self.dx)
-                        #expr = dolfinx.fem.Expression(qfunc, self.ScalarSpace.element.interpolation_points())
-                        
-                        #q.interpolate(expr)
-                            
-                        #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0))
+ 
+                        #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0)) ## old way of doing it - seems to give same values
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
                 if(meshData.N_antennas < 1): # if no antennas, still save something
-                    q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
+                    #q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
+                    q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(self.solutions_ref[nf][0], self.solutions_ref[nf][0])* ufl.conj(ufl.TestFunction(self.Wspace)) *ufl.dx)
+                    dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
+                    q.x.scatter_forward()
+                    
                     xdmf.write_function(q, nf)
         xdmf.close()
         
@@ -765,8 +802,11 @@ class Scatt3DProblem():
         :param Nframes: Number of frames in the anim. Each frame is a different phase from 0 to 2*pi
         :param removePML: If True, sets all values in the PML to something different
         '''
-        ## This is presumably an overdone method of finding these already-computed fields - I doubt this is needed
-        meshData = self.refMeshdata # use the ref case
+        if(ref):
+            meshData = self.refMeshdata # use the ref case
+        else:
+            meshData = self.DUTMeshdata
+        self.InitializeFEM(meshData) ## make sure functions are on the right mesh
         E = dolfinx.fem.Function(self.ScalarSpace)
         
         #=======================================================================
@@ -790,11 +830,13 @@ class Scatt3DProblem():
         pols = ['x-pol', 'y-pol', 'z-pol']
         if(ref):
             sol = self.solutions_ref[0][0] ## fields for the first frequency/antenna combo
+            textextra = 'ref'
         else:
             sol = self.solutions_dut[0][0]
+            textextra = 'dut'
         pml_cells = meshData.subdomains.find(meshData.pml_marker)
         pml_dofs = dolfinx.fem.locate_dofs_topological(self.ScalarSpace, entity_dim=self.tdim, entities=pml_cells)
-        xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'outputPhaseAnimation.xdmf', file_mode='w')
+        xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w')
         xdmf.write_mesh(meshData.mesh)
         
         xpart = dolfinx.fem.Constant(meshData.mesh, 0j)
