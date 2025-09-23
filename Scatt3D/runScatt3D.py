@@ -4,7 +4,6 @@
 #
 # Adapted from 2D code started by Daniel Sjoberg, (https://github.com/dsjoberg-git/rotsymsca, https://github.com/dsjoberg-git/ekas3d) approx. 2024-12-13 
 # Alexandros Pallaris, after that
-print('testprint')
 import os
 import numpy as np
 import dolfinx, ufl, basix
@@ -380,7 +379,7 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/3, degree=2)
+    #testFullExample(h=1/3, degree=2)
     #testSphereScattering(h=1/4, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
