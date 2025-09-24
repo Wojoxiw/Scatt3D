@@ -376,7 +376,9 @@ if __name__ == '__main__':
                     
             
             plt.show()
-            
+    
+    
+    runName = 'testRunDeg3'
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
