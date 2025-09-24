@@ -722,7 +722,6 @@ class Scatt3DProblem():
         #     return values
         #=======================================================================
         
-        print('a')
         ## save some problem/mesh data
         FEMm.epsr.x.array[:] = FEMm.dofs_map
         #self.epsr.name = 'dpf-map' ## can use names, but makes looking in paraview more annoying
@@ -733,13 +732,11 @@ class Scatt3DProblem():
         FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
         #self.epsr.name = 'epsr_ref'
         xdmf.write_function(FEMm.epsr, -2)
-        print('cca')
         if(DUTMesh):
             FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
             #self.epsr.name = 'epsr_dut'
             xdmf.write_function(FEMm.epsr, -1)
         elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-            print('da')
             epsr_dut_dut = dolfinx.fem.Function(self.FEMmesh_DUT.Wspace)
             epsr_dut_dut.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
             epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
@@ -754,7 +751,6 @@ class Scatt3DProblem():
             #self.epsr.name = 'epsr_dut'
             xdmf.write_function(FEMm.epsr, -1)
             
-        print('b')
         
         if(not DUTMesh): ## Do the interpolation to find qs, then save them
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
@@ -773,11 +769,12 @@ class Scatt3DProblem():
                         q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                         q.x.scatter_forward()
- 
+                        print('asd2')
                         #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0)) ## old way of doing it - seems to give same values
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
+                        print('asd3')
                 if(meshData.N_antennas < 1): # if no antennas, still save something
                     #q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
                     q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(self.solutions_ref[nf][0], self.solutions_ref[nf][0])* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
@@ -786,7 +783,6 @@ class Scatt3DProblem():
                     
                     xdmf.write_function(q, nf)
         xdmf.close()
-        print('sdsda')
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
             if( hasattr(self, 'S_dut') and hasattr(self, 'S_ref')): ## need both computed - otherwise, do not save
                 b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex) ## the array of S-parameters
