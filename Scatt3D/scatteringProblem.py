@@ -769,13 +769,10 @@ class Scatt3DProblem():
                             En.x.scatter_forward()
                         else:
                             En = self.solutions_ref[nf][n]
-                        print('asd')
+                            
                         q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
-                        print('aaaa')
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
-                        print('bbbb')
                         q.x.scatter_forward()
-                        print('asd2')
                         #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0)) ## old way of doing it - seems to give same values
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}'
