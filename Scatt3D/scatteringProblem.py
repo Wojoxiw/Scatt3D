@@ -35,6 +35,94 @@ eta0 = np.sqrt(mu0/eps0)
 # from memory_profiler import profile
 #===============================================================================
 
+
+class FEMmesh():
+    """Class to hold definitions and functions for either the dut or reference mesh. This is so that both can be defined at the same time, and hopefully be easier to distinguish between"""
+    def __init__(self,
+                 meshData, ## either the reference or dut MeshData from meshMaker.py
+                 degree, ## FE degree, from the problem
+                 quaddeg, ## quadrature degree, from the problem
+                 ):
+        self.meshData = meshData
+        self.tdim = 3                             # Dimension of triangles/tetraedra. 3 for 3D
+        self.fdim = self.tdim - 1                      # Dimension of facets
+        self.fem_degree = degree
+        self.dxquaddeg = quaddeg
+        self.meshData.mesh.topology.create_connectivity(self.tdim, self.tdim)
+        self.meshData.mesh.topology.create_connectivity(self.fdim, self.tdim) ## required when there are no antennas, for some reason
+        self.InitializeFEM()
+        
+    def InitializeFEM(self):
+        # Set up some FEM function spaces and boundary condition stuff.
+        curl_element = basix.ufl.element('N1curl', self.meshData.mesh.basix_cell(), self.fem_degree)
+        self.Vspace = dolfinx.fem.functionspace(self.meshData.mesh, curl_element)
+        self.ndofs = self.Vspace.dofmap.index_map.size_global * self.Vspace.dofmap.index_map_bs ## from https://github.com/jpdean/maxwell/blob/master/solver.py#L108-L162 - presumably this is accurate? Only the first coefficient is nonone
+        self.ScalarSpace = dolfinx.fem.functionspace(self.meshData.mesh, ('CG', self.meshData.order)) ## this is just used for plotting+post-computations, so use degree... 1?  Might need to be mesh degree (self.meshData.order) - but this gives an error
+        self.Wspace = dolfinx.fem.functionspace(self.meshData.mesh, ("DG", 0))
+        # Create measures for subdomains and surfaces
+        self.dx = ufl.Measure('dx', domain=self.meshData.mesh, subdomain_data=self.meshData.subdomains, metadata={'quadrature_degree': self.dxquaddeg})
+        self.dx_dom = self.dx((self.meshData.domain_marker, self.meshData.mat_marker, self.meshData.defect_marker))
+        self.dx_pml = self.dx(self.meshData.pml_marker)
+        self.ds = ufl.Measure('ds', domain=self.meshData.mesh, subdomain_data=self.meshData.boundaries) ## changing quadrature degree on ds/dS doesn't seem to have any effect
+        self.dS = ufl.Measure('dS', domain=self.meshData.mesh, subdomain_data=self.meshData.boundaries) ## capital S for internal facets (shared between two cells?)
+        self.ds_antennas = [self.ds(m) for m in self.meshData.antenna_surface_markers]
+        self.ds_pec = self.ds(self.meshData.pec_surface_marker)
+        self.Ezero = dolfinx.fem.Function(self.Vspace)
+        self.Ezero.x.array[:] = 0.0
+        self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.Vspace, entity_dim=self.fdim, entities=self.meshData.boundaries.find(self.meshData.pec_surface_marker))
+        self.bc_pec = dolfinx.fem.dirichletbc(self.Ezero, self.pec_dofs)
+        if(self.meshData.FF_surface): ## if there is a farfield surface
+            self.dS_farfield = self.dS(self.meshData.farfield_surface_marker)
+            cells = []
+            ff_facets = self.meshData.boundaries.find(self.meshData.farfield_surface_marker)
+            facets_to_cells = self.meshData.mesh.topology.connectivity(self.fdim, self.tdim)
+            for facet in ff_facets:
+                for cell in facets_to_cells.links(facet):
+                    if cell not in cells:
+                        cells.append(cell)
+            cells.sort()
+            self.farfield_cells = np.array(cells)
+        else:
+            self.farfield_cells = []
+            
+    def InitializeMaterial(self, material_epsr, material_mur, defect_epsr, defect_mur, epsr_bkg, mur_bkg):
+        # Set up material parameters. Not changing mur for now, need to edit this if doing so
+        ## First find dofs for different 'materials'
+        mat_cells = self.meshData.subdomains.find(self.meshData.mat_marker)
+        self.mat_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=mat_cells)
+        defect_cells = self.meshData.subdomains.find(self.meshData.defect_marker)
+        self.defect_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=defect_cells)
+        pml_cells = self.meshData.subdomains.find(self.meshData.pml_marker)
+        self.pml_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=pml_cells)
+        domain_cells = self.meshData.subdomains.find(self.meshData.domain_marker)
+        self.domain_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=domain_cells)
+        self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.fdim, entities=self.meshData.boundaries.find(self.meshData.pec_surface_marker)) ## should be empty since these surfaces are not 3D, I think
+        
+        self.epsr = dolfinx.fem.Function(self.Wspace)
+        self.mur = dolfinx.fem.Function(self.Wspace)
+        ## make a dof-map to start
+        self.epsr.x.array[:] = np.nan
+        self.epsr.x.array[self.domain_dofs] = 0
+        self.epsr.x.array[self.pml_dofs] = -1
+        self.epsr.x.array[self.defect_dofs] = 3
+        self.epsr.x.array[self.mat_dofs] = 2
+        self.epsr.x.array[self.pec_dofs] = 5
+        self.epsr.x.array[self.farfield_cells] = 1
+        self.dofs_map = self.epsr.x.array.copy()
+        
+        ## then the cases
+        self.epsr.x.array[:] = epsr_bkg
+        self.mur.x.array[:] = mur_bkg
+        self.epsr.x.array[self.mat_dofs] = material_epsr
+        self.mur.x.array[self.mat_dofs] = material_mur
+        self.epsr.x.array[self.defect_dofs] = material_epsr
+        self.mur.x.array[self.defect_dofs] = material_mur
+        self.epsr_array_ref = self.epsr.x.array.copy()
+        self.epsr.x.array[self.defect_dofs] = defect_epsr
+        self.mur.x.array[self.defect_dofs] = defect_mur
+        self.epsr_array_dut = self.epsr.x.array.copy()
+    
+
 class Scatt3DProblem():
     """Class to hold definitions and functions for simulating scattering or transmission of electromagnetic waves for a rotationally symmetric structure."""
     def __init__(self,
@@ -97,7 +185,6 @@ class Scatt3DProblem():
             self.fvec = np.linspace(f0-BW/2, f0+BW/2, Nf)  # Vector of simulation frequencies
             
         self.PML_R0 = PML_R0
-        self.dxquaddeg = quaddeg
         self.solver_settings = solver_settings
         self.max_solver_time = max_solver_time
             
@@ -107,7 +194,6 @@ class Scatt3DProblem():
         self.material_mur = material_mur
         self.defect_epsr = defect_epsr
         self.defect_mur = defect_mur
-        self.fem_degree = fem_degree
         self.antenna_pol = pol
         self.excitation = excitation
         
@@ -115,26 +201,20 @@ class Scatt3DProblem():
         self.PW_pol = PW_pol
 
         # Set up mesh information
-        self.refMeshdata = refMeshdata
-        self.refMeshdata.mesh.topology.create_connectivity(self.tdim, self.tdim)
-        self.refMeshdata.mesh.topology.create_connectivity(self.fdim, self.tdim) ## required when there are no antennas, for some reason
+        self.FEMmesh_ref = FEMmesh(refMeshdata, fem_degree, quaddeg)
+        self.FEMmesh_ref.InitializeMaterial(material_epsr, material_mur, defect_epsr, defect_mur, epsr_bkg, mur_bkg)
         if(DUTMeshdata != None):
-            self.DUTMeshdata = DUTMeshdata
-            self.DUTMeshdata.mesh.topology.create_connectivity(self.tdim, self.tdim)
-            self.DUTMeshdata.mesh.topology.create_connectivity(self.fdim, self.tdim) ## required when there are no antennas, for some reason
+            self.FEMmesh_DUT = FEMmesh(DUTMeshdata, fem_degree, quaddeg)
+            self.FEMmesh_DUT.InitializeMaterial(material_epsr, material_mur, defect_epsr, defect_mur, epsr_bkg, mur_bkg)
             
         # Calculate solutions
         if(computeImmediately):
             if(computeBoth): ## compute both cases, then opt vectors if asked for
                 self.compute(False, makeOptVects=False)
-                self.makeOptVectors(True) ## makes an xdmf of the DUT mesh/epsrs
-                self.saveDofsView(self.DUTMeshdata, self.dataFolder+self.name+'DUTDofsview.xdmf') ## to see that all groups are assigned appropriately
-                self.saveDofsView(self.refMeshdata, self.dataFolder+self.name+'refDofsview.xdmf')
+                self.makeOptVectors(True) ## makes an xdmf of the DUT mesh/epsrs/dofsmap
                 self.compute(True, makeOptVects=self.makeOptVects)
             else: ## just compute the ref case, and make opt vects if asked for
                 self.compute(computeRef, makeOptVects=self.makeOptVects)
-            
-                
     
     #@profile
     def compute(self, computeRef=True, makeOptVects=True):
@@ -142,17 +222,17 @@ class Scatt3DProblem():
         Sets up and runs the simulation. All the setup is set to reflect the current mesh, reference or dut. Solutions are saved.
         :param computeRef: If True, computes on the reference mesh
         '''
-        if(computeRef):
-            meshData = self.refMeshdata
-        else:
-            meshData = self.DUTMeshdata
         # Initialize function spaces, boundary conditions, and PML - for the reference mesh
-        self.InitializeFEM(meshData)
-        self.InitializeMaterial(meshData)
-        self.CalculatePML(meshData, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
+        if(computeRef):
+            meshData = self.FEMmesh_ref.meshData
+            self.CalculatePML(self.FEMmesh_ref, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
+        else:
+            meshData = self.FEMmesh_DUT.meshData
+            self.CalculatePML(self.FEMmesh_DUT, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
+        
         t1 = timer()
         #mem_usage = memory_usage((self.ComputeSolutions, (meshData,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
-        self.ComputeSolutions(meshData, computeRef)
+        self.ComputeSolutions(computeRef)
         mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
         self.calcTime = timer()-t1 ## Time it took to solve the problem. Given to mem-time estimator 
         if(self.verbosity > 2):
@@ -166,64 +246,8 @@ class Scatt3DProblem():
         sys.stdout.flush()
         if(makeOptVects):
             self.makeOptVectors()
-                
-    def InitializeFEM(self, meshData):
-        # Set up some FEM function spaces and boundary condition stuff.
-        curl_element = basix.ufl.element('N1curl', meshData.mesh.basix_cell(), self.fem_degree)
-        self.Vspace = dolfinx.fem.functionspace(meshData.mesh, curl_element)
-        self.ndofs = self.Vspace.dofmap.index_map.size_global * self.Vspace.dofmap.index_map_bs ## from https://github.com/jpdean/maxwell/blob/master/solver.py#L108-L162 - presumably this is accurate? Only the first coefficient is nonone
-        self.ScalarSpace = dolfinx.fem.functionspace(meshData.mesh, ('CG', meshData.order)) ## this is just used for plotting+post-computations, so use degree... 1?  Might need to be mesh degree (meshData.order) - but this gives an error
-        self.Wspace = dolfinx.fem.functionspace(meshData.mesh, ("DG", 0))
-        # Create measures for subdomains and surfaces
-        self.dx = ufl.Measure('dx', domain=meshData.mesh, subdomain_data=meshData.subdomains, metadata={'quadrature_degree': self.dxquaddeg})
-        self.dx_dom = self.dx((meshData.domain_marker, meshData.mat_marker, meshData.defect_marker))
-        self.dx_pml = self.dx(meshData.pml_marker)
-        self.ds = ufl.Measure('ds', domain=meshData.mesh, subdomain_data=meshData.boundaries) ## changing quadrature degree on ds/dS doesn't seem to have any effect
-        self.dS = ufl.Measure('dS', domain=meshData.mesh, subdomain_data=meshData.boundaries) ## capital S for internal facets (shared between two cells?)
-        self.ds_antennas = [self.ds(m) for m in meshData.antenna_surface_markers]
-        self.ds_pec = self.ds(meshData.pec_surface_marker)
-        self.Ezero = dolfinx.fem.Function(self.Vspace)
-        self.Ezero.x.array[:] = 0.0
-        self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.Vspace, entity_dim=self.fdim, entities=meshData.boundaries.find(meshData.pec_surface_marker))
-        self.bc_pec = dolfinx.fem.dirichletbc(self.Ezero, self.pec_dofs)
-        if(meshData.FF_surface): ## if there is a farfield surface
-            self.dS_farfield = self.dS(meshData.farfield_surface_marker)
-            cells = []
-            ff_facets = meshData.boundaries.find(meshData.farfield_surface_marker)
-            facets_to_cells = meshData.mesh.topology.connectivity(self.fdim, self.tdim)
-            for facet in ff_facets:
-                for cell in facets_to_cells.links(facet):
-                    if cell not in cells:
-                        cells.append(cell)
-            cells.sort()
-            self.farfield_cells = np.array(cells)
-        else:
-            self.farfield_cells = []
         
-    def InitializeMaterial(self, meshData):
-        # Set up material parameters. Not chancing mur for now, need to edit this if doing so
-        self.epsr = dolfinx.fem.Function(self.Wspace)
-        self.mur = dolfinx.fem.Function(self.Wspace)
-        self.epsr.x.array[:] = self.epsr_bkg
-        self.mur.x.array[:] = self.mur_bkg
-        mat_cells = meshData.subdomains.find(meshData.mat_marker)
-        self.mat_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=mat_cells)
-        defect_cells = meshData.subdomains.find(meshData.defect_marker)
-        self.defect_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=defect_cells)
-        pml_cells = meshData.subdomains.find(meshData.pml_marker)
-        self.pml_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=pml_cells)
-        domain_cells = meshData.subdomains.find(meshData.domain_marker)
-        self.domain_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=domain_cells)
-        self.epsr.x.array[self.mat_dofs] = self.material_epsr
-        self.mur.x.array[self.mat_dofs] = self.material_mur
-        self.epsr.x.array[self.defect_dofs] = self.material_epsr
-        self.mur.x.array[self.defect_dofs] = self.material_mur
-        self.epsr_array_ref = self.epsr.x.array.copy()
-        self.epsr.x.array[self.defect_dofs] = self.defect_epsr
-        self.mur.x.array[self.defect_dofs] = self.defect_mur
-        self.epsr_array_dut = self.epsr.x.array.copy()
-        
-    def CalculatePML(self, meshData, k):
+    def CalculatePML(self, FEMm, k):
         '''
         Set up the PML - stretched coordinates to form a perfectly-matched layer which absorbs incoming (perpendicular) waves
          Since we calculate at many frequencies, recalculate this for each freq. (should also just work for many frequencies without recalculating, but the calculation is quick)
@@ -251,44 +275,50 @@ class Scatt3DProblem():
             '''
             J = ufl.grad(pml_coords)
             A = ufl.inv(J)
-            epsr_pml = ufl.det(J) * A * self.epsr * ufl.transpose(A)
-            mur_pml = ufl.det(J) * A * self.mur * ufl.transpose(A)
+            epsr_pml = ufl.det(J) * A * FEMm.epsr * ufl.transpose(A)
+            mur_pml = ufl.det(J) * A * FEMm.mur * ufl.transpose(A)
             murinv_pml = ufl.inv(mur_pml)
             return epsr_pml, murinv_pml
         
-        x, y, z = ufl.SpatialCoordinate(meshData.mesh)
-        if(meshData.domain_geom == 'domedCyl'): ## implement it for this geometry
+        x, y, z = ufl.SpatialCoordinate(FEMm.meshData.mesh)
+        if(FEMm.meshData.domain_geom == 'domedCyl'): ## implement it for this geometry
             r = ufl.real(ufl.sqrt(x**2 + y**2)) ## cylindrical radius. need to set this to real because I compare against it later
-            domain_height_spheroid = ufl.conditional(ufl.ge(r, meshData.domain_radius), meshData.domain_height/2, (meshData.domain_height/2+meshData.dome_height)*ufl.real(ufl.sqrt(1-(r/(meshData.domain_radius+meshData.domain_spheroid_extraRadius))**2)))   ##start the z-stretching at, at minmum, the height of the domain cylinder
-            PML_height_spheroid = (meshData.PML_height/2+meshData.dome_height)*ufl.sqrt(1-(r/(meshData.PML_radius+meshData.PML_spheroid_extraRadius))**2) ##should always be ge the pml cylinder's height
-            x_stretched = pml_stretch(x, r, k, x_dom=meshData.domain_radius, x_pml=meshData.PML_radius)
-            y_stretched = pml_stretch(y, r, k, x_dom=meshData.domain_radius, x_pml=meshData.PML_radius)
+            domain_height_spheroid = ufl.conditional(ufl.ge(r, FEMm.meshData.domain_radius), FEMm.meshData.domain_height/2, (FEMm.meshData.domain_height/2+FEMm.meshData.dome_height)*ufl.real(ufl.sqrt(1-(r/(FEMm.meshData.domain_radius+FEMm.meshData.domain_spheroid_extraRadius))**2)))   ##start the z-stretching at, at minmum, the height of the domain cylinder
+            PML_height_spheroid = (FEMm.meshData.PML_height/2+FEMm.meshData.dome_height)*ufl.sqrt(1-(r/(FEMm.meshData.PML_radius+FEMm.meshData.PML_spheroid_extraRadius))**2) ##should always be ge the pml cylinder's height
+            x_stretched = pml_stretch(x, r, k, x_dom=FEMm.meshData.domain_radius, x_pml=FEMm.meshData.PML_radius)
+            y_stretched = pml_stretch(y, r, k, x_dom=FEMm.meshData.domain_radius, x_pml=FEMm.meshData.PML_radius)
             z_stretched = pml_stretch(z, abs(z), k, x_dom=domain_height_spheroid, x_pml=PML_height_spheroid) ## /2 since the height is from - to +
-            x_pml = ufl.conditional(ufl.ge(abs(r), meshData.domain_radius), x_stretched, x) ## stretch when outside radius of the domain
-            y_pml = ufl.conditional(ufl.ge(abs(r), meshData.domain_radius), y_stretched, y) ## stretch when outside radius of the domain
+            x_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshData.domain_radius), x_stretched, x) ## stretch when outside radius of the domain
+            y_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshData.domain_radius), y_stretched, y) ## stretch when outside radius of the domain
             z_pml = ufl.conditional(ufl.ge(abs(z), domain_height_spheroid), z_stretched, z) ## stretch when outside the height of the cylinder of the domain (or oblate spheroid roof with factor a_dom/a_pml - should only be higher/lower inside the domain radially)
-        elif(meshData.domain_geom == 'sphere'):
+        elif(FEMm.meshData.domain_geom == 'sphere'):
             r = ufl.real(ufl.sqrt(x**2 + y**2 + z**2))
-            x_stretched = pml_stretch(x, r, k, x_dom=meshData.domain_radius, x_pml=meshData.PML_radius)
-            y_stretched = pml_stretch(y, r, k, x_dom=meshData.domain_radius, x_pml=meshData.PML_radius)
-            z_stretched = pml_stretch(z, r, k, x_dom=meshData.domain_radius, x_pml=meshData.PML_radius)
-            x_pml = ufl.conditional(ufl.ge(abs(r), meshData.domain_radius), x_stretched, x) ## stretch when outside radius of the domain
-            y_pml = ufl.conditional(ufl.ge(abs(r), meshData.domain_radius), y_stretched, y) ## stretch when outside radius of the domain
-            z_pml = ufl.conditional(ufl.ge(abs(r), meshData.domain_radius), z_stretched, z) ## stretch when outside radius of the domain
+            x_stretched = pml_stretch(x, r, k, x_dom=FEMm.meshData.domain_radius, x_pml=FEMm.meshData.PML_radius)
+            y_stretched = pml_stretch(y, r, k, x_dom=FEMm.meshData.domain_radius, x_pml=FEMm.meshData.PML_radius)
+            z_stretched = pml_stretch(z, r, k, x_dom=FEMm.meshData.domain_radius, x_pml=FEMm.meshData.PML_radius)
+            x_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshData.domain_radius), x_stretched, x) ## stretch when outside radius of the domain
+            y_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshData.domain_radius), y_stretched, y) ## stretch when outside radius of the domain
+            z_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshData.domain_radius), z_stretched, z) ## stretch when outside radius of the domain
         else:
             print('nonvalid meshData.domain_geom')
             exit()
         pml_coords = ufl.as_vector((x_pml, y_pml, z_pml))
-        self.epsr_pml, self.murinv_pml = pml_epsr_murinv(pml_coords)
+        FEMm.epsr_pml, FEMm.murinv_pml = pml_epsr_murinv(pml_coords)
     
     #@profile
-    def ComputeSolutions(self, meshData, computeRef = True):
+    def ComputeSolutions(self, computeRef = True):
         '''
         Computes the solutions
         
         :param computeRef: if True, computes the reference case (this is always needed for reconstruction). if False, computes the DUT case (needed for simulation-only stuff).
         Since things need to be initialized for each mesh, that should be done first.
         '''
+        if(computeRef):
+            FEMm = self.FEMmesh_ref
+        else:
+            FEMm = self.FEMmesh_DUT
+        meshData = FEMm.meshData
+        
         def Eport(x): # Set up the excitation - on antenna faces
             """
             Compute the normalized electric field distribution in all ports.
@@ -334,13 +364,13 @@ class Scatt3DProblem():
                 E_pw[:] = E_pw[:]*np.exp(-1j*np.dot(k_pw, x))
             return E_pw
     
-        Ep = dolfinx.fem.Function(self.Vspace)
+        Ep = dolfinx.fem.Function(FEMm.Vspace)
         Ep.interpolate(lambda x: Eport(x))
-        Eb = dolfinx.fem.Function(self.Vspace) ## background/plane wave excitation
+        Eb = dolfinx.fem.Function(FEMm.Vspace) ## background/plane wave excitation
         
         # Set up simulation
-        E = ufl.TrialFunction(self.Vspace)
-        v = ufl.TestFunction(self.Vspace)
+        E = ufl.TrialFunction(FEMm.Vspace)
+        v = ufl.TestFunction(FEMm.Vspace)
         curl_E = ufl.curl(E)
         curl_v = ufl.curl(v)
         nvec = ufl.FacetNormal(meshData.mesh)
@@ -349,13 +379,13 @@ class Scatt3DProblem():
         a = [dolfinx.fem.Constant(meshData.mesh, 1.0 + 0j) for n in range(meshData.N_antennas)]
         F_antennas_str = '0' ## seems to give an error when evaluating an empty string
         for n in range(meshData.N_antennas):
-            F_antennas_str += f"""+ 1j*k00/Zrel*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*self.ds_antennas[{n}] - 1j*k00/Zrel*2*a[{n}]*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*self.ds_antennas[{n}]"""
-        F = ufl.inner(1/self.mur*curl_E, curl_v)*self.dx_dom \
-            - ufl.inner(k00**2*self.epsr*E, v)*self.dx_dom \
-            + ufl.inner(self.murinv_pml*curl_E, curl_v)*self.dx_pml \
-            - ufl.inner(k00**2*self.epsr_pml*E, v)*self.dx_pml \
-            - ufl.inner(k00**2*(self.epsr - 1/self.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*self.dx_dom + eval(F_antennas_str) ## background field and antenna terms
-        bcs = [self.bc_pec]
+            F_antennas_str += f"""+ 1j*k00/Zrel*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}] - 1j*k00/Zrel*2*a[{n}]*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}]"""
+        F = ufl.inner(1/FEMm.mur*curl_E, curl_v)*FEMm.dx_dom \
+            - ufl.inner(k00**2*FEMm.epsr*E, v)*FEMm.dx_dom \
+            + ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx_pml \
+            - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx_pml \
+            - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx_dom + eval(F_antennas_str) ## background field and antenna terms
+        bcs = [FEMm.bc_pec]
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
@@ -467,19 +497,21 @@ class Scatt3DProblem():
         
         
         
-        ### try Laguerre transform stuff (https://arxiv.org/pdf/2309.11023)
-        #Assemble K, M
-        
-        #Laguerre Setup Stuff
-        eta = 1
-        M_lag = 8
-        beta1 = mu0/(4*eps0) * self.epsr*eta0**2
-        
-        # for m in N, build then solve elliptic systems/operators
-        
-        # Then sum them to obtain the actual solution
-        
-        ###
+        #=======================================================================
+        # ### try Laguerre transform stuff (https://arxiv.org/pdf/2309.11023)
+        # #Assemble K, M
+        # 
+        # #Laguerre Setup Stuff
+        # eta = 1
+        # M_lag = 8
+        # beta1 = mu0/(4*eps0) * FEMm.epsr*eta0**2
+        # 
+        # # for m in N, build then solve elliptic systems/operators
+        # 
+        # # Then sum them to obtain the actual solution
+        # 
+        # ###
+        #=======================================================================
         
         
         #=======================================================================
@@ -575,7 +607,7 @@ class Scatt3DProblem():
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
                 Zrel.value = k00.value/np.sqrt(k00.value**2 - meshData.kc**2)
-                self.CalculatePML(meshData, k0)  ## update PML to this freq.
+                self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 sols = []
                 if(meshData.N_antennas == 0): ## if no antennas:
@@ -589,14 +621,14 @@ class Scatt3DProblem():
                         top8 = timer() ## solve starting time
                         E_h = problem.solve()
                         for m in range(meshData.N_antennas):
-                            factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*self.ds_antennas[m]))
+                            factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
                             factors = self.comm.gather(factor, root=self.model_rank)
                             if self.comm.rank == self.model_rank:
                                 factor = sum(factors)
                             else:
                                 factor = None
                             factor = self.comm.bcast(factor, root=self.model_rank)
-                            b = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(E_h, nvec), ufl.cross(Ep, nvec))*self.ds_antennas[m] + Zrel/(1j*k0)*ufl.inner(ufl.curl(E_h), ufl.cross(Ep, nvec))*self.ds_antennas[m]))/factor
+                            b = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(E_h, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m] + Zrel/(1j*k0)*ufl.inner(ufl.curl(E_h), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))/factor
                             bs = self.comm.gather(b, root=self.model_rank)
                             if self.comm.rank == self.model_rank:
                                 b = sum(bs)
@@ -606,22 +638,22 @@ class Scatt3DProblem():
                             S[nf,m,n] = b
                         sols.append(E_h.copy())
                         if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
-                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s)')
+                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s')
                         sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
         
         if(computeRef):
             if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
-                print(f'Rank {self.comm.rank}: Computing REF solutions (ndofs={self.ndofs})')
+                print(f'Rank {self.comm.rank}: Computing REF solutions (ndofs={FEMm.ndofs})')
             sys.stdout.flush()
-            self.epsr.x.array[:] = self.epsr_array_ref
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
             self.S_ref, self.solutions_ref = ComputeFields()    
         else:
             if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
-                print(f'Rank {self.comm.rank}: Computing DUT solutions')
+                print(f'Rank {self.comm.rank}: Computing DUT solutions (ndofs={FEMm.ndofs})')
             sys.stdout.flush()
-            self.epsr.x.array[:] = self.epsr_array_dut
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
             self.S_dut, self.solutions_dut = ComputeFields()
             
         solver = problem.solver
@@ -645,15 +677,16 @@ class Scatt3DProblem():
         '''
         Computes the optimization vectors from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
-        :param meshData: Should be the refMeshData, since that is what the reconstruction is on. If justMesh, can be the DUT mesh
-        :param justMesh: No optimization vectors, just cell volumes and epsrs
+        :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
         '''
         ## First, save mesh to xdmf
         if(DUTMesh):
-            meshData = self.DUTMeshdata
+            FEMm = self.FEMmesh_DUT
+            meshData = FEMm.meshData
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'DUTmesh.xdmf', file_mode='w')
         else:
-            meshData = self.refMeshdata
+            FEMm = self.FEMmesh_ref
+            meshData = FEMm.meshData
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
         xdmf.write_mesh(meshData.mesh)
         
@@ -663,8 +696,8 @@ class Scatt3DProblem():
             sys.stdout.flush()
         
         # Create function space for temporary interpolation
-        q = dolfinx.fem.Function(self.Wspace)
-        cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(self.Wspace))*ufl.dx)).array
+        q = dolfinx.fem.Function(FEMm.Wspace)
+        cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.Wspace))*ufl.dx)).array
         
         #=======================================================================
         # bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
@@ -691,15 +724,34 @@ class Scatt3DProblem():
         
         
         ## save some problem/mesh data
-        self.epsr.x.array[:] = cell_volumes
-        #self.epsr.name = 'Cell Volumes' ## can use names, but makes looking in paraview more annoying
-        xdmf.write_function(self.epsr, -3)
-        self.epsr.x.array[:] = self.epsr_array_ref
+        FEMm.epsr.x.array[:] = FEMm.dofs_map
+        #self.epsr.name = 'dpf-map' ## can use names, but makes looking in paraview more annoying
+        xdmf.write_function(FEMm.epsr, -4)
+        FEMm.epsr.x.array[:] = cell_volumes
+        #self.epsr.name = 'Cell Volumes'
+        xdmf.write_function(FEMm.epsr, -3)
+        FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
         #self.epsr.name = 'epsr_ref'
-        xdmf.write_function(self.epsr, -2)
-        self.epsr.x.array[:] = self.epsr_array_dut
-        #self.epsr.name = 'epsr_dut'
-        xdmf.write_function(self.epsr, -1)
+        xdmf.write_function(FEMm.epsr, -2)
+        if(DUTMesh):
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
+            #self.epsr.name = 'epsr_dut'
+            xdmf.write_function(FEMm.epsr, -1)
+        elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
+            epsr_dut_dut = dolfinx.fem.Function(self.FEMmesh_DUT.Wspace)
+            epsr_dut_dut.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
+            epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
+            
+            fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
+            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-14) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            epsr_dut.interpolate_nonmatching(epsr_dut_dut, cells, interpolation_data=interpolation_data)
+            epsr_dut.x.scatter_forward()
+            FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
+            #self.epsr.name = 'epsr_dut'
+            xdmf.write_function(FEMm.epsr, -1)
+            
         
         
         if(not DUTMesh): ## Do the interpolation to find qs, then save them
@@ -719,55 +771,7 @@ class Scatt3DProblem():
                         else:
                             En = self.solutions_ref[nf][n]
                             
-                        #=======================================================
-                        # cell = meshData.mesh.topology.cell_type
-                        # quadrature_degree = 2 * self.fem_degree ## twice the degree, for some reason? Better interpolation??
-                        # quadrature_points, weights = basix.make_quadrature(cell, quadrature_degree)
-                        # q_cell = dolfinx.fem.Expression(ufl.dot(En, Em_ref)) ## integral of E_m dot E_n per cell    
-                        # 
-                        # 
-                        # for cell_index in range(meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local): ## iterate over every cell
-                        #     xq = q_cell.eval(cell_index)  ## values at quadrature points
-                        #     detJ = meshData.mseh.geometry.cmap.detJ(cell_index, quadrature_points)  ## jacobian determinant
-                        #     integral = np.sum(xq * weights * detJ)
-                        #     q.x.array[cell_index] = dolfinx.fem.assemble_local(ufl.dot(En, Em_ref) *self.dx, cell)#integral
-                        # q.x.scatter_forward()
-                        #=======================================================
-                        
-                        
-                        
-                        #=======================================================
-                        # for c in range(meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local):
-                        #     # Create a measure restricted to cell `c`
-                        #     dx_cell = ufl.dx(domain=meshData.mesh, subdomain_data=None, metadata={"cell_domains": np.array([c], dtype=np.int32)})
-                        #     
-                        #     # Form for that single cell
-                        #     v = ufl.TestFunction(self.Wspace)
-                        #     form_cell = -1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(v) * dx_cell
-                        # 
-                        #     # Assemble the scalar for this cell
-                        #     vec = dolfinx.fem.Function(self.Wspace)
-                        #     dolfinx.fem.petsc.assemble_vector(vec.x.petsc_vec, form_cell)
-                        #     vec.x.scatter_forward()
-                        #     
-                        #     # Store the value (the only DOF in DG0 corresponds to this cell)
-                        #     dofs = self.Wspace.dofmap.list[c]
-                        #     q[c] = vec.x.array[dofs[0]]
-                        #=======================================================
-                        
-                        qs = dolfinx.fem.Function(self.Wspace)
-                        for c in range(meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local):
-                            dx_cell = ufl.dx(domain=meshData.mesh, subdomain_data=None, metadata={"cell_domains": np.array([c], dtype=np.int32)})
-                            q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(self.Wspace)) *dx_cell)
-                            dolfinx.fem.petsc.assemble_vector(qs.x.petsc_vec, q_cell)
-                            qs.x.scatter_forward()
-                            
-                            q.x.array = q.x.array + qs.x.array
-                            
-                            
-                            
-                            
-                        q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(self.Wspace)) *ufl.dx)
+                        q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                         q.x.scatter_forward()
  
@@ -777,7 +781,7 @@ class Scatt3DProblem():
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
                 if(meshData.N_antennas < 1): # if no antennas, still save something
                     #q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
-                    q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(self.solutions_ref[nf][0], self.solutions_ref[nf][0])* ufl.conj(ufl.TestFunction(self.Wspace)) *ufl.dx)
+                    q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(self.solutions_ref[nf][0], self.solutions_ref[nf][0])* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
                     dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                     q.x.scatter_forward()
                     
@@ -793,7 +797,7 @@ class Scatt3DProblem():
                             b[nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
                 np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mat=self.material_epsr, epsr_defect=self.defect_epsr, N_antennas=meshData.N_antennas)    
     
-    def saveEFieldsForAnim(self, ref=True, Nframes = 50, removePML = True):
+    def saveEFieldsForAnim(self, ref=True, Nframes = 50, removePML = True, dutOnRefMesh=True):
         '''
         Saves the E-field magnitudes for the final solution into .xdmf, for a number of different phase factors to create an animation in paraview
         Uses the reference mesh and fields. If removePML, set the values within the PML to 0 (can also be NaN, etc.)
@@ -801,13 +805,14 @@ class Scatt3DProblem():
         :param ref: If True, plot for the reference case. If False, for the DUT case
         :param Nframes: Number of frames in the anim. Each frame is a different phase from 0 to 2*pi
         :param removePML: If True, sets all values in the PML to something different
+        :param dutOnrefMesh: If True and plotting the DUT, interpolate it onto the reference mesh
         '''
-        if(ref):
-            meshData = self.refMeshdata # use the ref case
-        else:
-            meshData = self.DUTMeshdata
-        self.InitializeFEM(meshData) ## make sure functions are on the right mesh
-        E = dolfinx.fem.Function(self.ScalarSpace)
+        if(ref or dutOnRefMesh):
+            FEMm = self.FEMmesh_ref
+        elif(not dutOnRefMesh): ## only use the DUT mesh if not dutOnRefMesh
+            FEMm = self.FEMmesh_DUT
+            
+        E = dolfinx.fem.Function(FEMm.ScalarSpace)
         
         #=======================================================================
         # bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
@@ -831,17 +836,26 @@ class Scatt3DProblem():
         if(ref):
             sol = self.solutions_ref[0][0] ## fields for the first frequency/antenna combo
             textextra = 'ref'
+        elif(dutOnRefMesh):
+            sol = dolfinx.fem.Function(FEMm.Vspace)
+            
+            
+            fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
+            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-14) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            sol.interpolate_nonmatching(self.solutions_dut[0][0], cells, interpolation_data=interpolation_data)
+            sol.x.scatter_forward()
+            textextra = 'dutOnRefMesh'
         else:
             sol = self.solutions_dut[0][0]
             textextra = 'dut'
-        pml_cells = meshData.subdomains.find(meshData.pml_marker)
-        pml_dofs = dolfinx.fem.locate_dofs_topological(self.ScalarSpace, entity_dim=self.tdim, entities=pml_cells)
         xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w')
-        xdmf.write_mesh(meshData.mesh)
+        xdmf.write_mesh(FEMm.meshData.mesh)
         
-        xpart = dolfinx.fem.Constant(meshData.mesh, 0j)
-        ypart = dolfinx.fem.Constant(meshData.mesh, 0j)
-        zpart = dolfinx.fem.Constant(meshData.mesh, 0j)
+        xpart = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
+        ypart = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
+        zpart = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
         polVec = ufl.as_vector([xpart, ypart, zpart])
         for pol in pols:
             #E.interpolate(functools.partial(q_abs, Es=sol, pol=pol))
@@ -854,11 +868,13 @@ class Scatt3DProblem():
                 ypart.value = 1
             elif(pol == 'x-pol'): ## it is not simple to save the vector itself for some reason...
                 xpart.value = 1
-            expr = dolfinx.fem.Expression(ufl.dot(sol, polVec), self.ScalarSpace.element.interpolation_points())
+            expr = dolfinx.fem.Expression(ufl.dot(sol, polVec), FEMm.ScalarSpace.element.interpolation_points())
             E.interpolate(expr)
             
             E.name = pol
             if(removePML):
+                pml_cells = FEMm.meshData.subdomains.find(FEMm.meshData.pml_marker)
+                pml_dofs = dolfinx.fem.locate_dofs_topological(FEMm.ScalarSpace, entity_dim=self.tdim, entities=pml_cells)
                 E.x.array[pml_dofs] = 0#np.nan ## use the ScalarSpace one
             for i in range(Nframes):
                 E.x.array[:] = E.x.array*np.exp(1j*2*pi/Nframes)
@@ -866,30 +882,6 @@ class Scatt3DProblem():
         xdmf.close()
         if(self.verbosity>0 and self.comm.rank == self.model_rank):
             print(self.name+' E-fields animation complete')
-            sys.stdout.flush()
-        
-    def saveDofsView(self, meshData, fname):
-        '''
-        Saves the dofs with different numbers for viewing in ParaView. This hangs on the cluster, for unknown reasons
-        :param meshData: Whichever meshData to use
-        '''
-        self.InitializeFEM(meshData) ## so that this can be done before calculations
-        self.InitializeMaterial(meshData) ## so that this can be done before calculations
-        vals = dolfinx.fem.Function(self.Wspace)
-        xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=fname, file_mode='w')
-        xdmf.write_mesh(meshData.mesh)
-        pec_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.fdim, entities=meshData.boundaries.find(meshData.pec_surface_marker)) ## should be empty since these surfaces are not 3D, I think
-        vals.x.array[:] = np.nan
-        vals.x.array[self.domain_dofs] = 0
-        vals.x.array[self.pml_dofs] = -1
-        vals.x.array[self.defect_dofs] = 3
-        vals.x.array[self.mat_dofs] = 2
-        vals.x.array[pec_dofs] = 5
-        vals.x.array[self.farfield_cells] = 1
-        xdmf.write_function(vals, 0)
-        xdmf.close()
-        if(self.verbosity>0 and self.comm.rank == self.model_rank):
-            print(fname+' saved')
             sys.stdout.flush()
             
     def calcFarField(self, reference, compareToMie = False, showPlots=False, returnConvergenceVals=False, angles = None):
@@ -907,10 +899,10 @@ class Scatt3DProblem():
                 print(f'Calculating farfield values... ', end='')
                 sys.stdout.flush()
         if(reference):
-            meshData = self.refMeshdata
+            FEMm = self.FEMmesh_ref
             sols = self.solutions_ref
         else:
-            meshData = self.DUTMeshdata
+            FEMm = self.FEMmesh_DUT
             sols = self.solutions_dut
         ## check what angles to compute
         if(self.Nf > 2 and not returnConvergenceVals):
@@ -925,15 +917,15 @@ class Scatt3DProblem():
             
         
         numAngles = np.shape(angles)[0]
-        prefactor = dolfinx.fem.Constant(meshData.mesh, 0j)
-        theta = dolfinx.fem.Constant(meshData.mesh, 0j)
-        phi = dolfinx.fem.Constant(meshData.mesh, 0j)
+        prefactor = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
+        theta = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
+        phi = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
         khat = ufl.as_vector([ufl.sin(theta)*ufl.cos(phi), ufl.sin(theta)*ufl.sin(phi), ufl.cos(theta)]) ## in cartesian coordinates 
         phiHat = ufl.as_vector([-ufl.sin(phi), ufl.cos(phi), 0])
         thetaHat = ufl.as_vector([ufl.cos(theta)*ufl.cos(phi), ufl.cos(theta)*ufl.sin(phi), -ufl.sin(theta)])
-        n = ufl.FacetNormal(meshData.mesh)('+')
-        signfactor = ufl.sign(ufl.inner(n, ufl.SpatialCoordinate(meshData.mesh))) # Enforce outward pointing normal
-        exp_kr = dolfinx.fem.Function(self.ScalarSpace)
+        n = ufl.FacetNormal(FEMm.meshData.mesh)('+')
+        signfactor = ufl.sign(ufl.inner(n, ufl.SpatialCoordinate(FEMm.meshData.mesh))) # Enforce outward pointing normal
+        exp_kr = dolfinx.fem.Function(FEMm.ScalarSpace)
         
         #eta0 = float(np.sqrt(self.mur_bkg/self.epsr_bkg)) # following Daniel's script, this should really be etar here. The factor would be 1 and gets cancelled out anyway, though
         eta0 = float(np.sqrt(mu0/eps0)) ## must convert to float first
@@ -948,8 +940,8 @@ class Scatt3DProblem():
             
             ## can only integrate scalars
             F = signfactor*prefactor*ufl.cross(khat, ( ufl.cross(E, n) + eta0*ufl.cross(khat, ufl.cross(n, H))))*exp_kr
-            self.F_theta = dolfinx.fem.form(ufl.dot(thetaHat, F)*self.dS_farfield)
-            self.F_phi = dolfinx.fem.form(ufl.dot(phiHat, F)*self.dS_farfield)
+            self.F_theta = dolfinx.fem.form(ufl.dot(thetaHat, F)*FEMm.dS_farfield)
+            self.F_phi = dolfinx.fem.form(ufl.dot(phiHat, F)*FEMm.dS_farfield)
                 
             for i in range(numAngles):
                 theta.value = angles[i,0]*pi/180 # convert to radians first
@@ -957,7 +949,7 @@ class Scatt3DProblem():
             
                 def evalFs(): ## evaluates the farfield in some given direction khat
                     khatnp = [np.sin(angles[i,0]*pi/180)*np.cos(angles[i,1]*pi/180), np.sin(angles[i,0]*pi/180)*np.sin(angles[i,1]*pi/180), np.cos(angles[i,0]*pi/180)] ## so I can use it in evalFs as regular numbers - not sure how else to do this
-                    exp_kr.interpolate(lambda x: np.exp(1j*k*(khatnp[0]*x[0] + khatnp[1]*x[1] + khatnp[2]*x[2])), self.farfield_cells) ## not sure how to use ufl for this expression.
+                    exp_kr.interpolate(lambda x: np.exp(1j*k*(khatnp[0]*x[0] + khatnp[1]*x[1] + khatnp[2]*x[2])), FEMm.farfield_cells) ## not sure how to use ufl for this expression.
                     prefactor.value = 1j*k/(4*pi)
                     F_theta = dolfinx.fem.assemble.assemble_scalar(self.F_theta)
                     F_phi = dolfinx.fem.assemble.assemble_scalar(self.F_phi)
@@ -974,7 +966,7 @@ class Scatt3DProblem():
                     
         if(returnConvergenceVals): ## calculate and print some tests
             khatResults = np.zeros((numAngles), dtype=complex) ## should really be a real number, but somehow isnt?
-            khatCalc = dolfinx.fem.form(ufl.dot(khat, n)*self.dS_farfield) ## calculate zero from khat . n, for each angle
+            khatCalc = dolfinx.fem.form(ufl.dot(khat, n)*FEMm.dS_farfield) ## calculate zero from khat . n, for each angle
             for i in range(numAngles):
                 theta.value = angles[i,0]*pi/180 # convert to radians first
                 phi.value = angles[i,1]*pi/180
@@ -983,13 +975,13 @@ class Scatt3DProblem():
                 if(self.comm.rank == 0): ## assemble each part as it is made
                     khatResults[i] = sum(khatParts)
             
-            areaCalc = 1*self.dS_farfield ## calculate area
+            areaCalc = 1*FEMm.dS_farfield ## calculate area
             areaPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
             areaParts = self.comm.gather(areaPart, root=self.model_rank)
             
             if(self.comm.rank == 0): ## assemble each part as it is made
                 areaResult = sum(areaParts)
-                real_area = 4*pi*meshData.FF_surface_radius**2
+                real_area = 4*pi*FEMm.meshData.FF_surface_radius**2
                 if(self.verbosity>2):
                     print(f'khat calc first angle (should be zero): {np.abs(khatResults[0]):.5e}')
                     print(f'Farfield-surface area, calculated vs real (expected): {np.abs(areaResult)} vs {real_area}. Error: {np.abs(areaResult-real_area):.3e}, rel. error: {np.abs((areaResult-real_area)/real_area):.3e}')
@@ -997,12 +989,12 @@ class Scatt3DProblem():
                 m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
                 mies = np.zeros_like(angles[:, 1])
                 lambdat = c0/freq
-                x = 2*pi*meshData.object_radius/lambdat
+                x = 2*pi*FEMm.meshData.object_radius/lambdat
                 for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
                     if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
-                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi since it seems backwards => forwards
+                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshData.object_radius**2 ## +pi since it seems backwards => forwards
                     else: ## if not, we are changing theta angles and in the parallel plane
-                        mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
+                        mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
                         
                 vals = areaResult, khatResults, farfields, mies # [FF surface area, khat integral], scattering along planes, mie intensities in the scattering directions
                 return vals
@@ -1028,12 +1020,12 @@ class Scatt3DProblem():
                     lambdat = c0/freq
                     m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
                     mie = np.zeros_like(angles[:, 1])
-                    x = 2*pi*meshData.object_radius/lambdat
+                    x = 2*pi*FEMm.meshData.object_radius/lambdat
                     for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
                         if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
-                            mie[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi since it seems backwards => forwards
+                            mie[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshData.object_radius**2 ## +pi since it seems backwards => forwards
                         else: ## if not, we are changing theta angles and in the parallel plane
-                            mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
+                            mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshData.object_radius**2 ## +pi/2 since it seems backwards => forwards
                     
                     ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
                     ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = 1.2, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
@@ -1042,7 +1034,7 @@ class Scatt3DProblem():
                     ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = 1.2, color = 'blue', linestyle = ':')
                     ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = 1.2, color = 'red', linestyle = ':')
                     print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
-                    plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/meshData.h:.1f})')
+                    plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshData.h:.1f})')
                     ax1.legend()
                     #ax1.set_yscale('log')
                     ax1.grid(True)
@@ -1058,7 +1050,7 @@ class Scatt3DProblem():
                 mieBackward = np.zeros_like(self.fvec)
                 for i in range(len(self.fvec)): ## get a miepython error if I use a vector of x, so:
                     lambdat = c0/self.fvec[i]
-                    x = 2*pi*meshData.object_radius/lambdat
+                    x = 2*pi*FEMm.meshData.object_radius/lambdat
                     mieForward[i] = miepython.i_par(m, x, np.cos(pi), norm='qsca') 
                     mieBackward[i] = miepython.i_par(m, x, np.cos(0), norm='qsca')
                 
@@ -1092,16 +1084,16 @@ class Scatt3DProblem():
                 print(f'Calculating near-field values... ', end='')
                 sys.stdout.flush()
         if(reference):
-            meshData = self.refMeshdata
+            FEMm = self.FEMmesh_ref
             sols = self.solutions_ref
         else:
-            meshData = self.DUTMeshdata
+            FEMm = self.FEMmesh_DUT
             sols = self.solutions_dut
 
         ## also compare internal electric fields inside the sphere, at distances rs
         numpts = 1001
-        rs = np.linspace(0, meshData.PML_radius*.99, numpts)
-        negrs = np.linspace(-1*meshData.PML_radius*.99, 0, numpts)
+        rs = np.linspace(0, FEMm.meshData.PML_radius*.99, numpts)
+        negrs = np.linspace(-1*FEMm.meshData.PML_radius*.99, 0, numpts)
         enears = np.zeros((np.size(rs), 3), dtype=complex)
         enearsbw = np.zeros((np.size(rs), 3), dtype=complex) ## backward (I think)
         
@@ -1125,11 +1117,11 @@ class Scatt3DProblem():
             FEKO_Es[:, 2] = FEKOdat[:, 7] + 1j*FEKOdat[:, 8]
         
             
-        bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
+        bb_tree = dolfinx.geometry.bb_tree(FEMm.meshData.mesh, FEMm.meshData.mesh.topology.dim)
         cells = []
         points_on_proc = [] ## points on this processor
         cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, points.T) # Find cells whose bounding-box collide with the the points
-        colliding_cells = dolfinx.geometry.compute_colliding_cells(meshData.mesh, cell_candidates, points.T) # Choose one of the cells that contains the point
+        colliding_cells = dolfinx.geometry.compute_colliding_cells(FEMm.meshData.mesh, cell_candidates, points.T) # Choose one of the cells that contains the point
         idx_on_proc_list = [] ## list of indices on the MPI process
         for i, point in enumerate(points.T):
             if len(colliding_cells.links(i)) > 0:
@@ -1177,7 +1169,7 @@ class Scatt3DProblem():
             freq = self.fvec[0]
             lambdat = c0/freq
             k = 2*pi/lambdat
-            x = k*meshData.object_radius
+            x = k*FEMm.meshData.object_radius
             coefs = miepython.core.coefficients(m, x, internal=True)
             def planeWaveSph(x):
                 '''
@@ -1195,20 +1187,20 @@ class Scatt3DProblem():
             for q in range(len(rs)):
                 r = rs[q]
                 nr = -1*negrs[q] ## still positive, just in other direction due to angle
-                if(np.abs(r)<meshData.object_radius): ## miepython seems to include the incident field inside the sphere
+                if(np.abs(r)<FEMm.meshData.object_radius): ## miepython seems to include the incident field inside the sphere
                     t = 1
                 else:
                     t = 0
-                if(np.abs(nr)<meshData.object_radius): ## miepython seems to include the incident field inside the sphere
+                if(np.abs(nr)<FEMm.meshData.object_radius): ## miepython seems to include the incident field inside the sphere
                     t2 = 1
                 else:
                     t2 = 0
                 if(direction == 'forward'):
-                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
-                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshData.object_radius, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
+                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshData.object_radius, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
                 elif(direction == 'side'):
-                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
-                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*meshData.object_radius, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshData.object_radius, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
+                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshData.object_radius, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
                 
             enears = np.vstack((enearsbw, enears))
             ## plot components
@@ -1243,18 +1235,18 @@ class Scatt3DProblem():
             ax2.set_title('E-field magnitudes')
             ax3.set_title('Real/imag. parts of incident pol.')
             
-            ax1.axvline(meshData.object_radius, label = 'radius', color = 'black')
-            ax1.axvline(-1*meshData.object_radius, color = 'black')
-            ax2.axvline(meshData.object_radius, label = 'radius', color = 'black')
-            ax2.axvline(-1*meshData.object_radius, color = 'black')
-            ax3.axvline(meshData.object_radius, label = 'radius', color = 'black')
-            ax3.axvline(-1*meshData.object_radius, color = 'black')
-            ax1.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
-            ax1.axvline(-1*meshData.domain_radius, color = 'gray')
-            ax2.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
-            ax2.axvline(-1*meshData.domain_radius, color = 'gray')
-            ax3.axvline(meshData.domain_radius, label = 'radius', color = 'gray')
-            ax3.axvline(-1*meshData.domain_radius, color = 'gray')
+            ax1.axvline(FEMm.meshData.object_radius, label = 'radius', color = 'black')
+            ax1.axvline(-1*FEMm.meshData.object_radius, color = 'black')
+            ax2.axvline(FEMm.meshData.object_radius, label = 'radius', color = 'black')
+            ax2.axvline(-1*FEMm.meshData.object_radius, color = 'black')
+            ax3.axvline(FEMm.meshData.object_radius, label = 'radius', color = 'black')
+            ax3.axvline(-1*FEMm.meshData.object_radius, color = 'black')
+            ax1.axvline(FEMm.meshData.domain_radius, label = 'radius', color = 'gray')
+            ax1.axvline(-1*FEMm.meshData.domain_radius, color = 'gray')
+            ax2.axvline(FEMm.meshData.domain_radius, label = 'radius', color = 'gray')
+            ax2.axvline(-1*FEMm.meshData.domain_radius, color = 'gray')
+            ax3.axvline(FEMm.meshData.domain_radius, label = 'radius', color = 'gray')
+            ax3.axvline(-1*FEMm.meshData.domain_radius, color = 'gray')
             fig1.tight_layout()
             fig2.tight_layout()
             fig3.tight_layout()

@@ -51,16 +51,16 @@ class runTimesMems():
             :param extraInfo: Optional string one can add to classify the run
             :param mem: Total memory used in the problem
             '''
-            self.meshingTime = prob.refMeshdata.meshingTime
+            self.meshingTime = prob.FEMmesh_ref.meshData.meshingTime
             self.calcTime = prob.calcTime
             self.MPInum = prob.MPInum
             self.Nf = prob.Nf # number of frequencies - computations are for each frequency
-            self.Nants = prob.refMeshdata.N_antennas # number of antennas - computations are for each antenna pair
-            self.size = prob.refMeshdata.ncells # Computation size (number of FEM elements)
+            self.Nants = prob.FEMmesh_ref.meshData.N_antennas # number of antennas - computations are for each antenna pair
+            self.size = prob.FEMmesh_ref.meshData.ncells # Computation size (number of FEM elements)
             self.mem = prob.memCost # Total memory cost
-            self.fem_degree = prob.fem_degree ## Finite element degree
+            self.fem_degree = prob.FEMmesh_ref.fem_degree ## Finite element degree
             self.solve_its = prob.solver_its ## Iterations taken to solve the final problem
-            self.ndofs = prob.ndofs ## Number of degrees of freedom to the problem? Time/mem should scale off of this, rather than size
+            self.ndofs = prob.FEMmesh_ref.ndofs ## Number of degrees of freedom to the problem? Time/mem should scale off of this, rather than size
             self.solve_norm = prob.solver_norm ## Norm of found solution
             self.extraInfo = extraInfo
             

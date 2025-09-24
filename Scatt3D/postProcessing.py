@@ -182,19 +182,18 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
         #=======================================================================
         
         with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
-            cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze() ## f being the default name of the function as seen in paraview
-            cell_volumes[:] = cell_volumes[idx]
-            epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
-            epsr_array_ref = epsr_array_ref[idx]
-            epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
-            epsr_array_dut = epsr_array_dut[idx]
+            dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idx] ## f being the default name of the function as seen in paraview
+            cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idx]
+            epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
+            epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
             N = len(cell_volumes)
             A = np.zeros((Nb, N), dtype=complex) ## the matrix of scaled E-field stuff
             for n in range(Nb):
                 A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
                 A[n,:] = A[n,idx]
-                ## remove the PML dofs
-                
+                ## remove the PML dofs 
+                non_pml_idx = np.nonzero(np.abs(epsr_array_ref) > -1)[0] ## PML cells should have a value of -1
+                A = A[:, non_pml_idx]
         print('all data loaded in')
         sys.stdout.flush()
         
@@ -209,7 +208,7 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
         
     if (True): ## a priori
         if(comm.rank == 0):
-            idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
+            idx_ap = np.nonzero(np.abs(epsr_array_ref[non_pml_idx]) > 1)[0] ## indices of non-air
             x_ap = np.zeros(N)
             x_np_ap = np.zeros(N)
             print('A:', np.shape(A))
@@ -247,64 +246,4 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
             cells.x.array[:] = x_ap + 0j
             f.write_function(cells, 3)    
             cells.x.array[:] = x_np_ap + 0j
-            f.write_function(cells, 4)            
-
-def testSVD(problemName): ## Takes data files saved from a problem after running makeOptVectors, does stuff on it
-    ## load in all the data
-    data = np.load(problemName+'output.npz')
-    b = data['b']
-    fvec = data['fvec']
-    S_ref = data['S_ref']
-    S_dut = data['S_dut']
-    epsr_mat = data['epsr_mat']
-    epsr_defect = data['epsr_defect']
-    N_antennas = data['N_antennas']
-    Nf = len(fvec)
-    Np = S_ref.shape[-1]
-    Nb = len(b)
-    
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, problemName+'output-qs.xdmf', 'r') as f:
-        mesh = f.read_mesh()
-    Wspace = dolfinx.fem.functionspace(mesh, ('DG', 0))
-    cells = dolfinx.fem.Function(Wspace)
-    
-    idx = mesh.topology.original_cell_index
-    Nb = Nf*N_antennas*N_antennas
-    
-    with h5py.File(problemName+'output-qs.h5', 'r') as f:
-        cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
-        cell_volumes[:] = cell_volumes[idx]
-        epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
-        epsr_array_ref = epsr_array_ref[idx]
-        epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
-        epsr_array_dut = epsr_array_dut[idx]
-        N = len(cell_volumes)
-        A = np.zeros((Nb, N), dtype=complex) ## the matrix of scaled E-field stuff
-        for n in range(Nb):
-            A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
-            A[n,:] = A[n,idx]
-        
-    if (True): ## a priori
-        idx = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
-        x = np.zeros(np.shape(A)[1])
-        print('A', np.shape(A))
-        print('b', np.shape(b))
-        print('in-object cells',np.size(idx))
-        A = A[:, idx]
-        A_inv = np.linalg.pinv(A, rcond=1e-2)
-        x[idx] = np.dot(A_inv, b)
-        #x[idx] = np.linalg.lstsq(A, b)
-        
-    #### alternatively, try elemental?
-    #with dolfinx.io.XDMFFile(MPI.COMM_WORLD, problemName+'output-qs.h5', 'r') as f:
-    
-                
-    with dolfinx.io.XDMFFile(MPI.COMM_WORLD, problemName+'testoutput.xdmf', 'w') as f:
-        f.write_mesh(mesh)
-        cells.x.array[:] = epsr_array_dut + 0j
-        f.write_function(cells, 0)
-        cells.x.array[:] = epsr_array_ref + 0j
-        f.write_function(cells, -1)
-        
-        cells.x.array[:] = x + 0j
-        f.write_function(cells, 1)     
+            f.write_function(cells, 4)              

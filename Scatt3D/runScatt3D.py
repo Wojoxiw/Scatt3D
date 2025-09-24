@@ -61,6 +61,7 @@ if __name__ == '__main__':
     
     if(len(sys.argv) == 1): ## assume computing on local computer, not cluster. In jobscript for cluster, give a dummy argument
         filename = 'localCompTimesMems.npz'
+        matplotlib.use("QtAgg") ## so that plots actually appear
     else:
         filename = 'prevRuns.npz'
         
@@ -105,7 +106,7 @@ if __name__ == '__main__':
         dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=1, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 1, fem_degree=degree, ErefEdut=False)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, DUTMeshdata=dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 1, fem_degree=degree, ErefEdut=True)
         prob.saveEFieldsForAnim(True)
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
@@ -117,7 +118,6 @@ if __name__ == '__main__':
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsr=2.0*(1-0.01j), fem_degree=degree)
-        prob.saveDofsView(prob.refMeshdata, prob.dataFolder+prob.name+'refDofsview.xdmf')
         #prob.saveEFieldsForAnim()
         if(showPlots):
             prob.calcNearField(direction='side')
@@ -380,8 +380,8 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/4, degree=1)
-    #testSphereScattering(h=1/4, degree=1, showPlots=False)
+    testFullExample(h=1/4, degree=2)
+    #testSphereScattering(h=1/6, degree=2, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
