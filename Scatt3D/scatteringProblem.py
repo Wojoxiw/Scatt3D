@@ -759,10 +759,14 @@ class Scatt3DProblem():
                 for m in range(meshData.N_antennas):
                     Em_ref = self.solutions_ref[nf][m]
                     for n in range(meshData.N_antennas):
-                        if(self.ErefEdut): ## only using Eref*Eref right now. Eref*Edut should provide a superior reconstruction with fully simulated data, though
-                            En = dolfinx.fem.Function(Em_ref.function_space)  ## need to interpolate this onto the ref mesh
-                            En.interpolate(self.solutions_dut[nf][n])
-                            #En = self.solutions_dut[nf][n] 
+                        if(self.ErefEdut): ## Eref*Edut should provide a superior reconstruction with fully simulated data
+                            En = dolfinx.fem.Function(FEMm.Vspace)  ## need to interpolate this onto the ref mesh
+                            fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
+                            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+                            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-14) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                            En.interpolate_nonmatching(self.solutions_dut[nf][n], cells, interpolation_data=interpolation_data)
+                            En.x.scatter_forward()
                         else:
                             En = self.solutions_ref[nf][n]
                         print('asd')
