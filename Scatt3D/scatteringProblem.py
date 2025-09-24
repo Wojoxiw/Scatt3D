@@ -691,8 +691,8 @@ class Scatt3DProblem():
         xdmf.write_mesh(meshData.mesh)
         
         ## Then, compute opt. vectors, and save data
-        if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
-            print(f'Rank {self.comm.rank}: Computing optimization vectors')
+        if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
+            print(f'Computing optimization vectors...', end='')
             sys.stdout.flush()
         
         # Create function space for temporary interpolation
@@ -757,9 +757,6 @@ class Scatt3DProblem():
         if(not DUTMesh): ## Do the interpolation to find qs, then save them
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
             for nf in range(self.Nf):
-                if( (self.verbosity > 0 and self.comm.rank == self.model_rank) or (self.verbosity > 2) and (meshData.N_antennas > 0) ):
-                    print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
-                    sys.stdout.flush()
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 for m in range(meshData.N_antennas):
                     Em_ref = self.solutions_ref[nf][m]
@@ -795,7 +792,11 @@ class Scatt3DProblem():
                     for m in range(meshData.N_antennas):
                         for n in range(meshData.N_antennas):
                             b[nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mat=self.material_epsr, epsr_defect=self.defect_epsr, N_antennas=meshData.N_antennas)    
+                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mat=self.material_epsr, epsr_defect=self.defect_epsr, N_antennas=meshData.N_antennas)
+                
+        if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
+            print(f'   done.')
+            sys.stdout.flush()
     
     def saveEFieldsForAnim(self, ref=True, Nframes = 50, removePML = True, dutOnRefMesh=True):
         '''
@@ -813,6 +814,10 @@ class Scatt3DProblem():
             FEMm = self.FEMmesh_DUT
             
         E = dolfinx.fem.Function(FEMm.ScalarSpace)
+        
+        if(self.verbosity>0 and self.comm.rank == self.model_rank):
+            print('Starting E-field animation...', end='')
+            sys.stdout.flush()
         
         #=======================================================================
         # bb_tree = dolfinx.geometry.bb_tree(meshData.mesh, meshData.mesh.topology.dim)
@@ -852,7 +857,7 @@ class Scatt3DProblem():
             textextra = 'dut'
         xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w')
         xdmf.write_mesh(FEMm.meshData.mesh)
-        
+        print('hererer')
         xpart = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
         ypart = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
         zpart = dolfinx.fem.Constant(FEMm.meshData.mesh, 0j)
@@ -881,7 +886,7 @@ class Scatt3DProblem():
                 xdmf.write_function(E, i)
         xdmf.close()
         if(self.verbosity>0 and self.comm.rank == self.model_rank):
-            print(self.name+' E-fields animation complete')
+            print('   '+self.name+textextra+' E-fields animation complete.')
             sys.stdout.flush()
             
     def calcFarField(self, reference, compareToMie = False, showPlots=False, returnConvergenceVals=False, angles = None):
