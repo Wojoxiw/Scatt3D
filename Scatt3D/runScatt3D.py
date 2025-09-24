@@ -380,7 +380,7 @@ if __name__ == '__main__':
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/6.6, degree=3)
+    testFullExample(h=1/20, degree=1)
     #testSphereScattering(h=1/6, degree=2, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
