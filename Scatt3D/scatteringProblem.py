@@ -637,9 +637,13 @@ class Scatt3DProblem():
                             b = self.comm.bcast(b, root=self.model_rank)
                             S[nf,m,n] = b
                         sols.append(E_h.copy())
-                        if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2)) and nf==0 and n==0 ):
-                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s')
-                        sys.stdout.flush()
+                        if(nf==0 and n==0): ## after the first solve, give some info
+                            mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+                            mems = self.comm.gather(mem_usage, root=self.model_rank)
+                            if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
+                                firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s ({firstMem} GB memory)')
+                            sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
         
