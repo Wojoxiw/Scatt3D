@@ -242,7 +242,7 @@ class Scatt3DProblem():
             self.memCost = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             if(self.verbosity>0):
                 print(f'Total memory: {self.memCost:.3f} GiB ({mem_usage*self.MPInum:.3f} GiB for this process, MPInum={self.MPInum} times)')
-                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours, or {self.calcTime/self.Nf:.2e} s/freq) ' + '\033[0m')
+                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours, or {self.calcTime/(self.Nf*meshData.N_antennas):.2e} s/solve) ' + '\033[0m')
         sys.stdout.flush()
         if(makeOptVects):
             self.makeOptVectors()
@@ -637,7 +637,7 @@ class Scatt3DProblem():
                             b = self.comm.bcast(b, root=self.model_rank)
                             S[nf,m,n] = b
                         sols.append(E_h.copy())
-                        if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                        if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2)) and nf==0 and n==0 ):
                             print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s')
                         sys.stdout.flush()
                 solutions.append(sols)
@@ -744,7 +744,7 @@ class Scatt3DProblem():
             fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
             num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-14) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             epsr_dut.interpolate_nonmatching(epsr_dut_dut, cells, interpolation_data=interpolation_data)
             epsr_dut.x.scatter_forward()
             FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
@@ -764,7 +764,7 @@ class Scatt3DProblem():
                             fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
                             num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
                             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-14) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
                             En.interpolate_nonmatching(self.solutions_dut[nf][n], cells, interpolation_data=interpolation_data)
                             En.x.scatter_forward()
                         else:
@@ -849,7 +849,7 @@ class Scatt3DProblem():
             fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
             num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-14) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             sol.interpolate_nonmatching(self.solutions_dut[0][0], cells, interpolation_data=interpolation_data)
             sol.x.scatter_forward()
             textextra = 'dutOnRefMesh'
