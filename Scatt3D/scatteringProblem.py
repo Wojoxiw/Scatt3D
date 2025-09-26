@@ -642,7 +642,7 @@ class Scatt3DProblem():
                             mems = self.comm.gather(mem_usage, root=self.model_rank)
                             if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
                                 firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8} s ({firstMem} GB memory)')
+                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory)')
                             sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
@@ -760,6 +760,8 @@ class Scatt3DProblem():
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
             for nf in range(self.Nf):
                 k0 = 2*np.pi*self.fvec[nf]/c0
+                if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                    print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
                 for m in range(meshData.N_antennas):
                     Em_ref = self.solutions_ref[nf][m]
                     for n in range(meshData.N_antennas):
@@ -781,7 +783,6 @@ class Scatt3DProblem():
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}'
                         xdmf.write_function(q, nf*meshData.N_antennas*meshData.N_antennas + m*meshData.N_antennas + n)
-                        print('asd3')
                 if(meshData.N_antennas < 1): # if no antennas, still save something
                     #q.interpolate(functools.partial(q_func, Em=self.solutions_ref[nf][0], En=self.solutions_ref[nf][0], k0=k0))
                     q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(self.solutions_ref[nf][0], self.solutions_ref[nf][0])* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)

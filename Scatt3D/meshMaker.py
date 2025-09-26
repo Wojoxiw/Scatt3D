@@ -32,7 +32,7 @@ class MeshData():
                  verbosity = 0,
                  model_rank = 0,
                  h = 1/15,
-                 domain_geom = 'domedCyl', 
+                 domain_geom = 'sphere',#'domedCyl', 
                  object_geom = 'cylinder',
                  defect_geom = 'cylinder',
                  domain_radius = 1.92,
