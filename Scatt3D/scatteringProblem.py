@@ -756,8 +756,8 @@ class Scatt3DProblem():
                 #self.epsr.name = 'epsr_dut'
                 xdmf.write_function(FEMm.epsr, -1)
             except Exception as error: ## sometimes get RuntimeError: GJK error - max iteration limit reached when creating interpolation data...
-                if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
-                    print(f'Rank {self.comm.rank}: Error creating interpolation data (probably): {error}')
+                #if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                print(f'Rank {self.comm.rank}: Error creating interpolation data (probably): {error}')
             
         
         if(not DUTMesh): ## Do the interpolation to find qs, then save them
