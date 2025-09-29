@@ -135,7 +135,7 @@ class Scatt3DProblem():
                  mur_bkg=1,           # Permeability of the background medium
                  material_epsr=3.0*(1 - 0.01j),  # Permittivity of object
                  material_mur=1+0j,   # Permeability of object
-                 defect_epsr=5.5*(1 - 0.01j),      # Permittivity of defect
+                 defect_epsr=4.0*(1 - 0.01j),      # Permittivity of defect
                  defect_mur=1+0j,       # Permeability of defect
                  fem_degree=1,            # Degree of finite elements
                  model_rank=0,        # Rank of the master model - for saving, plotting, etc.
@@ -770,17 +770,19 @@ class Scatt3DProblem():
                     Em_ref = self.solutions_ref[nf][m]
                     for n in range(meshData.N_antennas):
                         if(self.ErefEdut): ## Eref*Edut should provide a superior reconstruction with fully simulated data
-                            En = dolfinx.fem.Function(FEMm.Vspace)  ## need to interpolate this onto the ref mesh
-                            fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
-                            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
-                            cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                            if(nf == 0 and n == 0): ## just set up once
+                                En = dolfinx.fem.Function(FEMm.Vspace)  ## need to interpolate this onto the ref mesh
+                                fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
+                                num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+                                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                                interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
                             En.interpolate_nonmatching(self.solutions_dut[nf][n], cells, interpolation_data=interpolation_data)
                             En.x.scatter_forward()
                         else:
                             En = self.solutions_ref[nf][n]
                             
                         q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
+                        q.x.array[:] = 0j
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                         q.x.scatter_forward()
                         #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0)) ## old way of doing it - seems to give same values
