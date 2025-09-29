@@ -741,19 +741,23 @@ class Scatt3DProblem():
             #self.epsr.name = 'epsr_dut'
             xdmf.write_function(FEMm.epsr, -1)
         elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-            epsr_dut_dut = dolfinx.fem.Function(self.FEMmesh_DUT.Wspace)
-            epsr_dut_dut.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
-            epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
-            
-            fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
-            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
-            cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-            epsr_dut.interpolate_nonmatching(epsr_dut_dut, cells, interpolation_data=interpolation_data)
-            epsr_dut.x.scatter_forward()
-            FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
-            #self.epsr.name = 'epsr_dut'
-            xdmf.write_function(FEMm.epsr, -1)
+            try:
+                epsr_dut_dut = dolfinx.fem.Function(self.FEMmesh_DUT.Wspace)
+                epsr_dut_dut.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
+                epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
+                
+                fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
+                num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                epsr_dut.interpolate_nonmatching(epsr_dut_dut, cells, interpolation_data=interpolation_data)
+                epsr_dut.x.scatter_forward()
+                FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
+                #self.epsr.name = 'epsr_dut'
+                xdmf.write_function(FEMm.epsr, -1)
+            except Exception as error: ## sometimes get RuntimeError: GJK error - max iteration limit reached when creating interpolation data...
+                if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                    print(f'Rank {self.comm.rank}: Error creating interpolation data (probably): {error}')
             
         
         if(not DUTMesh): ## Do the interpolation to find qs, then save them
