@@ -15,7 +15,8 @@ from matplotlib import pyplot as plt
 import h5py
 import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import ctypes.util
-from numba.core.types import none
+import spgl1
+import gc
 
 def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     '''
@@ -121,20 +122,20 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             
             if(checkVsNp):
                 t1 = timer()
-                x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-3) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
+                x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-4) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
                 nptime = timer() - t1
-                print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-10) @ b_np) - b_np))
+                print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
                 print('numpy norm alt1 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-4) @ b_np) - b_np))
                 print('numpy norm alt2 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-6) @ b_np) - b_np))
                 print('numpy norm alt3 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-8) @ b_np) - b_np))
-                print('numpy norm alt4 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-12) @ b_np) - b_np))
+                print('numpy norm alt4 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-10) @ b_np) - b_np))
                 print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                 print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
             sys.stdout.flush()
             return x0.data[:, 0], x_nplstsq[:, 0]
         
 
-def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keeping everything on one process
+def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping everything on one process
     comm = MPI.COMM_WORLD
     commself = MPI.COMM_SELF
     if(comm.rank == 0):
@@ -167,69 +168,47 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
         sys.stdout.flush()
         
         
-        #=======================================================================
-        # f.read_function(cells, -3) ## I have not found a way to actually read a function back out like this
-        # cell_volumes = cells.x.array
-        # f.read_function(cells, -2)
-        # epsr_array_ref = cells.x.array
-        # f.read_function(cells, -1)
-        # epsr_array_dut = cells.x.array
-        # 
-        # N = len(cells.x.array) ## number of cells
-        # A = np.empty((Nb, N), dtype=complex)
-        # 
-        # for nf in range(Nf): ## for each row in the A matrix
-        #     for m in range(N_antennas):
-        #         for n in range(N_antennas):
-        #             f.read_function(cells, nf*N_antennas*N_antennas + m*N_antennas + n)
-        #             A[nf*N_antennas*N_antennas + m*N_antennas + n, :] = cells.x.array[:] ## take the row from the data
-        #=======================================================================
-        
         with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
             dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idx] ## f being the default name of the function as seen in paraview
             cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idx]
             epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
             epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
             N = len(cell_volumes)
-            A = np.zeros((Nb, N), dtype=complex) ## the matrix of scaled E-field stuff
+            idx_non_pml = np.nonzero(np.abs(epsr_array_ref) > -1)[0] ## PML cells should have a value of -1
+            N_non_pml = len(idx_non_pml)
+            A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
             for n in range(Nb):
-                A[n,:] = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
-                A[n,:] = A[n,idx]
-                ## remove the PML dofs 
-                non_pml_idx = np.nonzero(np.abs(epsr_array_ref) > -1)[0] ## PML cells should have a value of -1
-                A = A[:, non_pml_idx]
+                Apart = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
+                A[n,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
+                
         print('all data loaded in')
         sys.stdout.flush()
+        idx_ap = np.nonzero(np.abs(epsr_array_ref[idx_non_pml]) > 1)[0] ## indices of non-air
+        A_ap = A[:, idx_ap]
+        print('shape of A:', np.shape(A))
+        print('shape of b:', np.shape(b))
+        print('in-object cells:', np.size(idx_ap))
         
         
+        print('Solving with scalapack least squares and numpy svd...', end='')
         ## non a-priori
         #A_inv = np.linalg.pinv(A, rcond=1e-3)
         b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary, but reshape it to fit what scalapack expects
         b_now[:, 0] = b
-        x, x_np = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
+        x, x_np = np.zeros(N, dtype=complex), np.zeros(N, dtype=complex)
+        x[idx_non_pml], x_np[idx_non_pml] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
     else: ## on other processes, call it with nothing
         scalapackLeastSquares(comm, MPInum)
         
-    if (True): ## a priori
-        if(comm.rank == 0):
-            idx_ap = np.nonzero(np.abs(epsr_array_ref[non_pml_idx]) > 1)[0] ## indices of non-air
-            x_ap = np.zeros(N)
-            x_np_ap = np.zeros(N)
-            print('A:', np.shape(A))
-            print('b:', np.shape(b))
-            print('in-object cells:', np.size(idx_ap))
-            A = A[:, idx_ap]
-            x_ap[idx_ap], x_np_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
-        else: ## on other processes, call it with nothing
-            scalapackLeastSquares(comm, MPInum)
-    
-    #===========================================================================
-    # else: ## distribute the solution to all ranks (not sure if the None is needed)
-    #     x = None
-    #     x_ap = None
-    # x = comm.bcast(x, root=0)
-    # x_ap = comm.bcast(x_ap, root=0)
-    #===========================================================================
+    ## a priori lsq
+    if(comm.rank == 0):
+        x_ap = np.zeros(N, dtype=complex)
+        x_np_ap = np.zeros(N, dtype=complex)
+        x_ap[idx_ap], x_np_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A_ap, b_now, True) ## only the master process gets the result
+        print(' done')
+    else: ## on other processes, call it with nothing
+        scalapackLeastSquares(comm, MPInum)
+        
     
     if(comm.rank == 0):
         ## write back the result
@@ -250,4 +229,72 @@ def testLSTSQ(problemName, MPInum): ## Try least squares using scalapack... keep
             cells.x.array[:] = x_ap + 0j
             f.write_function(cells, 3)    
             cells.x.array[:] = x_np_ap + 0j
-            f.write_function(cells, 4)              
+            f.write_function(cells, 4)
+            
+            
+            print('Solving with spgl...', end='') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
+            sigma = 1e-6 ## guess for a good sigma
+            tau = 1e0 ## guess for a good tau
+            iter_lim = 3366
+            
+            A1, A2 = np.shape(A)[0], np.shape(A)[1]
+            Ak = np.zeros((A1*2, A2*2)) ## real A
+            bk = np.hstack((np.real(b),np.imag(b))) ## real b
+            Ak[:A1,:A2] = np.real(A) ## A11
+            Ak[:A1,A2:] = -1*np.imag(A) ## A12
+            Ak[A1:,:A2] = 1*np.imag(A) ## A21
+            Ak[A1:,A2:] = np.real(A) ## A22
+            
+            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, iter_lim=iter_lim, verbosity=1)
+            x_spgl_bp = np.zeros(N, dtype=complex)
+            x_spgl_bp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+            
+            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+            x_spgl_bpdn = np.zeros(N, dtype=complex)
+            x_spgl_bpdn[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+            
+            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+            x_spgl_lasso = np.zeros(N, dtype=complex)
+            x_spgl_lasso[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+            
+            del Ak ## maybe this will help with clearing memory
+            gc.collect()
+            
+            ### a-priori
+            A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
+            Ak_ap = np.zeros((A1*2, A2*2)) ## real A
+            Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
+            Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
+            Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
+            Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
+            
+            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, iter_lim=iter_lim, verbosity=1)
+            x_spgl_bp_ap = np.zeros(N, dtype=complex)
+            x_spgl_bp_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+            
+            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+            x_spgl_bpdn_ap = np.zeros(N, dtype=complex)
+            x_spgl_bpdn_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+            
+            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+            x_spgl_lasso_ap = np.zeros(N, dtype=complex)
+            x_spgl_lasso_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+            
+            ## non a-priori
+            cells.x.array[:] = x_spgl_bp + 0j
+            f.write_function(cells, 5)
+            cells.x.array[:] = x_spgl_bpdn + 0j
+            f.write_function(cells, 6)
+            cells.x.array[:] = x_spgl_lasso + 0j
+            f.write_function(cells, 7)
+            
+            ## a-priori
+            cells.x.array[:] = x_spgl_bp_ap + 0j
+            f.write_function(cells, 8)
+            cells.x.array[:] = x_spgl_bpdn_ap + 0j
+            f.write_function(cells, 9)
+            cells.x.array[:] = x_spgl_lasso_ap + 0j
+            f.write_function(cells, 10)
+            
+            print(' done')
+                    

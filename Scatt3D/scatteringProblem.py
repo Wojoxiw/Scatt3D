@@ -149,6 +149,7 @@ class Scatt3DProblem():
                  computeImmediately = True, ## compute solutions at the end of initialization
                  computeRef = True, # If computing immediately, computes the reference simulation, where defects are not included
                  ErefEdut = False, # compute optimization vectors with Eref*Edut, a less-approximated version of the equation. Should provide better results, but can only be used in simulation
+                 dutOnRefMesh = True, # If true, rather than compute DUT things on its own, separate mesh, then interpolate between meshes (gives error for large, higher-order meshes) - just use the same mesh. Must have DUT mesh
                  excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise antenna excitation as normal
                  PW_dir = np.array([0, 0, 1]), ## incident direction of the plane-wave, if used above. Default is coming in from the z-axis, to align with miepython
                  PW_pol = np.array([1, 0, 0]), ## incident polarization of the plane-wave, if used above. Default is along the x-axis
@@ -170,6 +171,7 @@ class Scatt3DProblem():
         
         self.makeOptVects = makeOptVects
         self.ErefEdut = ErefEdut
+        self.dutOnRefMesh = dutOnRefMesh
         
         self.tdim = 3                             # Dimension of triangles/tetraedra. 3 for 3D
         self.fdim = self.tdim - 1                      # Dimension of facets
@@ -211,7 +213,8 @@ class Scatt3DProblem():
         if(computeImmediately):
             if(computeBoth): ## compute both cases, then opt vectors if asked for
                 self.compute(False, makeOptVects=False)
-                self.makeOptVectors(True) ## makes an xdmf of the DUT mesh/epsrs/dofsmap
+                if(not self.dutOnRefMesh):
+                    self.makeOptVectors(True) ## makes an xdmf of the DUT mesh/epsrs/dofsmap
                 self.compute(True, makeOptVects=self.makeOptVects)
             else: ## just compute the ref case, and make opt vects if asked for
                 self.compute(computeRef, makeOptVects=self.makeOptVects)
@@ -223,7 +226,7 @@ class Scatt3DProblem():
         :param computeRef: If True, computes on the reference mesh
         '''
         # Initialize function spaces, boundary conditions, and PML - for the reference mesh
-        if(computeRef):
+        if(computeRef or self.dutOnRefMesh):
             meshData = self.FEMmesh_ref.meshData
             self.CalculatePML(self.FEMmesh_ref, self.k0) ## this is recalculated for each frequency, in ComputeSolutions - run it here just to initialize variables (not sure if needed)
         else:
@@ -242,7 +245,7 @@ class Scatt3DProblem():
             self.memCost = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             if(self.verbosity>0):
                 print(f'Total memory: {self.memCost:.3f} GiB ({mem_usage*self.MPInum:.3f} GiB for this process, MPInum={self.MPInum} times)')
-                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours, or {self.calcTime/(self.Nf*meshData.N_antennas):.2e} s/solve) ' + '\033[0m')
+                print(f'Computations for {self.name} completed in ' + '\033[31m' + f' {self.calcTime:.2e} s ({self.calcTime/3600:.2e} hours, or {self.calcTime/(self.Nf*max(meshData.N_antennas, 1)):.2e} s/solve) ' + '\033[0m')
         sys.stdout.flush()
         if(makeOptVects):
             self.makeOptVectors()
@@ -313,7 +316,7 @@ class Scatt3DProblem():
         :param computeRef: if True, computes the reference case (this is always needed for reconstruction). if False, computes the DUT case (needed for simulation-only stuff).
         Since things need to be initialized for each mesh, that should be done first.
         '''
-        if(computeRef):
+        if(computeRef or self.dutOnRefMesh):
             FEMm = self.FEMmesh_ref
         else:
             FEMm = self.FEMmesh_DUT
@@ -736,7 +739,7 @@ class Scatt3DProblem():
         FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
         #self.epsr.name = 'epsr_ref'
         xdmf.write_function(FEMm.epsr, -2)
-        if(DUTMesh):
+        if(DUTMesh or self.dutOnRefMesh):
             FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
             #self.epsr.name = 'epsr_dut'
             xdmf.write_function(FEMm.epsr, -1)
@@ -764,25 +767,28 @@ class Scatt3DProblem():
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
             for nf in range(self.Nf):
                 k0 = 2*np.pi*self.fvec[nf]/c0
-                if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                if( (self.verbosity > 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                     print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
                 for m in range(meshData.N_antennas):
                     Em_ref = self.solutions_ref[nf][m]
                     for n in range(meshData.N_antennas):
                         if(self.ErefEdut): ## Eref*Edut should provide a superior reconstruction with fully simulated data
-                            if(nf == 0 and n == 0): ## just set up once
-                                En = dolfinx.fem.Function(FEMm.Vspace)  ## need to interpolate this onto the ref mesh
-                                fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
-                                num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
-                                cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                                interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                            En.interpolate_nonmatching(self.solutions_dut[nf][n], cells, interpolation_data=interpolation_data)
-                            En.x.scatter_forward()
+                            if(self.dutOnRefMesh): 
+                                En = self.solutions_dut[nf][n]
+                            else: ## interpolate from dut mesh to ref mesh
+                                if(nf == 0 and n == 0): ## just set up once
+                                    En = dolfinx.fem.Function(FEMm.Vspace)  ## need to interpolate this onto the ref mesh
+                                    fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
+                                    num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+                                    cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                                    interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                                En.interpolate_nonmatching(self.solutions_dut[nf][n], cells, interpolation_data=interpolation_data)
+                                En.x.scatter_forward()
                         else:
                             En = self.solutions_ref[nf][n]
                             
                         q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.Wspace)) *ufl.dx)
-                        q.x.array[:] = 0j
+                        q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
                         dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
                         q.x.scatter_forward()
                         #q.interpolate(functools.partial(q_func, Em=Em_ref, En=En, k0=k0)) ## old way of doing it - seems to give same values
@@ -818,9 +824,10 @@ class Scatt3DProblem():
         :param ref: If True, plot for the reference case. If False, for the DUT case
         :param Nframes: Number of frames in the anim. Each frame is a different phase from 0 to 2*pi
         :param removePML: If True, sets all values in the PML to something different
-        :param dutOnrefMesh: If True and plotting the DUT, interpolate it onto the reference mesh
+        :param dutOnrefMesh: If True and plotting the DUT (only matters if it's on its own mesh), interpolate it onto the reference mesh
         '''
-        if(ref or dutOnRefMesh):
+
+        if(ref or dutOnRefMesh or self.dutOnRefMesh):
             FEMm = self.FEMmesh_ref
         elif(not dutOnRefMesh): ## only use the DUT mesh if not dutOnRefMesh
             FEMm = self.FEMmesh_DUT
@@ -853,9 +860,8 @@ class Scatt3DProblem():
         if(ref):
             sol = self.solutions_ref[0][0] ## fields for the first frequency/antenna combo
             textextra = 'ref'
-        elif(dutOnRefMesh):
+        elif(dutOnRefMesh and not self.dutOnRefMesh):
             sol = dolfinx.fem.Function(FEMm.Vspace)
-            
             
             fine_mesh_cell_map = FEMm.meshData.mesh.topology.index_map(FEMm.meshData.mesh.topology.dim)
             num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
