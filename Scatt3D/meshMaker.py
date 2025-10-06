@@ -83,7 +83,7 @@ class MeshData():
         :param defect_angles: [x, y, z] angles to rotate about these axes
         :param viewGMSH: If True, plots the mesh after creation then exits
         :param FF_surface: If True, creates a spherical shell with a radius slightly lower than the domain's, to calculate the farfield on (domain_geom should also be spherical)
-        :param order: Order of the mesh elements
+        :param order: Order of the mesh elements - have to switch from xdmf to vtx or vtk when going above 2? They don't work straightforwardly
         '''
         
         self.comm = comm                               # MPI communicator
@@ -100,7 +100,7 @@ class MeshData():
         self.tdim = 3 ## Tetrahedra dimensionality - 3D
         self.fdim = self.tdim - 1 ## Facet dimensionality - 2D
         self.FF_surface = FF_surface
-        self.order = order
+        self.order = min(order, 2) ## capped at 2
         
         
         if(PML_thickness == 0): ## if not specified, calculate it
@@ -177,7 +177,7 @@ class MeshData():
         t1 = timer()
         gmsh.initialize()
         if self.comm.rank == self.model_rank: ## make all the definitions through the master-rank process
-            gmsh.model.add('The Model') ## for the whole thing
+            gmsh.model.add('The Model') ## name for the whole thing
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
             gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.h)

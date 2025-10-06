@@ -57,7 +57,7 @@ class FEMmesh():
         curl_element = basix.ufl.element('N1curl', self.meshData.mesh.basix_cell(), self.fem_degree)
         self.Vspace = dolfinx.fem.functionspace(self.meshData.mesh, curl_element)
         self.ndofs = self.Vspace.dofmap.index_map.size_global * self.Vspace.dofmap.index_map_bs ## from https://github.com/jpdean/maxwell/blob/master/solver.py#L108-L162 - presumably this is accurate? Only the first coefficient is nonone
-        self.ScalarSpace = dolfinx.fem.functionspace(self.meshData.mesh, ('CG', self.meshData.order)) ## this is just used for plotting+post-computations, so use degree... 1?  Might need to be mesh degree (self.meshData.order) - but this gives an error
+        self.ScalarSpace = dolfinx.fem.functionspace(self.meshData.mesh, ('CG', self.meshData.order)) ## is this goes above 2, need to use VTXwriter for E-field animation instead of XDMF?? so cap mesh order at 2 for now.
         self.Wspace = dolfinx.fem.functionspace(self.meshData.mesh, ("DG", 0))
         # Create measures for subdomains and surfaces
         self.dx = ufl.Measure('dx', domain=self.meshData.mesh, subdomain_data=self.meshData.subdomains, metadata={'quadrature_degree': self.dxquaddeg})

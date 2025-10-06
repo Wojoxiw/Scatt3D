@@ -17,6 +17,7 @@ import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import ctypes.util
 import spgl1
 import gc
+import cvxpy as cp
 
 def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     '''
@@ -174,7 +175,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
             epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
             N = len(cell_volumes)
-            idx_non_pml = np.nonzero(np.abs(epsr_array_ref) > -1)[0] ## PML cells should have a value of -1
+            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1
             N_non_pml = len(idx_non_pml)
             A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
             for n in range(Nb):
@@ -183,9 +184,9 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
                 
         print('all data loaded in')
         sys.stdout.flush()
-        idx_ap = np.nonzero(np.abs(epsr_array_ref[idx_non_pml]) > 1)[0] ## indices of non-air
-        A_ap = A[:, idx_ap]
-        print('shape of A:', np.shape(A))
+        idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
+        A_ap = A[:, np.nonzero(np.abs(epsr_array_ref[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
+        print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
         print('shape of b:', np.shape(b))
         print('in-object cells:', np.size(idx_ap))
         
@@ -231,11 +232,10 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             cells.x.array[:] = x_np_ap + 0j
             f.write_function(cells, 4)
             
-            
             print('Solving with spgl...', end='') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-            sigma = 1e-6 ## guess for a good sigma
+            sigma = 1e-5 ## guess for a good sigma
             tau = 1e0 ## guess for a good tau
-            iter_lim = 3366
+            iter_lim = 2366
             
             A1, A2 = np.shape(A)[0], np.shape(A)[1]
             Ak = np.zeros((A1*2, A2*2)) ## real A
@@ -245,15 +245,15 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             Ak[A1:,:A2] = 1*np.imag(A) ## A21
             Ak[A1:,A2:] = np.real(A) ## A22
             
-            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, iter_lim=iter_lim, verbosity=1)
+            xsol, resid, grad, info = spgl1.spg_bp(Ak, bk, iter_lim=iter_lim, verbosity=1)
             x_spgl_bp = np.zeros(N, dtype=complex)
             x_spgl_bp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
             
-            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+            xsol, resid, grad, info = spgl1.spg_bpdn(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
             x_spgl_bpdn = np.zeros(N, dtype=complex)
             x_spgl_bpdn[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
             
-            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+            xsol, resid, grad, info = spgl1.spg_lasso(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
             x_spgl_lasso = np.zeros(N, dtype=complex)
             x_spgl_lasso[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
             
@@ -268,15 +268,15 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
             Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
             
-            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, iter_lim=iter_lim, verbosity=1)
+            xsol, resid, grad, info = spgl1.spg_bp(Ak_ap, bk, iter_lim=iter_lim, verbosity=1)
             x_spgl_bp_ap = np.zeros(N, dtype=complex)
             x_spgl_bp_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             
-            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+            xsol, resid, grad, info = spgl1.spg_bpdn(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
             x_spgl_bpdn_ap = np.zeros(N, dtype=complex)
             x_spgl_bpdn_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             
-            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+            xsol, resid, grad, info = spgl1.spg_lasso(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
             x_spgl_lasso_ap = np.zeros(N, dtype=complex)
             x_spgl_lasso_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             
@@ -297,4 +297,44 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             f.write_function(cells, 10)
             
             print(' done')
+                    
+            print('solving with cvxpy...', end='')
+            t_cvx = timer()
+            x_cvxpy = cp.Variable(N_non_pml, complex=True)
+            objective_cvxpy = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
+            problem_cvxpy = cp.Problem(objective_cvxpy)
+            problem_cvxpy.solve()
+            
+            x_cvx1 = np.zeros(N, dtype=complex)
+            x_cvx1[idx_non_pml] = x_cvxpy.value
+            print(f'cvx1 optimal value: {problem_cvxpy.value}')
+            
+            x_cvxpy = cp.Variable(N_non_pml, complex=True)
+            objective_cvxpy = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
+            problem_cvxpy = cp.Problem(objective_cvxpy)
+            problem_cvxpy.solve()
+            
+            x_cvx2 = np.zeros(N, dtype=complex)
+            x_cvx2[idx_non_pml] = x_cvxpy.value
+            print(f'cvx2 optimal value: {problem_cvxpy.value}')
+            
+            x_cvxpy = cp.Variable(N_non_pml, complex=True)
+            objective_cvxpy = cp.Minimize(cp.sum_squares(A @ x_cvxpy - b))
+            problem_cvxpy = cp.Problem(objective_cvxpy)
+            problem_cvxpy.solve()
+            
+            x_cvxss = np.zeros(N, dtype=complex)
+            x_cvxss[idx_non_pml] = x_cvxpy.value
+            print(f'cvx sum of squares optimal value: {problem_cvxpy.value}')
+            
+            cells.x.array[:] = x_cvx1 + 0j
+            f.write_function(cells, 11)
+            
+            cells.x.array[:] = x_cvx2 + 0j
+            f.write_function(cells, 12)
+            
+            cells.x.array[:] = x_cvxss + 0j
+            f.write_function(cells, 13)
+            
+            print(f' done, in {timer()-t_cvx:.2f} s')
                     
