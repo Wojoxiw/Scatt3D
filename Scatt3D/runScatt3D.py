@@ -381,12 +381,12 @@ if __name__ == '__main__':
             plt.show()
     
     
-    runName = 'testRunDeg3'
+    runName = 'testRunDeg1'
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/6.7, degree=3)
+    testFullExample(h=1/17, degree=1)
     #testSphereScattering(h=1/5, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
