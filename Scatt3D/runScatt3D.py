@@ -381,7 +381,7 @@ if __name__ == '__main__':
             plt.show()
     
     
-    runName = 'testRunDeg3'
+    runName = 'testRunDeg2'
     
     #testRun(h=1/3)
     #profilingMemsTimes()
