@@ -103,13 +103,13 @@ if __name__ == '__main__':
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing toward a full example, including postprocessing stuff
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=2, order=degree)
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         else:
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=2, order=degree)
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 1, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
         prob.saveEFieldsForAnim(True)
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
