@@ -122,16 +122,21 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             print('pzgels norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x0.data) - b_np))
             
             if(checkVsNp):
-                t1 = timer()
-                x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-4) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
-                nptime = timer() - t1
-                print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
-                print('numpy norm alt1 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-4) @ b_np) - b_np))
-                print('numpy norm alt2 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-6) @ b_np) - b_np))
-                print('numpy norm alt3 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-8) @ b_np) - b_np))
-                print('numpy norm alt4 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-10) @ b_np) - b_np))
-                print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
-                print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
+                try:
+                    t1 = timer()
+                    x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-4) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
+                    nptime = timer() - t1
+                    print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
+                    print('numpy norm alt1 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-4) @ b_np) - b_np))
+                    print('numpy norm alt2 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-6) @ b_np) - b_np))
+                    print('numpy norm alt3 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-8) @ b_np) - b_np))
+                    print('numpy norm alt4 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-10) @ b_np) - b_np))
+                    print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
+                    print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
+                except Exception as error:
+                    print(f'Numpy solution error, skipping: {error}')
+                    x_nplstsq = np.zeros(np.shape(x0.data))
+                    
             sys.stdout.flush()
             return x0.data[:, 0], x_nplstsq[:, 0]
         
@@ -184,7 +189,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
                 
         print('all data loaded in')
         sys.stdout.flush()
-        idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air
+        idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
         A_ap = A[:, np.nonzero(np.abs(epsr_array_ref[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
         print('shape of b:', np.shape(b))
@@ -213,128 +218,147 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
     
     if(comm.rank == 0):
         ## write back the result
-        with dolfinx.io.XDMFFile(commself, problemName+'testoutput.xdmf', 'w') as f:
-            f.write_mesh(mesh)
-            cells.x.array[:] = epsr_array_ref + 0j
-            f.write_function(cells, -1)
-            cells.x.array[:] = epsr_array_dut + 0j
-            f.write_function(cells, 0)
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'testoutput.xdmf', file_mode='w')
             
-            ## non a-priori
-            cells.x.array[:] = x + 0j
-            f.write_function(cells, 1)  
-            cells.x.array[:] = x_np + 0j
-            f.write_function(cells, 2)  
-            
-            ## a-priori
-            cells.x.array[:] = x_ap + 0j
-            f.write_function(cells, 3)    
-            cells.x.array[:] = x_np_ap + 0j
-            f.write_function(cells, 4)
-            
-            print('Solving with spgl...', end='') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-            sigma = 1e-5 ## guess for a good sigma
-            tau = 1e0 ## guess for a good tau
-            iter_lim = 2366
-            
-            A1, A2 = np.shape(A)[0], np.shape(A)[1]
-            Ak = np.zeros((A1*2, A2*2)) ## real A
-            bk = np.hstack((np.real(b),np.imag(b))) ## real b
-            Ak[:A1,:A2] = np.real(A) ## A11
-            Ak[:A1,A2:] = -1*np.imag(A) ## A12
-            Ak[A1:,:A2] = 1*np.imag(A) ## A21
-            Ak[A1:,A2:] = np.real(A) ## A22
-            
-            xsol, resid, grad, info = spgl1.spg_bp(Ak, bk, iter_lim=iter_lim, verbosity=1)
-            x_spgl_bp = np.zeros(N, dtype=complex)
-            x_spgl_bp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-            
-            xsol, resid, grad, info = spgl1.spg_bpdn(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
-            x_spgl_bpdn = np.zeros(N, dtype=complex)
-            x_spgl_bpdn[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-            
-            xsol, resid, grad, info = spgl1.spg_lasso(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
-            x_spgl_lasso = np.zeros(N, dtype=complex)
-            x_spgl_lasso[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-            
-            del Ak ## maybe this will help with clearing memory
-            gc.collect()
-            
-            ### a-priori
-            A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
-            Ak_ap = np.zeros((A1*2, A2*2)) ## real A
-            Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
-            Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
-            Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
-            Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
-            
-            xsol, resid, grad, info = spgl1.spg_bp(Ak_ap, bk, iter_lim=iter_lim, verbosity=1)
-            x_spgl_bp_ap = np.zeros(N, dtype=complex)
-            x_spgl_bp_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-            
-            xsol, resid, grad, info = spgl1.spg_bpdn(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
-            x_spgl_bpdn_ap = np.zeros(N, dtype=complex)
-            x_spgl_bpdn_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-            
-            xsol, resid, grad, info = spgl1.spg_lasso(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
-            x_spgl_lasso_ap = np.zeros(N, dtype=complex)
-            x_spgl_lasso_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-            
-            ## non a-priori
-            cells.x.array[:] = x_spgl_bp + 0j
-            f.write_function(cells, 5)
-            cells.x.array[:] = x_spgl_bpdn + 0j
-            f.write_function(cells, 6)
-            cells.x.array[:] = x_spgl_lasso + 0j
-            f.write_function(cells, 7)
-            
-            ## a-priori
-            cells.x.array[:] = x_spgl_bp_ap + 0j
-            f.write_function(cells, 8)
-            cells.x.array[:] = x_spgl_bpdn_ap + 0j
-            f.write_function(cells, 9)
-            cells.x.array[:] = x_spgl_lasso_ap + 0j
-            f.write_function(cells, 10)
-            
-            print(' done')
-                    
-            print('solving with cvxpy...', end='')
-            t_cvx = timer()
-            x_cvxpy = cp.Variable(N_non_pml, complex=True)
-            objective_cvxpy = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
-            problem_cvxpy = cp.Problem(objective_cvxpy)
-            problem_cvxpy.solve()
-            
-            x_cvx1 = np.zeros(N, dtype=complex)
-            x_cvx1[idx_non_pml] = x_cvxpy.value
-            print(f'cvx1 optimal value: {problem_cvxpy.value}')
-            
-            x_cvxpy = cp.Variable(N_non_pml, complex=True)
-            objective_cvxpy = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
-            problem_cvxpy = cp.Problem(objective_cvxpy)
-            problem_cvxpy.solve()
-            
-            x_cvx2 = np.zeros(N, dtype=complex)
-            x_cvx2[idx_non_pml] = x_cvxpy.value
-            print(f'cvx2 optimal value: {problem_cvxpy.value}')
-            
-            x_cvxpy = cp.Variable(N_non_pml, complex=True)
-            objective_cvxpy = cp.Minimize(cp.sum_squares(A @ x_cvxpy - b))
-            problem_cvxpy = cp.Problem(objective_cvxpy)
-            problem_cvxpy.solve()
-            
-            x_cvxss = np.zeros(N, dtype=complex)
-            x_cvxss[idx_non_pml] = x_cvxpy.value
-            print(f'cvx sum of squares optimal value: {problem_cvxpy.value}')
-            
-            cells.x.array[:] = x_cvx1 + 0j
-            f.write_function(cells, 11)
-            
-            cells.x.array[:] = x_cvx2 + 0j
-            f.write_function(cells, 12)
-            
-            cells.x.array[:] = x_cvxss + 0j
-            f.write_function(cells, 13)
-            
-            print(f' done, in {timer()-t_cvx:.2f} s')
-                    
+        f.write_mesh(mesh)
+        cells.x.array[:] = epsr_array_ref + 0j
+        f.write_function(cells, -1)
+        cells.x.array[:] = epsr_array_dut + 0j
+        f.write_function(cells, 0)
+        
+        ## non a-priori
+        cells.x.array[:] = x + 0j
+        f.write_function(cells, 1)  
+        cells.x.array[:] = x_np + 0j
+        f.write_function(cells, 2)  
+        
+        ## a-priori
+        cells.x.array[:] = x_ap + 0j
+        f.write_function(cells, 3)    
+        cells.x.array[:] = x_np_ap + 0j
+        f.write_function(cells, 4)
+        
+        f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
+        
+        sigma = 1e-5 ## guess for a good sigma
+        tau = 1e0 ## guess for a good tau
+        
+        print('solving with cvxpy...', end='')
+        t_cvx = timer()
+        x_cvxpy = cp.Variable(N_non_pml, complex=True)
+        objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
+        objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
+        objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
+        constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
+        constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
+        
+        problem_cvxpy = cp.Problem(objective_1norm)
+        problem_cvxpy.solve()
+        
+        x_cvx1 = np.zeros(N, dtype=complex)
+        x_cvx1[idx_non_pml] = x_cvxpy.value
+        print(f'cvx1 norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
+        
+        problem_cvxpy = cp.Problem(objective_2norm)
+        problem_cvxpy.solve()
+        
+        x_cvx2 = np.zeros(N, dtype=complex)
+        x_cvx2[idx_non_pml] = x_cvxpy.value
+        print(f'cvx2 norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
+        
+        problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
+        problem_cvxpy.solve()
+        
+        x_cvx_lasso = np.zeros(N, dtype=complex)
+        x_cvx_lasso[idx_non_pml] = x_cvxpy.value
+        print(f'cvx_lasso norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
+        
+        problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
+        problem_cvxpy.solve()
+        
+        x_cvx_bpdn = np.zeros(N, dtype=complex)
+        x_cvx_bpdn[idx_non_pml] = x_cvxpy.value
+        print(f'cvx_bpdn norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
+        
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'testoutput.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        cells.x.array[:] = x_cvx1 + 0j
+        f.write_function(cells, 11)
+        
+        cells.x.array[:] = x_cvx2 + 0j
+        f.write_function(cells, 12)
+        
+        cells.x.array[:] = x_cvx_lasso + 0j
+        f.write_function(cells, 13)
+        
+        cells.x.array[:] = x_cvx_bpdn + 0j
+        f.write_function(cells, 14)
+        f.close()
+        
+        print(f' done, in {timer()-t_cvx:.2f} s')
+        
+        print('Solving with spgl...', end='') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
+        iter_lim = 2366
+        
+        A1, A2 = np.shape(A)[0], np.shape(A)[1]
+        Ak = np.zeros((A1*2, A2*2)) ## real A
+        bk = np.hstack((np.real(b),np.imag(b))) ## real b
+        Ak[:A1,:A2] = np.real(A) ## A11
+        Ak[:A1,A2:] = -1*np.imag(A) ## A12
+        Ak[A1:,:A2] = 1*np.imag(A) ## A21
+        Ak[A1:,A2:] = np.real(A) ## A22
+        
+        xsol, resid, grad, info = spgl1.spg_bp(Ak, bk, iter_lim=iter_lim, verbosity=1)
+        x_spgl_bp = np.zeros(N, dtype=complex)
+        x_spgl_bp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+        
+        xsol, resid, grad, info = spgl1.spg_bpdn(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+        x_spgl_bpdn = np.zeros(N, dtype=complex)
+        x_spgl_bpdn[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+        
+        xsol, resid, grad, info = spgl1.spg_lasso(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+        x_spgl_lasso = np.zeros(N, dtype=complex)
+        x_spgl_lasso[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+        
+        del Ak ## maybe this will help with clearing memory
+        gc.collect()
+        
+        ### a-priori
+        A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
+        Ak_ap = np.zeros((A1*2, A2*2)) ## real A
+        Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
+        Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
+        Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
+        Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
+        
+        xsol, resid, grad, info = spgl1.spg_bp(Ak_ap, bk, iter_lim=iter_lim, verbosity=1)
+        x_spgl_bp_ap = np.zeros(N, dtype=complex)
+        x_spgl_bp_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        
+        xsol, resid, grad, info = spgl1.spg_bpdn(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+        x_spgl_bpdn_ap = np.zeros(N, dtype=complex)
+        x_spgl_bpdn_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        
+        xsol, resid, grad, info = spgl1.spg_lasso(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+        x_spgl_lasso_ap = np.zeros(N, dtype=complex)
+        x_spgl_lasso_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'testoutput.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        ## non a-priori
+        cells.x.array[:] = x_spgl_bp + 0j
+        f.write_function(cells, 5)
+        cells.x.array[:] = x_spgl_bpdn + 0j
+        f.write_function(cells, 6)
+        cells.x.array[:] = x_spgl_lasso + 0j
+        f.write_function(cells, 7)
+        
+        ## a-priori
+        cells.x.array[:] = x_spgl_bp_ap + 0j
+        f.write_function(cells, 8)
+        cells.x.array[:] = x_spgl_bpdn_ap + 0j
+        f.write_function(cells, 9)
+        cells.x.array[:] = x_spgl_lasso_ap + 0j
+        f.write_function(cells, 10)
+        
+        f.close()
+        
+        print(' done')

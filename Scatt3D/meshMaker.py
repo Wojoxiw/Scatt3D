@@ -47,9 +47,11 @@ class MeshData():
                  antenna_z_offset = 0,
                  object_radius = 0.66,
                  object_height = 1.25,
+                 object_offset = np.array([.15, .1, 0]),
                  defect_radius = 0.4,
                  defect_height = 0.5,
                  defect_angles = [0, 0, 0],
+                 defect_offset = np.array([-.06, .13, .01]),
                  viewGMSH = False,
                  FF_surface = False,
                  order = 1,
@@ -64,7 +66,7 @@ class MeshData():
         :param verbosity: This is passed to gmsh, also if > 0, I print more stuff
         :param model_rank: Rank of the master model - for saving, plotting, etc.
         :param domain_geom: The geometry of the domain (and PML).
-        :param object_geom: Geometry of the object ('sphere', 'None')
+        :param object_geom: Geometry of the object ('sphere', 'cylinder', 'cubic', 'None')
         :param defect_geom: Geometry of the defect.
         :param domain_radius:
         :param domain_height:
@@ -78,9 +80,11 @@ class MeshData():
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
         :param object_radius: If object is a sphere (or cylinder), the radius
         :param object_height: If object is a cylinder, the height
+        :param object_offset: The object is shifted this far (in wavelengths)
         :param defect_radius: If defect is a sphere (or cylinder), the radius
         :param defect_height: If defect is a cylinder, the height
         :param defect_angles: [x, y, z] angles to rotate about these axes
+        :param defect_offset: The defect is shifted this far from the centre of the object (in wavelengths)
         :param viewGMSH: If True, plots the mesh after creation then exits
         :param FF_surface: If True, creates a spherical shell with a radius slightly lower than the domain's, to calculate the farfield on (domain_geom should also be spherical)
         :param order: Order of the mesh elements - have to switch from xdmf to vtx or vtk when going above 2? They don't work straightforwardly
@@ -151,14 +155,18 @@ class MeshData():
         elif(object_geom == 'cylinder'):
             self.object_radius = object_radius * self.lambda0
             self.object_height = object_height * self.lambda0
+        elif(object_geom == 'cubic'):
+            self.object_length = object_radius * self.lambda0
         elif(object_geom == 'None'):
             pass
         else:
             print('Nonvalid object geom, exiting...')
             exit()
         self.object_geom = object_geom
+        self.object_offset = object_offset * self.lambda0
         
         self.defect_angles = defect_angles ## [x, y, z] rotations
+        self.defect_offset = defect_offset * self.lambda0
         if(defect_geom == 'cylinder'):
             self.defect_geom = defect_geom
             self.defect_radius = defect_radius * self.lambda0
@@ -214,6 +222,10 @@ class MeshData():
             elif(self.object_geom == 'cylinder'):
                 obj = gmsh.model.occ.addCylinder(0,0,-self.object_height/2,0,0,self.object_height, self.object_radius) ## add it to the origin
                 matDimTags.append((self.tdim, obj)) ## the material fills the object
+            elif(self.object_geom == 'cubic'):
+                obj = gmsh.model.occ.addBox(-self.object_length/2,-self.object_length/2,-self.object_length/2,self.object_length,self.object_length,self.object_length) ## add it to the origin
+                matDimTags.append((self.tdim, obj)) ## the material fills the object
+            gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
             if(self.defect_geom == 'cylinder'):
                 def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too
                     dimTags = []
@@ -226,6 +238,7 @@ class MeshData():
                     return dimTags
             if(not self.reference):
                 defectDimTags = makeDefect()
+                gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             
             ## Make the domain and the PML
             if(self.domain_geom == 'domedCyl'):
@@ -365,7 +378,7 @@ class MeshData():
             #===================================================================
                 
             if(viewGMSH):
-                gmsh.fltk.run()
+                gmsh.fltk.run() ## gives a PETSc error when run in a spack installation
                 exit()
             
         else: ## some data is also needed for subordinate processes
@@ -398,7 +411,7 @@ class MeshData():
             
     def plotMeshPartition(self):
         '''
-        Plots mesh partitions
+        Plots mesh partitions - only works for order 1 meshes currently
         '''
         import pyvista ## can I just import this here so it doesn't need to be installed on the cluster?
         
