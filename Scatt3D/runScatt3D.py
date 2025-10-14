@@ -100,24 +100,20 @@ if __name__ == '__main__':
         #prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
         
-    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, justPPs=False): ## Testing toward a full example, including postprocessing stuff
-        if(not justPPs):
-            prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-            if(dutOnRefMesh):
-                refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
-            else:
-                refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
-            #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
-            #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-            #refMesh.plotMeshPartition()
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
-            prob.saveEFieldsForAnim(True)
-            prob.saveEFieldsForAnim(False)
-            prevRuns.memTimeAppend(prob)
-            fname=prob.dataFolder+prob.name
+    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing toward a full example
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        if(dutOnRefMesh):
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         else:
-            fname = 'data3D/'+runName ## the default names
-        postProcessing.solveFromQs(fname, MPInum)
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+        #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        #refMesh.plotMeshPartition()
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+        prob.saveEFieldsForAnim(True)
+        prob.saveEFieldsForAnim(False)
+        prevRuns.memTimeAppend(prob)
+        
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -386,12 +382,14 @@ if __name__ == '__main__':
             plt.show()
     
     
-    runName = 'testRunDeg1'
+    #runName = 'testRunDeg1'
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/19, degree=1, justPPs=False)
+    testFullExample(h=1/10.5, degree=1)
+    postProcessing.solveFromQs(folder+runName, MPInum)
+    
     #testSphereScattering(h=1/5, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)

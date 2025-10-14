@@ -18,6 +18,7 @@ import ctypes.util
 import spgl1
 import gc
 import cvxpy as cp
+import resource
 
 def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     '''
@@ -124,13 +125,13 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             if(checkVsNp):
                 try:
                     t1 = timer()
-                    x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-4) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
+                    x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-5) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
                     nptime = timer() - t1
                     print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
-                    print('numpy norm alt1 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-4) @ b_np) - b_np))
-                    print('numpy norm alt2 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-6) @ b_np) - b_np))
-                    print('numpy norm alt3 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-8) @ b_np) - b_np))
-                    print('numpy norm alt4 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-10) @ b_np) - b_np))
+                    #print('numpy norm alt1 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-4) @ b_np) - b_np))
+                    #print('numpy norm alt2 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-6) @ b_np) - b_np))
+                    #print('numpy norm alt3 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-8) @ b_np) - b_np))
+                    #print('numpy norm alt4 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-10) @ b_np) - b_np))
                     print(f'Time to pzgels solve: {scalatime:.2f}, time to numpy solve: {nptime:.2f}')
                     print('Norm of difference between solutions:', np.linalg.norm(x0.data-x_nplstsq))
                 except Exception as error:
@@ -142,6 +143,7 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
         
 
 def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping everything on one process
+    gc.collect()
     comm = MPI.COMM_WORLD
     commself = MPI.COMM_SELF
     if(comm.rank == 0):
@@ -186,6 +188,8 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             for n in range(Nb):
                 Apart = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
                 A[n,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
+            del Apart ## maybe this will help with clearing memory
+        gc.collect()
                 
         print('all data loaded in')
         sys.stdout.flush()
@@ -215,10 +219,15 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
     else: ## on other processes, call it with nothing
         scalapackLeastSquares(comm, MPInum)
         
+    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+    mems = comm.gather(mem_usage, root=0)
+    if( comm.rank == 0 ):
+        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
     
     if(comm.rank == 0):
         ## write back the result
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'testoutput.xdmf', file_mode='w')
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='w')
             
         f.write_mesh(mesh)
         cells.x.array[:] = epsr_array_ref + 0j
@@ -280,21 +289,28 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         x_cvx_bpdn[idx_non_pml] = x_cvxpy.value
         print(f'cvx_bpdn norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
         
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'testoutput.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         cells.x.array[:] = x_cvx1 + 0j
-        f.write_function(cells, 11)
+        f.write_function(cells, 5)
         
         cells.x.array[:] = x_cvx2 + 0j
-        f.write_function(cells, 12)
+        f.write_function(cells, 6)
         
         cells.x.array[:] = x_cvx_lasso + 0j
-        f.write_function(cells, 13)
+        f.write_function(cells, 7)
         
         cells.x.array[:] = x_cvx_bpdn + 0j
-        f.write_function(cells, 14)
+        f.write_function(cells, 8)
         f.close()
-        
         print(f' done, in {timer()-t_cvx:.2f} s')
+        
+        
+    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+    mems = comm.gather(mem_usage, root=0)
+    if( comm.rank == 0 ):
+        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
+        
         
         print('Solving with spgl...', end='') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
         iter_lim = 2366
@@ -342,22 +358,22 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         x_spgl_lasso_ap = np.zeros(N, dtype=complex)
         x_spgl_lasso_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'testoutput.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## non a-priori
         cells.x.array[:] = x_spgl_bp + 0j
-        f.write_function(cells, 5)
+        f.write_function(cells, 9)
         cells.x.array[:] = x_spgl_bpdn + 0j
-        f.write_function(cells, 6)
+        f.write_function(cells, 10)
         cells.x.array[:] = x_spgl_lasso + 0j
-        f.write_function(cells, 7)
+        f.write_function(cells, 11)
         
         ## a-priori
         cells.x.array[:] = x_spgl_bp_ap + 0j
-        f.write_function(cells, 8)
+        f.write_function(cells, 12)
         cells.x.array[:] = x_spgl_bpdn_ap + 0j
-        f.write_function(cells, 9)
+        f.write_function(cells, 13)
         cells.x.array[:] = x_spgl_lasso_ap + 0j
-        f.write_function(cells, 10)
+        f.write_function(cells, 14)
         
         f.close()
         
