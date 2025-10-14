@@ -102,10 +102,11 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.06, .13, .01])} ## settings for the meshMaker
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         else:
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
@@ -118,7 +119,7 @@ if __name__ == '__main__':
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
-        refMesh.plotMeshPartition()
+        #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsr=2.0*(1-0.01j), fem_degree=degree)
@@ -382,15 +383,16 @@ if __name__ == '__main__':
             plt.show()
     
     
-    #runName = 'testRunDeg1'
+    runName = 'testRunDeg2'
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
-    testFullExample(h=1/10.5, degree=1)
+    
+    testFullExample(h=1/10.5, degree=2)
     postProcessing.solveFromQs(folder+runName, MPInum)
     
-    #testSphereScattering(h=1/5, degree=1, showPlots=True)
+    #testSphereScattering(h=1/10, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')

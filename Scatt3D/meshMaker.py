@@ -47,11 +47,11 @@ class MeshData():
                  antenna_z_offset = 0,
                  object_radius = 0.66,
                  object_height = 1.25,
-                 object_offset = np.array([.15, .1, 0]),
+                 object_offset = np.array([0, 0, 0]),
                  defect_radius = 0.175,
                  defect_height = 0.3,
                  defect_angles = [0, 0, 0],
-                 defect_offset = np.array([-.06, .13, .01]),
+                 defect_offset = np.array([0, 0, 0]),
                  viewGMSH = False,
                  FF_surface = False,
                  order = 1,
@@ -424,9 +424,15 @@ class MeshData():
         grid["rank"] = np.real(u.x.array)
         grids = self.comm.gather(grid, root=self.model_rank)
         if self.comm.rank == self.model_rank:
-            plotter = pyvista.Plotter()
+            plotter = pyvista.Plotter() ## first plot the 3D mesh
             for g in grids:
                 plotter.add_mesh(g, show_edges=True)
             plotter.view_xy()
+            plotter.add_axes()
+            plotter.show()
+            plotter.clear() ## then plot orthogonal slices
+            for g in grids:
+                slices = g.slice_orthogonal()
+                plotter.add_mesh(slices, show_edges=True)
             plotter.add_axes()
             plotter.show()

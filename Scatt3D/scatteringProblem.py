@@ -429,19 +429,34 @@ class Scatt3DProblem():
         #=======================================================================
         # ## option to try
         # petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
-        # 'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_rtol': 1e-1, 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_ksp_max_it': 50, 'mg_coarse_pc_type': 'asm', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict',
-        # 'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_tc_side': 'left', 'mg_levels_pc_type': 'asm', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
-        # **conv_sets, **self.solver_settings} ## based on https://github.com/FreeFem/FreeFem-sources/blob/develop/examples/hpddm/maxwell-mg-3d-PETSc-complex.edp
+        # 'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_rtol': 1e-1, 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_ksp_max_it': 50, 'mg_coarse_pc_type': 'asm', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
+        # 'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_pc_type': 'asm', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
+        # **conv_sets, **self.solver_settings} ## based on https://github.com/FreeFem/FreeFem-sources/blob/develop/examples/hpddm/maxwell-mg-3d-PETSc-complex.edp. Without coarse options, this seems to save some memory over a direct solve
         #=======================================================================
-        
-        
-        
         
         cache_dir = f"{str(Path.cwd())}/.cache"
         jit_options={}
         jit_options= {"cffi_extra_compile_args": ['-O3', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little.
         
         problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options)
+        ksp = problem.solver
+        pc = ksp.getPC()
+        
+        #=======================================================================
+        # coarse_ksp = pc.getMGCoarseSolve()
+        # coarse_ksp.setType("gmres")
+        # coarse_ksp.setTolerances(rtol=1e-1, max_it=50)
+        # coarse_pc = coarse_ksp.getPC()
+        # coarse_pc.setType("asm")
+        # coarse_pc.setASMType(1) ## should be restrict
+        # ksp.setFromOptions()
+        # for sub_ksp in coarse_pc.getASMSubKSP():
+        #     print(sub_ksp)
+        # sub_pc = coarse_pc.PCASMGetSubKSP()
+        # sub_pc.setType("cholesky")
+        # sub_pc.setFactorSolverType("mumps")
+        #=======================================================================
+        
         
         #=======================================================================
         # a = dolfinx.fem.form(problem.a)
@@ -470,10 +485,6 @@ class Scatt3DProblem():
         # x.set(0)
         # ksp.solve(b, x)
         #=======================================================================
-         
-        
-        ksp = problem.solver
-        pc = ksp.getPC()
         
         #=======================================================================
         # pc1 = pc.getCompositePC(0)
