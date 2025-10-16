@@ -389,8 +389,8 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    testFullExample(h=1/10.5, degree=2)
-    postProcessing.solveFromQs(folder+runName, MPInum)
+    testFullExample(h=1/9.5, degree=2)
+    #postProcessing.solveFromQs(folder+runName, MPInum)
     
     #testSphereScattering(h=1/10, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')

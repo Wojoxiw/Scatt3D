@@ -250,75 +250,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
 
         sigma = 1e-5 ## guess for a good sigma
-        tau = 1e0 ## guess for a good tau
-
-        print('solving with cvxpy...')
-        t_cvx = timer()
-        
-        def cvxpySolve(type=0): ## put this in a function to allow gc?
-            x_cvxpy = cp.Variable(N_non_pml, complex=True)
-            print(f'{type=}')
-            if(type==0):
-                objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
-                problem_cvxpy = cp.Problem(objective_1norm)
-            if(type==1):
-                objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
-                problem_cvxpy = cp.Problem(objective_2norm)
-            if(type==2): ## bpdn
-                objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
-                constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
-                problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
-            if(type==3): ## lasso
-                objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
-                constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
-                problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
-            problem_cvxpy.solve()
-            return x_cvxpy.value
-
-
-        x_cvx1 = np.zeros(N, dtype=complex)
-        x_cvx1[idx_non_pml] = cvxpySolve(0)
-        print(f'cvx1 norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
-        print(mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-        sys.stdout.flush()
-        
-        x_cvx2 = np.zeros(N, dtype=complex)
-        x_cvx2[idx_non_pml] = cvxpySolve(1)
-        print(f'cvx2 norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
-        print(mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-        sys.stdout.flush()
-        x_cvx_lasso = np.zeros(N, dtype=complex)
-        x_cvx_lasso[idx_non_pml] = cvxpySolve(2)
-        print(f'cvx_lasso norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
-        print(mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-        sys.stdout.flush()
-        x_cvx_bpdn = np.zeros(N, dtype=complex)
-        x_cvx_bpdn[idx_non_pml] = cvxpySolve(3)
-        print(f'cvx_bpdn norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value}')
-        print(mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-        sys.stdout.flush()
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
-        cells.x.array[:] = x_cvx1 + 0j
-        f.write_function(cells, 5)
-        
-        cells.x.array[:] = x_cvx2 + 0j
-        f.write_function(cells, 6)
-        
-        cells.x.array[:] = x_cvx_lasso + 0j
-        f.write_function(cells, 7)
-        
-        cells.x.array[:] = x_cvx_bpdn + 0j
-        f.write_function(cells, 8)
-        f.close()
-        print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')
-        
-        
-    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
-    mems = comm.gather(mem_usage, root=0)
-    if( comm.rank == 0 ):
-        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
-        
+        tau = 2e-1 ## guess for a good tau
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
         iter_lim = 2366
@@ -386,3 +318,67 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         f.close()
         
         print('done spgl solution')
+        
+        
+        print('solving with cvxpy...')
+        t_cvx = timer()
+        
+        def cvxpySolve(type=0): ## put this in a function to allow gc?
+            x_cvxpy = cp.Variable(N_non_pml, complex=True)
+            print(f'{type=}')
+            if(type==0):
+                objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
+                problem_cvxpy = cp.Problem(objective_1norm)
+            if(type==1):
+                objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
+                problem_cvxpy = cp.Problem(objective_2norm)
+            if(type==2): ## bpdn
+                objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
+                constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
+                problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
+            if(type==3): ## lasso
+                objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
+                constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
+                problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
+            problem_cvxpy.solve(verbose=True)
+            print(f'cvxpy norm of residual {type=}: {cp.norm(A @ x_cvxpy - b, p=2).value}')
+            return x_cvxpy.value
+
+
+        x_cvx1 = np.zeros(N, dtype=complex)
+        x_cvx1[idx_non_pml] = cvxpySolve(0)
+        
+        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
+        
+        x_cvx2 = np.zeros(N, dtype=complex)
+        x_cvx2[idx_non_pml] = cvxpySolve(1)
+        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
+
+        x_cvx_lasso = np.zeros(N, dtype=complex)
+        x_cvx_lasso[idx_non_pml] = cvxpySolve(2)
+        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
+
+        x_cvx_bpdn = np.zeros(N, dtype=complex)
+        x_cvx_bpdn[idx_non_pml] = cvxpySolve(3)
+        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
+
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        cells.x.array[:] = x_cvx1 + 0j
+        f.write_function(cells, 5)
+        
+        cells.x.array[:] = x_cvx2 + 0j
+        f.write_function(cells, 6)
+        
+        cells.x.array[:] = x_cvx_lasso + 0j
+        f.write_function(cells, 7)
+        
+        cells.x.array[:] = x_cvx_bpdn + 0j
+        f.write_function(cells, 8)
+        f.close()
+        print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')
+        
+    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+    mems = comm.gather(mem_usage, root=0)
+    if( comm.rank == 0 ):
+        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
