@@ -233,11 +233,12 @@ if __name__ == '__main__':
                     plt.close()
             
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
-        refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=5, object_radius = .73, domain_radius=1.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='cylinder', order=deg, FF_surface = False)
+        refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=3, object_radius = .73, domain_radius=1.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='cylinder', order=deg, FF_surface = False)
         settings = [] ## list of solver settings
         maxTime = 355 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
         ## MG tests
+        testName = 'mg_testing'
         for mgrtol in [1e-1, 1.5e-1, .5e-1]:
             for maxit in [25, 50, 80]:
                 for pctype in ['asm', 'sor', 'gasm']:
@@ -388,7 +389,7 @@ if __name__ == '__main__':
             
             fig.tight_layout()
             fig.tight_layout() ## need both of these for some reason
-            plt.savefig(prob.dataFolder+prob.name+'mg_testing_solversettingsplot.png')
+            plt.savefig(prob.dataFolder+prob.name+testName+'_solversettingsplot.png')
             
             if(num>9):
                 print('Top 10 Options #s:') ## fastest options that seemed to converge
@@ -417,7 +418,7 @@ if __name__ == '__main__':
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/12)
+    testSolverSettings(h=1/6)
     
     #===========================================================================
     # runName = 'testRunDeg1'
