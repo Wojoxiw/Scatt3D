@@ -25,6 +25,7 @@ from petsc4py import PETSc
 import scipy
 
 import psutil
+import threading
 from memory_profiler import memory_usage
 from timeit import default_timer as timer
 import time
@@ -93,10 +94,10 @@ if __name__ == '__main__':
             
     def testRun(h = 1/2): ## A quick test run to check it works. Default settings make this run in a second
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='None', N_antennas=0)
+        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='None', N_antennas=1)
         prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, excitation = 'planewave')
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, Nf=1)
         #prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
         
@@ -236,6 +237,13 @@ if __name__ == '__main__':
         settings = [] ## list of solver settings
         maxTime = 355 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
+        ## MG tests
+        for mgrtol in [1e-1, 1.5e-1, .5e-1]:
+            for maxit in [25, 50, 80]:
+                for pctype in ['asm', 'sor', 'gasm']:
+                        settings.append( {'mg_coarse_ksp_rtol': mgrtol, 'mg_coarse_ksp_max_it': maxit, 'mg_levels_pc_type': pctype, 'mg_coarse_pc_type': pctype} )
+        
+        
         #=======================================================================
         # ## GASM tests
         # for subDs in [MPInum*1, MPInum*2, MPInum*3]:
@@ -245,65 +253,64 @@ if __name__ == '__main__':
         #                 settings.append( {'pc_gasm_total_subdomains': subDs, 'pc_gasm_overlap': overlap, **tryit, **try2} )
         #=======================================================================
         
-        ## composite PC tests
-        for type in ['additive', 'mutiplicative']:
-            for pc1 in ['gamg', 'asm', 'sor', 'bcgs', 'gmres', 'gasm']:
-                for pc2 in ['gasm', 'asm', 'sor', 'bcgs', 'gmres', 'gamg']:
-                    if(pc1 != pc2):
-                        def pc1stuff(pc1, pc2):
-                            if(pc1 == 'gasm'):
-                                pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                                pc1t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                                pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                            elif(pc1 == 'asm'):
-                                pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                            elif(pc1 == 'sor'):
-                                pc1t = {}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                            elif(pc1 == 'gamg'):
-                                pc1t = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                                pc1t = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
-                            elif(pc1 == 'bcgs'):
-                                pc1t = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
-                            elif(pc1 == 'gmres'):
-                                pc1t = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
-                                settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
-                                
-                        if(pc2 == 'gasm'):
-                            pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                            pc1stuff(pc1, pc2)
-                            pc2t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
-                            pc1stuff(pc1, pc2)
-                            pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                            pc1stuff(pc1, pc2)
-                        elif(pc2 == 'asm'):
-                            pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
-                            pc1stuff(pc1, pc2)
-                        elif(pc2 == 'sor'):
-                            pc2t = {}
-                            pc1stuff(pc1, pc2)
-                        elif(pc2 == 'gamg'):
-                            pc2t = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
-                            pc1stuff(pc1, pc2)
-                            pc2t = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
-                            pc1stuff(pc1, pc2)
-                        elif(pc2 == 'bcgs'):
-                            pc2t = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
-                            pc1stuff(pc1, 'ksp')
-                        elif(pc2 == 'gmres'):
-                            pc2t = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
-                            pc1stuff(pc1, 'ksp')
-                        
-                        
-                        
-                                                    
+        #=======================================================================
+        # ## composite PC tests
+        # for type in ['additive', 'mutiplicative']:
+        #     for pc1 in ['gamg', 'asm', 'sor', 'bcgs', 'gmres', 'gasm']:
+        #         for pc2 in ['gasm', 'asm', 'sor', 'bcgs', 'gmres', 'gamg']:
+        #             if(pc1 != pc2):
+        #                 def pc1stuff(pc1, pc2):
+        #                     if(pc1 == 'gasm'):
+        #                         pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                         pc1t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                         pc1t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                     elif(pc1 == 'asm'):
+        #                         pc1t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                     elif(pc1 == 'sor'):
+        #                         pc1t = {}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                     elif(pc1 == 'gamg'):
+        #                         pc1t = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                         pc1t = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': pc1+','+pc2, **pc1t, **pc2t} )
+        #                     elif(pc1 == 'bcgs'):
+        #                         pc1t = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
+        #                     elif(pc1 == 'gmres'):
+        #                         pc1t = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
+        #                         settings.append( {'pc_composite_type': type, 'pc_composite_pcs': 'ksp'+','+pc2, **pc1t, **pc2t} )
+        #                         
+        #                 if(pc2 == 'gasm'):
+        #                     pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 4, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+        #                     pc1stuff(pc1, pc2)
+        #                     pc2t = {'pc_gasm_total_subdomains': MPInum*2, 'pc_gasm_overlap': 3, 'sub_pc_type': 'bjacobi', 'sub_pc_factor_levels': 1, 'sub_pc_factor_mat_solver_type': 'petsc', 'sub_pc_factor_mat_ordering_type': 'nd'}
+        #                     pc1stuff(pc1, pc2)
+        #                     pc2t = {'pc_gasm_total_subdomains': MPInum, 'pc_gasm_overlap': 3, 'sub_pc_type': 'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+        #                     pc1stuff(pc1, pc2)
+        #                 elif(pc2 == 'asm'):
+        #                     pc2t = {'sub_pc_type':'lu', 'sub_pc_factor_mat_solver_type': 'mumps'}
+        #                     pc1stuff(pc1, pc2)
+        #                 elif(pc2 == 'sor'):
+        #                     pc2t = {}
+        #                     pc1stuff(pc1, pc2)
+        #                 elif(pc2 == 'gamg'):
+        #                     pc2t = {'pc_gamg_type': 'agg', 'pc_gamg_sym_graph': 1, 'matptap_via': 'scalable', 'pc_gamg_square_graph': 1, 'pc_gamg_reuse_interpolation': 1}
+        #                     pc1stuff(pc1, pc2)
+        #                     pc2t = {'mg_levels_pc_type': 'jacobi', 'pc_gamg_agg_nsmooths': 1, 'pc_mg_cycle_type': 'v', 'pc_gamg_aggressive_coarsening': 2, 'pc_gamg_theshold': 0.01, 'mg_levels_ksp_max_it': 5, 'mg_levels_ksp_type': 'chebyshev', 'pc_gamg_repartition': False, 'pc_gamg_square_graph': True, 'pc_mg_type': 'additive'}
+        #                     pc1stuff(pc1, pc2)
+        #                 elif(pc2 == 'bcgs'):
+        #                     pc2t = {'ksp_ksp_type': 'bcgs', 'ksp_ksp_max_it': 100, 'ksp_pc_type': 'jacobi'}
+        #                     pc1stuff(pc1, 'ksp')
+        #                 elif(pc2 == 'gmres'):
+        #                     pc2t = {'pc_ksp_type': 'gmres', 'ksp_max_it': 1, 'pc_ksp_rtol' : 1e-1, "pc_ksp_pc_type": "sor"}
+        #                     pc1stuff(pc1, 'ksp')
+        #=======================================================================
+                                                 
         num = len(settings)
         if(comm.rank == model_rank):
             print(f'Expected max time: approximately {num*maxTime} seconds')
@@ -315,12 +322,24 @@ if __name__ == '__main__':
         ts = np.zeros(num)
         its = np.zeros(num)
         norms = np.zeros(num)
-        mems = np.zeros(num)
+        mems = np.zeros(num) ## to get the memories for each run, use psutil on each process with sampling every 0.5 seconds
         for i in range(num):
             if(comm.rank == model_rank):
                 print('\033[94m' + f'Run {i+1}/{num} with settings:' + '\033[0m', settings[i])
             sys.stdout.flush()
+            
+            process_mem = 0
+            process_done = False
+            proc = psutil.Process(os.getpid())
+            def getMem():
+                nonlocal process_mem
+                while not process_done:
+                    process_mem = max(proc.memory_info().rss/1024**2, process_mem) ## get max mem
+                    time.sleep(0.4362)
+            
             try:
+                t = threading.Thread(target=getMem)
+                t.start()
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
                 if(comm.rank == model_rank):
                     ts[i] = prob.calcTime
@@ -335,6 +354,7 @@ if __name__ == '__main__':
                     norms[i] = np.nan
                     mems[i] = np.nan
                 sys.stdout.flush()
+            process_done = True
                     
         if(comm.rank == model_rank):
             fig, ax1 = plt.subplots()
@@ -350,7 +370,7 @@ if __name__ == '__main__':
             l2, = ax2.plot(omegas, ts, label = 'Time [s]', linewidth = 2, color='tab:blue')
             l3, = ax3.plot(omegas, norms, label = 'norms', linewidth = 2, color = 'orange')
             
-            plt.title(f'Solver Time by Setting (fem_degree=1, h={h:.2f}, dofs={prob.ndofs:.2e})')
+            plt.title(f'Solver Time by Setting (fem_degree=1, h={h:.2f}, dofs={prob.FEMmesh_ref.ndofs:.2e})')
             ax1.set_xlabel(r'Setting (composite try #)')
             ax1.set_ylabel('#')
             ax2.set_ylabel('Time [s]')
@@ -383,20 +403,21 @@ if __name__ == '__main__':
             plt.show()
     
     
-    runName = 'testRunDeg2'
+    #runName = 'testRunDeg2'
+    #runName = 'testRunSmall'
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    testFullExample(h=1/9.5, degree=2)
+    #testFullExample(h=1/9.5, degree=1)
     #postProcessing.solveFromQs(folder+runName, MPInum)
     
     #testSphereScattering(h=1/10, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    #testSolverSettings(h=1/6.3)
+    testSolverSettings(h=1/12)
     
     #===========================================================================
     # runName = 'testRunDeg1'

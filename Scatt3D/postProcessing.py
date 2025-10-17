@@ -319,7 +319,14 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         
         print('done spgl solution')
         
+    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+    mems = comm.gather(mem_usage, root=0)
+    if( comm.rank == 0 ):
+        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
         
+        print()
+        print()
         print('solving with cvxpy...')
         t_cvx = timer()
         
@@ -340,7 +347,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
                 objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
                 constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
                 problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
-            problem_cvxpy.solve(verbose=True)
+            problem_cvxpy.solve(verbose=True, solver=cp.SCS)
             print(f'cvxpy norm of residual {type=}: {cp.norm(A @ x_cvxpy - b, p=2).value}')
             return x_cvxpy.value
 

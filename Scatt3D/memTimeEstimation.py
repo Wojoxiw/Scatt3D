@@ -62,6 +62,7 @@ class runTimesMems():
             self.solve_its = prob.solver_its ## Iterations taken to solve the final problem
             self.ndofs = prob.FEMmesh_ref.ndofs ## Number of degrees of freedom to the problem? Time/mem should scale off of this, rather than size
             self.solve_norm = prob.solver_norm ## Norm of found solution
+            self.solve_type = prob.solve_type ## 'direct' for a direct solver, otherwise 'other'
             self.extraInfo = extraInfo
             
     def memTimeAppend(self, run, extraInfo = ''):

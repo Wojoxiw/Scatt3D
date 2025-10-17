@@ -150,7 +150,7 @@ class Scatt3DProblem():
                  computeRef = True, # If computing immediately, computes the reference simulation, where defects are not included
                  ErefEdut = False, # compute optimization vectors with Eref*Edut, a less-approximated version of the equation. Should provide better results, but can only be used in simulation
                  dutOnRefMesh = True, # If true, rather than compute DUT things on its own, separate mesh, then interpolate between meshes (gives error for large, higher-order meshes) - just use the same mesh. Must have DUT mesh
-                 excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise antenna excitation as normal
+                 excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise 'antennas' excitation as normal
                  PW_dir = np.array([0, 0, 1]), ## incident direction of the plane-wave, if used above. Default is coming in from the z-axis, to align with miepython
                  PW_pol = np.array([1, 0, 0]), ## incident polarization of the plane-wave, if used above. Default is along the x-axis
                  makeOptVects = True, ## if True, compute and saves the optimization vectors. Turn False if not needed
@@ -392,7 +392,21 @@ class Scatt3DProblem():
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
-        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        
+        #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        
+        ## a multigrid option to try. Seems to use less memory than the LU solver, while still being a direct solver. Also faster?
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
+        'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_rtol': 1e-1, 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_ksp_max_it': 50, 'mg_coarse_pc_type': 'asm', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
+        'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_pc_type': 'asm', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
+        **conv_sets, **self.solver_settings} ## based on https://github.com/FreeFem/FreeFem-sources/blob/develop/examples/hpddm/maxwell-mg-3d-PETSc-complex.edp.
+        
+        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
+        'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
+        'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
+        **conv_sets, **self.solver_settings} ## for settings testing
+        
+        self.solve_type = 'direct'
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
         #petsc_options={"ksp_type": "lgmres", 'pc_type': 'asm', 'sub_pc_type': 'sor', **conv_sets} ## is okay
@@ -426,13 +440,9 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_ksp_type': 'preonly', 'pc_hpddm_coarse_correction': 'galerkin', 'pc_hpddm_levels_1_overlap': 2, **conv_sets, **self.solver_settings}
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_ksp_type': 'preonly', 'pc_hpddm_coarse_correction': 'deflated', 'pc_hpddm_levels_1_overlap': 2, 'coarse_pc_type': 'gamg', 'pc_hpddm_levels_1_eps_nev': 10, **conv_sets, **self.solver_settings}
         
-        #=======================================================================
-        # ## option to try
-        # petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
-        # 'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_rtol': 1e-1, 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_ksp_max_it': 50, 'mg_coarse_pc_type': 'asm', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
-        # 'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_pc_type': 'asm', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
-        # **conv_sets, **self.solver_settings} ## based on https://github.com/FreeFem/FreeFem-sources/blob/develop/examples/hpddm/maxwell-mg-3d-PETSc-complex.edp. Without coarse options, this seems to save some memory over a direct solve
-        #=======================================================================
+        
+        if(not hasattr(self, 'solve_type')): # if it isn't set, set it
+            self.solve_type = 'other'
         
         cache_dir = f"{str(Path.cwd())}/.cache"
         jit_options={}

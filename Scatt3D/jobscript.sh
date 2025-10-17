@@ -1,6 +1,6 @@
 #!/bin/bash
 # ### SBATCH # --qos=test  ## to run a quick, high-priority test (should be very quick). This is currently commented out (I hope)
-#SBATCH -t 32:55:00 ## job is killed after this time - overestimate
+#SBATCH -t 4:55:00 ## job is killed after this time - overestimate
 #SBATCH -A lu2024-2-93 ##from projinfo command
 
 #SBATCH -N 2 ##number of nodes that will be allocated - must use --ntasks-per-node or --cpus-per-task to use more than 1 core per node
@@ -8,7 +8,7 @@
 
 #SBATCH -o jobresults/%j.out ## result filename, %j becomes the job number
 #SBATCH -e jobresults/%j.err ## errors filename - should be empty unless an error occurs
-#SBATCH -J deg2 ##puts a job name, to identify it
+#SBATCH -J solvetest ##puts a job name, to identify it
 
 cat $0 ## unix command - outputs this script to the top of the job's output file
 echo ## newline
