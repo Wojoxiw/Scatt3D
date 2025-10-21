@@ -398,12 +398,14 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         # ##
         #=======================================================================
         
-        ## test other solver settings
-        ##
-        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        exit()
-        ##
-        ##
+        #=======================================================================
+        # ## test other solver settings
+        # ##
+        # testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        # exit()
+        # ##
+        # ##
+        #=======================================================================
         
         print('Solving with scalapack least squares and numpy svd...')
         ## non a-priori
