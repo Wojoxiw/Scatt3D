@@ -101,9 +101,9 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     settings = [] ## list of solver settings
     
     ## MG tests
-    testName = 'cvxpy_type1_testsolvers'
+    testName = 'cvxpy_type2_testsolvers'
     for solver in cp.installed_solvers():
-        settings.append( {'solver': solver, 'solveType': 1} )
+        settings.append( {'solver': solver, 'solveType': 2} )
     
                             
     num = len(settings)
