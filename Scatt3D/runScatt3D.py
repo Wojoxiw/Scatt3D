@@ -342,11 +342,14 @@ if __name__ == '__main__':
                 t = threading.Thread(target=getMem)
                 t.start()
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
+                memGather = comm.gather(process_mem, root=model_rank)
+                if(comm.rank == model_rank):
+                    memTotal = sum(memGather) ## keep the total usage. Only the master rank should be used, so this should be fine
                 if(comm.rank == model_rank):
                     ts[i] = prob.calcTime
                     its[i] = prob.solver_its
                     norms[i] = prob.solver_norm
-                    mems[i] = prob.memCost
+                    mems[i] = memTotal #prob.memCost
             except Exception as error: ## if the solver isn't defined or something, try skipping it
                 if(comm.rank == model_rank):
                     print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
@@ -371,7 +374,7 @@ if __name__ == '__main__':
             l2, = ax2.plot(omegas, ts, label = 'Time [s]', linewidth = 2, color='tab:blue')
             l3, = ax3.plot(omegas, norms, label = 'norms', linewidth = 2, color = 'orange')
             
-            plt.title(f'Solver Time by Setting (fem_degree=1, h={h:.2f}, dofs={prob.FEMmesh_ref.ndofs:.2e})')
+            plt.title(f'Solver Time by Setting (fem_degree={prob.fem_degree}, h={h:.2f}, dofs={prob.FEMmesh_ref.ndofs:.2e}), ({testName})')
             ax1.set_xlabel(r'Setting (composite try #)')
             ax1.set_ylabel('#')
             ax2.set_ylabel('Time [s]')
@@ -393,7 +396,7 @@ if __name__ == '__main__':
             
             if(num>9):
                 print('Top 10 Options #s:') ## fastest options that seemed to converge
-                ts[norms>4e-4] = 10000
+                ts[norms>4e-4] = ts[norms>4e-4] + 10000
                 idxsort = np.argsort(ts)
                 for k in range(10):
                     print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, norm={norms[idxsort[k]]}, mem={mems[idxsort[k]]:.3e}GiB --- ')
@@ -405,20 +408,20 @@ if __name__ == '__main__':
     
     
     #runName = 'testRunDeg2'
-    #runName = 'testRunSmall'
+    runName = 'testRunSmall'
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    #testFullExample(h=1/9.5, degree=1)
-    #postProcessing.solveFromQs(folder+runName, MPInum)
+    #testFullExample(h=1/8, degree=1)
+    postProcessing.solveFromQs(folder+runName, MPInum)
     
-    #testSphereScattering(h=1/10, degree=1, showPlots=True)
+    #testSphereScattering(h=1/10, degree=1, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
-    testSolverSettings(h=1/6)
+    #testSolverSettings(h=1/6)
     
     #===========================================================================
     # runName = 'testRunDeg1'

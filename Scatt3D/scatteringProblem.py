@@ -394,18 +394,7 @@ class Scatt3DProblem():
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
         
         #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
-        
-        ## a multigrid option to try. Seems to use less memory than the LU solver, while still being a direct solver. Also faster?
-        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
-        'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_rtol': 1e-1, 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_ksp_max_it': 50, 'mg_coarse_pc_type': 'asm', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
-        'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_pc_type': 'asm', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
-        **conv_sets, **self.solver_settings} ## based on https://github.com/FreeFem/FreeFem-sources/blob/develop/examples/hpddm/maxwell-mg-3d-PETSc-complex.edp.
-        
-        petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
-        'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
-        'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
-        **conv_sets, **self.solver_settings} ## for settings testing
-        
+        petsc_options = {"ksp_type": "preonly", "pc_type": "cholesky", "pc_factor_mat_solver_type": "mumps"} ## uses less memory than the LU solver. Also faster? Supposed to only work for positive-definite matrices, while this one is indefinite, but the norm is tiny and the solution seems reasonable
         self.solve_type = 'direct'
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
@@ -439,6 +428,22 @@ class Scatt3DProblem():
         #petsc_options={'ksp_type': 'hpddm', 'ksp_hpddm_type': 'gmres', **conv_sets, **self.solver_settings}
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_ksp_type': 'preonly', 'pc_hpddm_coarse_correction': 'galerkin', 'pc_hpddm_levels_1_overlap': 2, **conv_sets, **self.solver_settings}
         #petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1000, 'pc_type': 'hpddm', 'pc_hpddm_type': 'hcurl', 'sub_pc_type': 'lu', 'sub_ksp_type': 'preonly', 'pc_hpddm_coarse_correction': 'deflated', 'pc_hpddm_levels_1_overlap': 2, 'coarse_pc_type': 'gamg', 'pc_hpddm_levels_1_eps_nev': 10, **conv_sets, **self.solver_settings}
+        
+        
+        #=======================================================================
+        # ## a multigrid option to try. get a strange error when using mg_levels
+        # petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 'pc_mg_levels': 2,
+        # 'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_rtol': 1e-1, 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_ksp_max_it': 50, 'mg_coarse_pc_type': 'asm', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
+        # 'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_pc_type': 'asm', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
+        # **conv_sets, **self.solver_settings} ## based on https://github.com/FreeFem/FreeFem-sources/blob/develop/examples/hpddm/maxwell-mg-3d-PETSc-complex.edp.
+        #=======================================================================
+        
+        #=======================================================================
+        # petsc_options={'ksp_type': 'fgmres', 'ksp_gmres_restart': 1200, 'pc_type': 'mg', 
+        # 'mg_coarse_ksp_type': 'gmres', 'mg_coarse_ksp_pc_side': 'right', 'mg_coarse_sub_pc_factor_mat_solver_type': 'mumps', 'mg_coarse_sub_pc_type': 'cholesky', 'mg_coarse_pc_asm_type': 'restrict', ## coarse options can't be handed in here, seemingly.
+        # 'mg_levels_ksp_type': 'richardson', 'mg_levels_ksp_pc_side': 'left', 'mg_levels_sub_pc_type': 'cholesky', 'mg_levels_sub_pc_factor_mat_solver_type': 'mumps', 'mg_levels_pc_asm_type': 'restrict',
+        # **conv_sets, **self.solver_settings} ## for settings testing
+        #=======================================================================
         
         
         if(not hasattr(self, 'solve_type')): # if it isn't set, set it

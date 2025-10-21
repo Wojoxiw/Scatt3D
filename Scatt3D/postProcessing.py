@@ -19,6 +19,170 @@ import spgl1
 import gc
 import cvxpy as cp
 import resource
+import psutil, threading, os, time
+from timeit import default_timer as timer
+import scipy
+
+def cvxpySolve(A, b, solveType, solver=cp.SCS, cell_volumes=None, tau=2e-1, sigma=1e-5, solver_settings={}, verbose=False): ## put this in a function to allow gc?
+    N_x = np.shape(A)[1]
+    x_cvxpy = cp.Variable(N_x, complex=True)
+    if(solveType==0):
+        objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
+        problem_cvxpy = cp.Problem(objective_1norm)
+    if(solveType==1):
+        objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
+        problem_cvxpy = cp.Problem(objective_2norm)
+    if(solveType==2): ## bpdn
+        if(cell_volumes is None): ## can normalize with cell volumes, or not
+            objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
+        else:
+            objective_bpdn = cp.Minimize(cp.norm(x_cvxpy*cell_volumes, p=1))
+        constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
+        problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
+    if(solveType==3): ## lasso
+        objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
+        if(cell_volumes is None): ## can normalize with cell volumes, or not
+            constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
+        else:
+            constraint_lasso = [cp.norm(x_cvxpy*cell_volumes, p=1) <= tau]
+        problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
+    problem_cvxpy.solve(verbose=verbose, solver=solver)
+    print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({solveType=})')
+    return x_cvxpy.value
+    
+def reconstructionError(epsr_rec, epsr_ref, epsr_dut, cell_volumes, printIt=True):
+    '''
+    Find the 'error' figure of merit in reconstructed delta eps_r
+    :param epsr_rec: Reconstructed delta eps_r
+    :param epsr_ref: Reference eps_r
+    :param epsr_dut: Dut eps_r
+    :param cell_volumes: Volume of each cell - results are normalized by this
+    '''
+    delta_epsr_actual = epsr_dut-epsr_ref
+    #error = np.mean(np.abs(epsr_rec - delta_epsr_actual) * cell_volumes)
+    error = np.mean(np.abs(epsr_rec/np.mean(epsr_rec) - delta_epsr_actual/np.mean(delta_epsr_actual)) * cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape
+    if(printIt):
+        print(f'Reconstruction error: {error:.3e}')
+    return error
+
+def numpySVDfindOptimal(A, b, epsr_ref, epsr_dut, cell_volumes): ## optimize for rcond
+    u, s, vt = np.linalg.svd(A.conjugate(), full_matrices=False) ## singular values in descending order
+    def calcAccuracy(svd_t, verbose=False, returnSol=False): ### uses the computed svd decomp. and an SVD threshold to find a figure of merit (for optimizing that threshold)
+        tol = np.asarray(10**-(svd_t)) ### use this to help the optimizer... otherwise, could maybe try simulated annealing
+        cutoff = tol[..., np.newaxis] * np.amax(s, axis=-1, keepdims=True)
+        large = s > cutoff
+        sinv = np.divide(1, s, where=large)
+        sinv[~large] = 0
+        A_inv = np.matmul( np.transpose(vt), np.multiply( sinv[..., np.newaxis], np.transpose(u) ) )
+        x_try = np.dot(A_inv, b) ## set the reconstructed indices
+        err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        if verbose: ## so I don't spam the console
+            print(f'Error calculated as {err:.3e}, svd_t = 10**-{svd_t}')
+        if(returnSol):
+            return x_try
+        else:
+            return err
+    optsol = scipy.optimize.minimize(calcAccuracy, 2, method='Nelder-Mead')## initially guess that we want to include only up to relative values of 1e-2
+    optThresh = optsol.x
+    print(f'Optimal threshold calculated as '+str(optThresh))
+    x = calcAccuracy(optThresh, returnSol = True, verbose = True)
+    return x
+
+def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
+    '''
+    Tests to try to find the best settings for a solver, using the reconstruction error as a goal.
+    :param A: Matrix A
+    :param b: Vector b
+    :param epsr_ref: Reference epsr
+    :param epsr_dut: DUT epsr
+    :param cell_volumes: Cell volumes
+    '''
+    
+    settings = [] ## list of solver settings
+    
+    ## MG tests
+    testName = 'cvxpy_type1_testsolvers'
+    for solver in cp.installed_solvers():
+        settings.append( {'solver': solver, 'solveType': 1} )
+    
+                            
+    num = len(settings)
+    for i in range(num):
+        print(f'Settings {i}:', settings[i])
+    
+    omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
+    ts = np.zeros(num)
+    errors = np.zeros(num)
+    mems = np.zeros(num) ## to get the memories for each run, use psutil on each process with sampling every 0.5 seconds
+    for i in range(num):
+        print('\033[94m' + f'Run {i+1}/{num} with settings:' + '\033[0m', settings[i])
+        
+        process_mem = 0
+        process_done = False
+        proc = psutil.Process(os.getpid())
+        def getMem():
+            nonlocal process_mem
+            while not process_done:
+                process_mem = max(proc.memory_info().rss/1024**2, process_mem) ## get max mem
+                time.sleep(0.4362)
+        
+        try:
+            t = threading.Thread(target=getMem)
+            t.start()
+            starTime = timer()
+            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, **settings[i])
+            ts[i] = timer() - starTime
+            errors[i] = reconstructionError(x_rec, epsr_ref, epsr_dut, cell_volumes)
+            mems[i] = process_mem
+        except Exception as error: ## if the solver isn't defined or something, try skipping it
+            print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
+            ts[i] = np.nan
+            errors[i] = np.nan
+            mems[i] = np.nan
+        process_done = True
+                
+    fig, ax1 = plt.subplots()
+    fig.subplots_adjust(right=0.45)
+    fig.set_size_inches(29.5, 14.5)
+    ax2 = ax1.twinx()
+    ax3 = ax1.twinx()
+    ax3.spines.right.set_position(("axes", 1.2))
+    ax3.set_yscale('log')
+    ax1.grid()
+    
+    l1, = ax1.plot(omegas, mems, label = 'Memory Costs [GB]', linewidth = 2, color='tab:red')
+    l2, = ax2.plot(omegas, ts, label = 'Time [s]', linewidth = 2, color='tab:blue')
+    l3, = ax3.plot(omegas, errors, label = 'errors', linewidth = 2, color = 'orange')
+    
+    plt.title(f'Solver Time by Setting ({testName})')
+    ax1.set_xlabel(r'Setting (composite try #)')
+    ax1.set_ylabel('#')
+    ax2.set_ylabel('Time [s]')
+    ax3.set_ylabel('log10(Errors)')
+    
+    ax1.yaxis.label.set_color(l1.get_color())
+    ax2.yaxis.label.set_color(l2.get_color())
+    ax3.yaxis.label.set_color(l3.get_color())
+    tkw = dict(size=4, width=1.5)
+    ax1.tick_params(axis='y', colors=l1.get_color(), **tkw)
+    ax2.tick_params(axis='y', colors=l2.get_color(), **tkw)
+    ax3.tick_params(axis='y', colors=l3.get_color(), **tkw)
+    ax1.tick_params(axis='x', **tkw)
+    ax1.legend(handles=[l1, l2, l3])
+    
+    fig.tight_layout()
+    fig.tight_layout() ## need both of these for some reason
+    #plt.savefig(prob.dataFolder+prob.name+testName+'_post-processing_solversettingsplot.png')
+    
+    nprint = min(num, 10)
+    print(f'Top {nprint} Options #s:') ## lowest errors
+    idxsort = np.argsort(errors)
+    for k in range(nprint):
+        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]}, mem={mems[idxsort[k]]:.3f}GiB --- ')
+        print(settings[idxsort[k]])
+        print()
+    
+    plt.show()
 
 def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     '''
@@ -125,7 +289,7 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             if(checkVsNp):
                 try:
                     t1 = timer()
-                    x_nplstsq = np.linalg.pinv(A_np, rcond = 1e-5) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
+                    x_nplstsq = np.linalg.pinv(A_np, rcond = 3e-4) @ b_np #np.linalg.lstsq(A_np, b_np, rcond=1e-3)[0] ## should be the same thing?
                     nptime = timer() - t1
                     print('numpy norm |Ax-b|:', np.linalg.norm(np.dot(A_np, x_nplstsq) - b_np))
                     #print('numpy norm alt1 |Ax-b|:', np.linalg.norm(np.dot(A_np, np.linalg.pinv(A_np, rcond = 1e-4) @ b_np) - b_np))
@@ -139,9 +303,8 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     x_nplstsq = np.zeros(np.shape(x0.data))
                     
             sys.stdout.flush()
-            return x0.data[:, 0], x_nplstsq[:, 0]
-        
-
+            return x0.data[:, 0]
+    
 def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping everything on one process
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -179,8 +342,8 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
             dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idx] ## f being the default name of the function as seen in paraview
             cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idx]
-            epsr_array_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
-            epsr_array_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
+            epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
+            epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
             N = len(cell_volumes)
             idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1
             N_non_pml = len(idx_non_pml)
@@ -193,28 +356,60 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
                 
         print('all data loaded in')
         sys.stdout.flush()
-        idx_ap = np.nonzero(np.abs(epsr_array_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
-        A_ap = A[:, np.nonzero(np.abs(epsr_array_ref[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
+        idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
+        A_ap = A[:, np.nonzero(np.abs(epsr_ref[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
         print('shape of b:', np.shape(b))
         print('in-object cells:', np.size(idx_ap))
         
+        ## prepare the file
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='w')  
+        f.write_mesh(mesh)
+        cells.x.array[:] = epsr_ref + 0j
+        f.write_function(cells, -1)
+        cells.x.array[:] = epsr_dut + 0j
+        f.write_function(cells, 0)
+        f.close()
+        
+        x_temp = np.zeros(N, dtype=complex) ## to hold reconstructed epsr values
+        
+        #=======================================================================
+        # ## test SVD thresholding, AP and non-AP
+        # ##
+        # f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') 
+        # x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -5) 
+        # x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -6)
+        # f.close()
+        # ##
+        # ##
+        #=======================================================================
+        
+        ## test other solver settings
+        ##
+        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        exit()
+        ##
+        ##
         
         print('Solving with scalapack least squares and numpy svd...')
         ## non a-priori
         #A_inv = np.linalg.pinv(A, rcond=1e-3)
         b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary, but reshape it to fit what scalapack expects
         b_now[:, 0] = b
-        x, x_np = np.zeros(N, dtype=complex), np.zeros(N, dtype=complex)
-        x[idx_non_pml], x_np[idx_non_pml] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
+        x_temp = np.zeros(N, dtype=complex)
+        x_temp[idx_non_pml] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
     else: ## on other processes, call it with nothing
         scalapackLeastSquares(comm, MPInum)
         
     ## a priori lsq
     if(comm.rank == 0):
         x_ap = np.zeros(N, dtype=complex)
-        x_np_ap = np.zeros(N, dtype=complex)
-        x_ap[idx_ap], x_np_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A_ap, b_now, True) ## only the master process gets the result
+        x_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A_ap, b_now, True) ## only the master process gets the result
+        
         print('done scalapack + numpy solution')
     else: ## on other processes, call it with nothing
         scalapackLeastSquares(comm, MPInum)
@@ -227,96 +422,92 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
     
     if(comm.rank == 0):
         ## write back the result
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='w')
-            
-        f.write_mesh(mesh)
-        cells.x.array[:] = epsr_array_ref + 0j
-        f.write_function(cells, -1)
-        cells.x.array[:] = epsr_array_dut + 0j
-        f.write_function(cells, 0)
-        
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a')
         ## non a-priori
-        cells.x.array[:] = x + 0j
-        f.write_function(cells, 1)  
-        cells.x.array[:] = x_np + 0j
-        f.write_function(cells, 2)  
-        
-        ## a-priori
         cells.x.array[:] = x_ap + 0j
-        f.write_function(cells, 3)    
-        cells.x.array[:] = x_np_ap + 0j
-        f.write_function(cells, 4)
+        f.write_function(cells, 1)  
+        ## a-priori
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 2)    
         
         f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
-
-        sigma = 1e-5 ## guess for a good sigma
-        tau = 2e-1 ## guess for a good tau
+        
+        print('Scalapack done, computing numpy solutions...')
+        rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a')
+        
+        x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 3)
+        x_temp[idx_non_pml] = np.linalg.pinv(A, rcond = rcond) @ b
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 4)  
+        
+        f.close()
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-        iter_lim = 2366
-        
-        A1, A2 = np.shape(A)[0], np.shape(A)[1]
-        Ak = np.zeros((A1*2, A2*2)) ## real A
-        bk = np.hstack((np.real(b),np.imag(b))) ## real b
-        Ak[:A1,:A2] = np.real(A) ## A11
-        Ak[:A1,A2:] = -1*np.imag(A) ## A12
-        Ak[A1:,:A2] = 1*np.imag(A) ## A21
-        Ak[A1:,A2:] = np.real(A) ## A22
-        
-        xsol, resid, grad, info = spgl1.spg_bp(Ak, bk, iter_lim=iter_lim, verbosity=1)
-        x_spgl_bp = np.zeros(N, dtype=complex)
-        x_spgl_bp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-        
-        xsol, resid, grad, info = spgl1.spg_bpdn(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
-        x_spgl_bpdn = np.zeros(N, dtype=complex)
-        x_spgl_bpdn[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-        
-        xsol, resid, grad, info = spgl1.spg_lasso(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
-        x_spgl_lasso = np.zeros(N, dtype=complex)
-        x_spgl_lasso[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-        
-        del Ak ## maybe this will help with clearing memory
-        gc.collect()
-        
-        ### a-priori
+        sigma = 1e-5 ## guess for a good sigma
+        tau = 2e-1 ## guess for a good tau
+        iter_lim = 9366
+          
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        ## a-priori
         A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
         Ak_ap = np.zeros((A1*2, A2*2)) ## real A
         Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
         Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
         Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
         Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
-        
+        bk = np.hstack((np.real(b),np.imag(b))) ## real b
+         
         xsol, resid, grad, info = spgl1.spg_bp(Ak_ap, bk, iter_lim=iter_lim, verbosity=1)
-        x_spgl_bp_ap = np.zeros(N, dtype=complex)
-        x_spgl_bp_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        
+        x_temp = np.zeros(N, dtype=complex)
+        x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 13)
+          
         xsol, resid, grad, info = spgl1.spg_bpdn(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
-        x_spgl_bpdn_ap = np.zeros(N, dtype=complex)
-        x_spgl_bpdn_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        
+        x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 14)
+          
         xsol, resid, grad, info = spgl1.spg_lasso(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
-        x_spgl_lasso_ap = np.zeros(N, dtype=complex)
-        x_spgl_lasso_ap[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        
+        x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 15)
+         
+        f.close()
+         
+        iter_lim = 2366
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## non a-priori
-        cells.x.array[:] = x_spgl_bp + 0j
-        f.write_function(cells, 9)
-        cells.x.array[:] = x_spgl_bpdn + 0j
-        f.write_function(cells, 10)
-        cells.x.array[:] = x_spgl_lasso + 0j
-        f.write_function(cells, 11)
-        
-        ## a-priori
-        cells.x.array[:] = x_spgl_bp_ap + 0j
-        f.write_function(cells, 12)
-        cells.x.array[:] = x_spgl_bpdn_ap + 0j
-        f.write_function(cells, 13)
-        cells.x.array[:] = x_spgl_lasso_ap + 0j
-        f.write_function(cells, 14)
-        
+        A1, A2 = np.shape(A)[0], np.shape(A)[1]
+        Ak = np.zeros((A1*2, A2*2)) ## real A
+        Ak[:A1,:A2] = np.real(A) ## A11
+        Ak[:A1,A2:] = -1*np.imag(A) ## A12
+        Ak[A1:,:A2] = 1*np.imag(A) ## A21
+        Ak[A1:,A2:] = np.real(A) ## A22
+         
+        xsol, resid, grad, info = spgl1.spg_bp(Ak, bk, iter_lim=iter_lim, verbosity=1)
+        x_temp = np.zeros(N, dtype=complex)
+        x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 16)
+         
+        xsol, resid, grad, info = spgl1.spg_bpdn(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
+        x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 17)
+          
+        xsol, resid, grad, info = spgl1.spg_lasso(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
+        x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 18)
         f.close()
-        
+          
+        del Ak ## maybe this will help with clearing memory
+        gc.collect()
+         
         print('done spgl solution')
         
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
@@ -329,59 +520,48 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         print()
         print('solving with cvxpy...')
         t_cvx = timer()
-        
-        def cvxpySolve(type=0): ## put this in a function to allow gc?
-            x_cvxpy = cp.Variable(N_non_pml, complex=True)
-            print(f'{type=}')
-            if(type==0):
-                objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
-                problem_cvxpy = cp.Problem(objective_1norm)
-            if(type==1):
-                objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
-                problem_cvxpy = cp.Problem(objective_2norm)
-            if(type==2): ## bpdn
-                objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
-                constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
-                problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
-            if(type==3): ## lasso
-                objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
-                constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
-                problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
-            problem_cvxpy.solve(verbose=True, solver=cp.SCS)
-            print(f'cvxpy norm of residual {type=}: {cp.norm(A @ x_cvxpy - b, p=2).value}')
-            return x_cvxpy.value
-
-
-        x_cvx1 = np.zeros(N, dtype=complex)
-        x_cvx1[idx_non_pml] = cvxpySolve(0)
-        
-        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-        
-        x_cvx2 = np.zeros(N, dtype=complex)
-        x_cvx2[idx_non_pml] = cvxpySolve(1)
-        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-
-        x_cvx_lasso = np.zeros(N, dtype=complex)
-        x_cvx_lasso[idx_non_pml] = cvxpySolve(2)
-        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
-
-        x_cvx_bpdn = np.zeros(N, dtype=complex)
-        x_cvx_bpdn[idx_non_pml] = cvxpySolve(3)
-        print(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2)
 
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
-        cells.x.array[:] = x_cvx1 + 0j
+        ## a-priori
+        
+        x_temp = np.zeros(N, dtype=complex)
+        x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap])
+        cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 5)
         
-        cells.x.array[:] = x_cvx2 + 0j
+        x_temp[idx_ap] = cvxpySolve(A_ap, b, 1, cell_volumes=cell_volumes[idx_ap])
+        cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 6)
-        
-        cells.x.array[:] = x_cvx_lasso + 0j
+
+        x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, cell_volumes=cell_volumes[idx_ap])
+        cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 7)
-        
-        cells.x.array[:] = x_cvx_bpdn + 0j
+
+        x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, cell_volumes=cell_volumes[idx_ap])
+        cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 8)
         f.close()
+        
+        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        ## then non a-priori:
+        
+        x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml])
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 9)
+        
+        x_temp[idx_non_pml] = cvxpySolve(A, b, 1, cell_volumes=cell_volumes[idx_non_pml])
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 10)
+
+        x_temp[idx_non_pml] = cvxpySolve(A, b, 2, cell_volumes=cell_volumes[idx_non_pml])
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 11)
+
+        x_temp[idx_non_pml] = cvxpySolve(A, b, 3, cell_volumes=cell_volumes[idx_non_pml])
+        cells.x.array[:] = x_temp + 0j
+        f.write_function(cells, 12)
+        f.close()
+        
         print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')
         
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
