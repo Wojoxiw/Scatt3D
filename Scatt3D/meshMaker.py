@@ -227,7 +227,7 @@ class MeshData():
                 matDimTags.append((self.tdim, obj)) ## the material fills the object
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
             if(self.defect_geom == 'cylinder'):
-                def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too
+                def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too (I have not found a working way to do this with gmsh)
                     dimTags = []
                     defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
                     ## apply some rotations around the origin, and each axis

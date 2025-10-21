@@ -23,31 +23,31 @@ import psutil, threading, os, time
 from timeit import default_timer as timer
 import scipy
 
-def cvxpySolve(A, b, solveType, solver='CLARABEL', cell_volumes=None, tau=2e-1, sigma=1e-5, verbose=False): ## put this in a function to allow gc?
+def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, tau=2e-1, sigma=1e-5, verbose=False, solve_settings={}): ## put this in a function to allow gc?
     N_x = np.shape(A)[1]
     x_cvxpy = cp.Variable(N_x, complex=True)
-    if(solveType==0):
+    if(problemType==0):
         objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
         problem_cvxpy = cp.Problem(objective_1norm)
-    if(solveType==1):
+    if(problemType==1):
         objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
         problem_cvxpy = cp.Problem(objective_2norm)
-    if(solveType==2): ## bpdn
+    if(problemType==2): ## bpdn
         if(cell_volumes is None): ## can normalize with cell volumes, or not
             objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
         else:
             objective_bpdn = cp.Minimize(cp.norm(x_cvxpy*cell_volumes, p=1))
         constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
         problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
-    if(solveType==3): ## lasso
+    if(problemType==3): ## lasso
         objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
         if(cell_volumes is None): ## can normalize with cell volumes, or not
             constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
         else:
             constraint_lasso = [cp.norm(x_cvxpy*cell_volumes, p=1) <= tau]
         problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
-    problem_cvxpy.solve(verbose=verbose, solver=solver)
-    print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({solveType=})')
+    problem_cvxpy.solve(verbose=verbose, solver=solver, **solve_settings)
+    print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({problemType=})')
     return x_cvxpy.value
     
 def reconstructionError(epsr_rec, epsr_ref, epsr_dut, cell_volumes, printIt=True):
@@ -100,17 +100,19 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     
     settings = [] ## list of solver settings
     
-    ## cvxpy solver tests
-    testName = 'cvxpy_type1_testsolvers'
-    for solver in cp.installed_solvers():
-        settings.append( {'solver': solver, 'solveType': 1} )
-        
     #===========================================================================
-    # ## CLARABEL settings tests
-    # testName = 'cvxpy_CLARABEL_settingstest'
+    # ## cvxpy solver tests
+    # testName = 'cvxpy_type1_testsolvers'
     # for solver in cp.installed_solvers():
-    #     settings.append( {'solver': solver, 'solveType': 1} )
+    #     settings.append( {'solver': solver, 'problemType': 1} )
     #===========================================================================
+        
+    ## CLARABEL settings tests
+    testName = 'cvxpy_CLARABEL_settingstest'
+    for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
+        for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
+            solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt}
+            settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
     
                             
     num = len(settings)
@@ -137,10 +139,11 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
             t = threading.Thread(target=getMem)
             t.start()
             starTime = timer()
-            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, **settings[i])
+            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
             ts[i] = timer() - starTime
             errors[i] = reconstructionError(x_rec, epsr_ref, epsr_dut, cell_volumes)
             mems[i] = process_mem
+            print(f'Run completed with memory: {mems[i]:3f} GB, error: {errors[i]:3e} in: {ts[i]:3e} s')
         except Exception as error: ## if the solver isn't defined or something, try skipping it
             print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
             ts[i] = np.nan
@@ -397,7 +400,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         
         ## test other solver settings
         ##
-        testSolverSettings(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
         exit()
         ##
         ##
