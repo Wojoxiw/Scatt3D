@@ -123,7 +123,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
         def getMem():
             nonlocal process_mem
             while not process_done:
-                process_mem = max(proc.memory_info().rss/1024**2, process_mem) ## get max mem
+                process_mem = max(proc.memory_info().rss/1024, process_mem) ## get max mem
                 time.sleep(0.4362)
         
         try:
@@ -178,7 +178,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     print(f'Top {nprint} Options #s:') ## lowest errors
     idxsort = np.argsort(errors)
     for k in range(nprint):
-        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]}, mem={mems[idxsort[k]]:.3f}GiB --- ')
+        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]}, mem={mems[idxsort[k]]:.2f}GiB --- ')
         print(settings[idxsort[k]])
         print()
     
