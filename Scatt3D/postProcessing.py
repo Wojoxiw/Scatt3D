@@ -23,7 +23,7 @@ import psutil, threading, os, time
 from timeit import default_timer as timer
 import scipy
 
-def cvxpySolve(A, b, solveType, solver=cp.SCS, cell_volumes=None, tau=2e-1, sigma=1e-5, solver_settings={}, verbose=False): ## put this in a function to allow gc?
+def cvxpySolve(A, b, solveType, solver='CLARABEL', cell_volumes=None, tau=2e-1, sigma=1e-5, verbose=False): ## put this in a function to allow gc?
     N_x = np.shape(A)[1]
     x_cvxpy = cp.Variable(N_x, complex=True)
     if(solveType==0):
@@ -60,7 +60,7 @@ def reconstructionError(epsr_rec, epsr_ref, epsr_dut, cell_volumes, printIt=True
     '''
     delta_epsr_actual = epsr_dut-epsr_ref
     #error = np.mean(np.abs(epsr_rec - delta_epsr_actual) * cell_volumes)
-    error = np.mean(np.abs(epsr_rec/np.mean(epsr_rec) - delta_epsr_actual/np.mean(delta_epsr_actual)) * cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape
+    error = np.mean(np.abs(epsr_rec/np.mean(epsr_rec + 1e-9) - delta_epsr_actual/np.mean(delta_epsr_actual + 1e-9)) * cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape
     if(printIt):
         print(f'Reconstruction error: {error:.3e}')
     return error
@@ -100,10 +100,17 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     
     settings = [] ## list of solver settings
     
-    ## MG tests
-    testName = 'cvxpy_type0_testsolvers'
+    ## cvxpy solver tests
+    testName = 'cvxpy_type1_testsolvers'
     for solver in cp.installed_solvers():
-        settings.append( {'solver': solver, 'solveType': 0} )
+        settings.append( {'solver': solver, 'solveType': 1} )
+        
+    #===========================================================================
+    # ## CLARABEL settings tests
+    # testName = 'cvxpy_CLARABEL_settingstest'
+    # for solver in cp.installed_solvers():
+    #     settings.append( {'solver': solver, 'solveType': 1} )
+    #===========================================================================
     
                             
     num = len(settings)
@@ -123,7 +130,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
         def getMem():
             nonlocal process_mem
             while not process_done:
-                process_mem = max(proc.memory_info().rss/1024, process_mem) ## get max mem
+                process_mem = max(proc.memory_info().rss/1024**3, process_mem) ## get max mem
                 time.sleep(0.4362)
         
         try:
@@ -178,7 +185,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     print(f'Top {nprint} Options #s:') ## lowest errors
     idxsort = np.argsort(errors)
     for k in range(nprint):
-        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]}, mem={mems[idxsort[k]]:.2f}GiB --- ')
+        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]:3e}, mem={mems[idxsort[k]]:.2f}GiB --- ')
         print(settings[idxsort[k]])
         print()
     
@@ -390,7 +397,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         
         ## test other solver settings
         ##
-        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        testSolverSettings(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
         exit()
         ##
         ##
@@ -525,7 +532,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         ## a-priori
         
         x_temp = np.zeros(N, dtype=complex)
-        x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap])
+        x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap], solver = 'GLPK') ## GLPK where it can be used - seems faster and possibly better than CLARABEL. GLPK_MI seems faster, but possibly worse
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 5)
         
@@ -545,7 +552,7 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## then non a-priori:
         
-        x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml])
+        x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml], solver = 'GLPK')
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 9)
         

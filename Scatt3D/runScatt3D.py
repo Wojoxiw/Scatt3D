@@ -414,7 +414,7 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    testFullExample(h=1/8, degree=1)
+    #testFullExample(h=1/8, degree=1)
     postProcessing.solveFromQs(folder+runName, MPInum)
     
     #testSphereScattering(h=1/10, degree=1, showPlots=False)
