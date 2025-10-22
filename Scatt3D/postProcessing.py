@@ -47,7 +47,8 @@ def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, tau=2e-1
             constraint_lasso = [cp.norm(x_cvxpy*cell_volumes, p=1) <= tau]
         problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
     problem_cvxpy.solve(verbose=verbose, solver=solver, **solve_settings)
-    print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({problemType=})')
+    if(verbose):
+        print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({problemType=})')
     return x_cvxpy.value
     
 def reconstructionError(epsr_rec, epsr_ref, epsr_dut, cell_volumes, printIt=True):
@@ -63,6 +64,8 @@ def reconstructionError(epsr_rec, epsr_ref, epsr_dut, cell_volumes, printIt=True
     error = np.mean(np.abs(epsr_rec/np.mean(epsr_rec + 1e-9) - delta_epsr_actual/np.mean(delta_epsr_actual + 1e-9)) * cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape
     if(printIt):
         print(f'Reconstruction error: {error:.3e}')
+    if(np.allclose(epsr_rec, 0)):
+        error = 1
     return error
 
 def numpySVDfindOptimal(A, b, epsr_ref, epsr_dut, cell_volumes): ## optimize for rcond
@@ -101,24 +104,33 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     settings = [] ## list of solver settings
     
     #===========================================================================
-    # ## cvxpy solver tests
+    # ## cvxpy solver tests ## seems I should use CLARABEL - they all give similar results, but CLARABEL is faster. perhaps GLPK for problem 0, which it actually works on
     # testName = 'cvxpy_type1_testsolvers'
     # for solver in cp.installed_solvers():
     #     settings.append( {'solver': solver, 'problemType': 1} )
     #===========================================================================
         
-    ## CLARABEL settings tests
-    testName = 'cvxpy_CLARABEL_settingstest'
-    for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
-        for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
-            solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt}
-            settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
+    #===========================================================================
+    # ## CLARABEL settings tests
+    # testName = 'cvxpy_CLARABEL_settingstest' ## If I give large tolerances, it can solve faster but with worse results... just leaving settings at default
+    # for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
+    #     for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
+    #         solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt}
+    #         settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
+    #===========================================================================
     
-                            
+    ## spgl settings tests
+    testName = 'spgl_settingstest'
+    for tausigma in [{}, {'tau': 1e-2}, {'tau': 1}, {'tau': 1e2}, {'tau': 1e4}, {'tau': 1e6}, {'sigma': 1e-2}, {'sigma': 1e-4}, {'sigma': 1e-6}, {'sigma': 1e-8}]:
+        for iters in [500, 1000, 9000]:
+            for prevs in [1, 3, 10]:
+                for complexNs in [True, False]:
+                    settings.append( {'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': complexNs, **tausigma} )
+           
     num = len(settings)
     for i in range(num):
         print(f'Settings {i}:', settings[i])
-    
+        
     omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
     ts = np.zeros(num)
     errors = np.zeros(num)
@@ -139,18 +151,23 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
             t = threading.Thread(target=getMem)
             t.start()
             starTime = timer()
-            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
+            
+            xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, x0=np.hstack((epsr_ref, epsr_ref)), **settings[i])
+            size = np.size(epsr_ref)
+            x_rec = xsol[:size] + 1j*xsol[size:]
+            #x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
+            
             ts[i] = timer() - starTime
             errors[i] = reconstructionError(x_rec, epsr_ref, epsr_dut, cell_volumes)
             mems[i] = process_mem
-            print(f'Run completed with memory: {mems[i]:3f} GB, error: {errors[i]:3e} in: {ts[i]:3e} s')
+            print(f'Run completed with memory: {mems[i]:3f} GB, error: {errors[i]:2e} in: {ts[i]:2f} s')
         except Exception as error: ## if the solver isn't defined or something, try skipping it
             print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
             ts[i] = np.nan
             errors[i] = np.nan
             mems[i] = np.nan
         process_done = True
-                
+    
     fig, ax1 = plt.subplots()
     fig.subplots_adjust(right=0.45)
     fig.set_size_inches(29.5, 14.5)
@@ -398,14 +415,35 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         # ##
         #=======================================================================
         
+        ## test other solver settings
+        ##
+        
+        ## a-priori
+        A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
+        Ak_ap = np.zeros((A1*2, A2*2)) ## real A
+        Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
+        Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
+        Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
+        Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
+        bk = np.hstack((np.real(b),np.imag(b))) ## real b
+        testSolverSettings(Ak_ap, bk, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        
         #=======================================================================
-        # ## test other solver settings
-        # ##
-        # testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        # exit()
-        # ##
-        # ##
+        # ## non a-priori
+        # A1, A2 = np.shape(A)[0], np.shape(A)[1]
+        # Ak = np.zeros((A1*2, A2*2)) ## real A
+        # Ak[:A1,:A2] = np.real(A) ## A11
+        # Ak[:A1,A2:] = -1*np.imag(A) ## A12
+        # Ak[A1:,:A2] = 1*np.imag(A) ## A21
+        # Ak[A1:,A2:] = np.real(A) ## A22
+        # bk = np.hstack((np.real(b),np.imag(b))) ## real b
+        # testSolverSettings(Ak, bk, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
         #=======================================================================
+        
+        #testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        exit()
+        ##
+        ##
         
         print('Solving with scalapack least squares and numpy svd...')
         ## non a-priori
@@ -437,30 +475,34 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a')
         ## non a-priori
         cells.x.array[:] = x_ap + 0j
-        f.write_function(cells, 1)  
+        f.write_function(cells, 1)
+        print(f'Timestep 1 reconstruction error: {reconstructionError(x_ap, epsr_ref, epsr_dut, cell_volumes):.3e}')
         ## a-priori
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 2)    
-        
+        print(f'Timestep 2 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
         f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
         
         print('Scalapack done, computing numpy solutions...')
         rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a')
+        x_temp = np.zeros(N, dtype=complex)
         
         x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 3)
+        print(f'Timestep 3 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
         x_temp[idx_non_pml] = np.linalg.pinv(A, rcond = rcond) @ b
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 4)  
+        print(f'Timestep 4 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
         
         f.close()
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
         sigma = 1e-5 ## guess for a good sigma
         tau = 2e-1 ## guess for a good tau
-        iter_lim = 9366
+        iter_lim = 19366
           
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## a-priori
@@ -477,20 +519,23 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 13)
+        print(f'Timestep 13 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
           
         xsol, resid, grad, info = spgl1.spg_bpdn(Ak_ap, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 14)
+        print(f'Timestep 14 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
           
         xsol, resid, grad, info = spgl1.spg_lasso(Ak_ap, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 15)
+        print(f'Timestep 15 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
          
         f.close()
          
-        iter_lim = 2366
+        iter_lim = 4366
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## non a-priori
         A1, A2 = np.shape(A)[0], np.shape(A)[1]
@@ -505,16 +550,19 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 16)
+        print(f'Timestep 16 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
          
         xsol, resid, grad, info = spgl1.spg_bpdn(Ak, bk, iter_lim=iter_lim, sigma=sigma, verbosity=1)
         x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 17)
+        print(f'Timestep 17 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
           
         xsol, resid, grad, info = spgl1.spg_lasso(Ak, bk, iter_lim=iter_lim, tau=tau, verbosity=1)
         x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 18)
+        print(f'Timestep 18 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
         f.close()
           
         del Ak ## maybe this will help with clearing memory
@@ -540,18 +588,23 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap], solver = 'GLPK') ## GLPK where it can be used - seems faster and possibly better than CLARABEL. GLPK_MI seems faster, but possibly worse
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 5)
+        print(f'Timestep 5 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
         
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 1, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 6)
-
+        print(f'Timestep 6 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 7)
-
+        print(f'Timestep 7 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 8)
+        print(f'Timestep 8 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        
         f.close()
         
         f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
@@ -560,18 +613,23 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml], solver = 'GLPK')
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 9)
+        print(f'Timestep 9 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
         
         x_temp[idx_non_pml] = cvxpySolve(A, b, 1, cell_volumes=cell_volumes[idx_non_pml])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 10)
-
+        print(f'Timestep 10 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        
         x_temp[idx_non_pml] = cvxpySolve(A, b, 2, cell_volumes=cell_volumes[idx_non_pml])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 11)
-
+        print(f'Timestep 11 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        
         x_temp[idx_non_pml] = cvxpySolve(A, b, 3, cell_volumes=cell_volumes[idx_non_pml])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 12)
+        print(f'Timestep 12 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        
         f.close()
         
         print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')

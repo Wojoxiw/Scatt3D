@@ -407,15 +407,16 @@ if __name__ == '__main__':
             plt.show()
     
     
-    #runName = 'testRunDeg2'
-    #runName = 'testRunSmall'
-    runName = 'testRunLarger'
+    #runName = 'testRunDeg2' ## h=1/9.5
+    #runName = 'testRunDeg2Smaller' ## h=1/6
+    runName = 'testRunSmall' ## h=1/8 or so
+    #runName = 'testRunLarger' ## h=1/18
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    testFullExample(h=1/18, degree=1)
+    #testFullExample(h=1/6, degree=2)
     postProcessing.solveFromQs(folder+runName, MPInum)
     
     #testSphereScattering(h=1/10, degree=1, showPlots=False)
