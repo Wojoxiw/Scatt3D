@@ -377,7 +377,13 @@ class Scatt3DProblem():
         Ep_unnormalized = dolfinx.fem.Function(FEMm.Vspace)
         Ep_unnormalized.interpolate(lambda x: Eport(x))
         normFactorForm = dolfinx.fem.form(ufl.inner(Ep_unnormalized, Ep_unnormalized)*FEMm.ds_antennas[0]) ## should be the same for each antenna
-        normFactor = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+        normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+        normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
+        if(self.comm.rank == 0): ## assemble each part as it is made
+                normFactor = sum(normFactorParts)
+        else:
+            normFactor = None
+        normFactor= self.comm.bcast(normFactor, root=self.model_rank)
         #print(normFactor)
         expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.Vspace.element.interpolation_points())
         Ep.interpolate(expr)
