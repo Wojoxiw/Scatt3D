@@ -33,8 +33,8 @@ class MeshData():
                  model_rank = 0,
                  h = 1/15,
                  domain_geom = 'sphere',#'domedCyl', 
-                 object_geom = 'cubic',
-                 defect_geom = 'cylinder',
+                 object_geom = 'cubic',#'complex1'
+                 defect_geom = 'cylinder',#'complex1'
                  domain_radius = 1.92,
                  domain_height = 1.5,
                  PML_thickness = 0,
@@ -157,6 +157,8 @@ class MeshData():
             self.object_height = object_height * self.lambda0
         elif(object_geom == 'cubic'):
             self.object_length = object_radius * self.lambda0
+        elif(object_geom == 'complex1'):
+            self.object_scale = object_radius * self.lambda0
         elif(object_geom == 'None'):
             pass
         else:
@@ -168,7 +170,9 @@ class MeshData():
         self.defect_angles = defect_angles ## [x, y, z] rotations
         self.defect_offset = defect_offset * self.lambda0
         if(defect_geom == 'cylinder'):
-            self.defect_geom = defect_geom
+            self.defect_radius = defect_radius * self.lambda0
+            self.defect_height = defect_height * self.lambda0
+        elif(defect_geom == 'complex1'):
             self.defect_radius = defect_radius * self.lambda0
             self.defect_height = defect_height * self.lambda0
         elif(defect_geom == ''):
@@ -176,6 +180,7 @@ class MeshData():
         else:
             print('Nonvalid defect geom, exiting...')
             exit()
+        self.defect_geom = defect_geom
             
         ## Finally, actually make the mesh
         self.createMesh(viewGMSH)
@@ -218,13 +223,34 @@ class MeshData():
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
                 obj = gmsh.model.occ.addSphere(0,0,0, self.object_radius) ## add it to the origin
-                matDimTags.append((self.tdim, obj)) ## the material fills the object
+                matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'cylinder'):
                 obj = gmsh.model.occ.addCylinder(0,0,-self.object_height/2,0,0,self.object_height, self.object_radius) ## add it to the origin
-                matDimTags.append((self.tdim, obj)) ## the material fills the object
+                matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'cubic'):
                 obj = gmsh.model.occ.addBox(-self.object_length/2,-self.object_length/2,-self.object_length/2,self.object_length,self.object_length,self.object_length) ## add it to the origin
-                matDimTags.append((self.tdim, obj)) ## the material fills the object
+                matDimTags.append((self.tdim, obj))
+            elif(self.object_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
+                part1 = gmsh.model.occ.addSphere(0,0,0, self.object_scale*1.5) ## long ellipsoid in the centre
+                gmsh.model.occ.dilate([(self.tdim, part1)], 0, 0, 0, 1, 0.34, 0.18)
+                gmsh.model.occ.rotate([(self.tdim, part1)], 0, 0, 0, 1, 0, 0, 15*pi/180)
+                
+                part2 = gmsh.model.occ.addBox(0, 0, 0, self.object_scale*.2, self.object_scale*.8, self.object_scale*.1) ## the 'wings'
+                yrot = 30*pi/180
+                zrot = 55*pi/180
+                gmsh.model.occ.rotate([(self.tdim, part2)], 0, 0, 0, 0, 1, 0, yrot)
+                gmsh.model.occ.rotate([(self.tdim, part2)], 0, 0, 0, 0, 0, 1, zrot)
+                gmsh.model.occ.translate([(self.tdim, part2)], self.object_scale*0.2, self.object_scale*0.2, self.object_scale*0.03)
+                part3 = gmsh.model.occ.addBox(0, 0, 0, self.object_scale*.1, self.object_scale*.6, self.object_scale*.05)
+                gmsh.model.occ.rotate([(self.tdim, part3)], 0, 0, 0, 0, 1, 0, yrot)
+                gmsh.model.occ.rotate([(self.tdim, part3)], 0, 0, 0, 0, 0, 1, -zrot)
+                gmsh.model.occ.translate([(self.tdim, part3)], self.object_scale*0.2, -self.object_scale*0.2, self.object_scale*0.03)
+                
+                part4 = gmsh.model.occ.addSphere(-self.object_scale*0.66,0,0, self.object_scale*0.4) ## 'tail' in the back
+                gmsh.model.occ.dilate([(self.tdim, part4)], 0, 0, 0, 0.2, 1, 0.4)
+                
+                obj = gmsh.model.occ.fuse([(self.tdim, part1)], [(self.tdim, part2),(self.tdim, part3),(self.tdim, part4)])[0][0] ## [0][0] to get  dimTags
+                matDimTags.append(obj) ## the material fills the object
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
             if(self.defect_geom == 'cylinder'):
                 def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too (I have not found a working way to do this with gmsh)
@@ -234,6 +260,14 @@ class MeshData():
                     gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 1, 0, 0, self.defect_angles[0])
                     gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
                     gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
+                    dimTags.append((self.tdim, defect1))
+                    return dimTags
+            elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
+                def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too (I have not found a working way to do this with gmsh)
+                    dimTags = []
+                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
+                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.23)
+
                     dimTags.append((self.tdim, defect1))
                     return dimTags
             if(not self.reference):
@@ -425,12 +459,16 @@ class MeshData():
         grids = self.comm.gather(grid, root=self.model_rank)
         if self.comm.rank == self.model_rank:
             plotter = pyvista.Plotter() ## first plot the 3D mesh
-            for g in grids:
-                plotter.add_mesh(g, show_edges=True)
-            plotter.view_xy()
-            plotter.add_axes()
-            plotter.show()
-            plotter.clear() ## then plot orthogonal slices
+            
+            #===================================================================
+            # for g in grids:
+            #     plotter.add_mesh(g, show_edges=True)
+            # plotter.view_xy()
+            # plotter.add_axes()
+            # plotter.show()
+            # plotter.clear() ## then plot orthogonal slices
+            #===================================================================
+            
             for g in grids:
                 slices = g.slice_orthogonal()
                 plotter.add_mesh(slices, show_edges=True)

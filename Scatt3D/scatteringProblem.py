@@ -337,9 +337,9 @@ class Scatt3DProblem():
                 y = np.transpose(x.T - center)
                 loc_x = np.dot(Rmat, y) ### position vector, [x, y, z] presumably, rotated to be in the coordinates the antenna was defined in
                 if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
-                    Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshData.kc*loc_x[0])))/np.sqrt(meshData.antenna_width/2)
+                    Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshData.kc*loc_x[0])))#/np.sqrt(meshData.antenna_height*meshData.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
                 else: ## horizontal (x-) pol, field varies along z
-                    Ep_loc = np.vstack((np.cos(meshData.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])/np.sqrt(meshData.antenna_height/2)
+                    Ep_loc = np.vstack((np.cos(meshData.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])#/np.sqrt(meshData.antenna_width*meshData.antenna_height/2)
                     
                 #simple, inexact confinement conditions
                 #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
@@ -367,8 +367,21 @@ class Scatt3DProblem():
                 E_pw[:] = E_pw[:]*np.exp(-1j*np.dot(k_pw, x))
             return E_pw
     
+        #=======================================================================
+        # Ep = dolfinx.fem.Function(FEMm.Vspace)
+        # Ep.interpolate(lambda x: Eport(x))
+        #=======================================================================
+    
+        ## try normalizing numerically
         Ep = dolfinx.fem.Function(FEMm.Vspace)
-        Ep.interpolate(lambda x: Eport(x))
+        Ep_unnormalized = dolfinx.fem.Function(FEMm.Vspace)
+        Ep_unnormalized.interpolate(lambda x: Eport(x))
+        normFactorForm = dolfinx.fem.form(ufl.inner(Ep_unnormalized, Ep_unnormalized)*FEMm.ds_antennas[0]) ## should be the same for each antenna
+        normFactor = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+        #print(normFactor)
+        expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.Vspace.element.interpolation_points())
+        Ep.interpolate(expr)
+        
         Eb = dolfinx.fem.Function(FEMm.Vspace) ## background/plane wave excitation
         
         # Set up simulation
@@ -680,7 +693,7 @@ class Scatt3DProblem():
                             mems = self.comm.gather(mem_usage, root=self.model_rank)
                             if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
                                 firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory)')
+                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*self.Nf*meshData.N_antennas:.2f} hours')
                             sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
@@ -715,11 +728,12 @@ class Scatt3DProblem():
             sys.stdout.flush()
            
     #@profile
-    def makeOptVectors(self, DUTMesh=False):
+    def makeOptVectors(self, DUTMesh=False, skipQs=False):
         '''
         Computes the optimization vectors from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
         :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
+        :param skipQs: Skip writing the actual optimization vectors
         '''
         ## First, save mesh to xdmf
         if(DUTMesh):
@@ -798,7 +812,7 @@ class Scatt3DProblem():
                 print(f'Rank {self.comm.rank}: Error creating interpolation data (probably): {error}')
             
         
-        if(not DUTMesh): ## Do the interpolation to find qs, then save them
+        if(not DUTMesh and not skipQs): ## Do the interpolation to find qs, then save them
             b = np.zeros(self.Nf*meshData.N_antennas*meshData.N_antennas, dtype=complex)
             for nf in range(self.Nf):
                 k0 = 2*np.pi*self.fvec[nf]/c0

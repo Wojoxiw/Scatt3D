@@ -116,6 +116,23 @@ if __name__ == '__main__':
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         
+    def testLargeExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing a large-object example
+        #prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        settings = {'N_antennas': 9, 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
+        if(dutOnRefMesh):
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **settings)
+        else:
+            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, **settings)
+        #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        #refMesh.plotMeshPartition()
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, computeImmediately=False)
+        prob.makeOptVectors(skipQs=True)
+        #prob.saveEFieldsForAnim(True)
+        #prob.saveEFieldsForAnim(False)
+        #prevRuns.memTimeAppend(prob)
+        degree = 1
+        
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -409,14 +426,15 @@ if __name__ == '__main__':
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    runName = 'testRunSmall' ## h=1/8 or so
+    #runName = 'testRunSmall' ## h=1/8 or so
+    runName = 'testRunSmallNumericalNormalization' ## h=1/8 or so
     #runName = 'testRunLarger' ## h=1/18
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    #testFullExample(h=1/6, degree=2)
+    testFullExample(h=1/8, degree=1)
     postProcessing.solveFromQs(folder+runName, MPInum)
     
     #testSphereScattering(h=1/10, degree=1, showPlots=False)
@@ -424,6 +442,9 @@ if __name__ == '__main__':
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
+    
+    runName = 'testingComplexObject' ## h=1/12
+    #testLargeExample(h=1/8, degree=1)
     
     #===========================================================================
     # runName = 'testRunDeg1'
