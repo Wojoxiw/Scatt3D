@@ -22,7 +22,7 @@ import sys
 # from memory_profiler import profile
 #===============================================================================
 
-class MeshData():
+class MeshInfo():
     """Data structure for the mesh (all geometry) and related metadata."""
     def __init__(self,
                  comm,
@@ -45,14 +45,14 @@ class MeshData():
                  N_antennas = 10,
                  antenna_radius = 0,
                  antenna_z_offset = 0,
-                 object_radius = 0.66,
+                 object_radius = 1.06,
                  object_height = 1.25,
                  object_offset = np.array([0, 0, 0]),
                  defect_radius = 0.175,
                  defect_height = 0.3,
                  defect_angles = [0, 0, 0],
                  defect_offset = np.array([0, 0, 0]),
-                 viewGMSH = False,
+                 viewGMSH = True,
                  FF_surface = False,
                  order = 1,
                 ):
@@ -104,7 +104,7 @@ class MeshData():
         self.tdim = 3 ## Tetrahedra dimensionality - 3D
         self.fdim = self.tdim - 1 ## Facet dimensionality - 2D
         self.FF_surface = FF_surface
-        self.order = min(order, 2) ## capped at 2
+        self.order = min(order, 2) ## capped at 2, since xdmf can't save above order 2. Also, doesn't seem to make a huge difference
         
         
         if(PML_thickness == 0): ## if not specified, calculate it
@@ -130,7 +130,7 @@ class MeshData():
             if(self.FF_surface):
                 self.FF_surface_radius = self.domain_radius - self.lambda0*.25 #self.h*2 ## just a bit less than the domain's radius
         else:
-            print('Invalid geometry type in MeshData, exiting...')
+            print('Invalid geometry type in MeshInfo, exiting...')
             exit()
         self.PML_thickness = PML_thickness*self.lambda0 ## for potential use later
         
@@ -219,7 +219,7 @@ class MeshData():
                 inAntennaSurface.append(lambda x: np.allclose(x, x_antenna[n])) ## (0, 0, 0) - the antenna surface
                 inPECSurface.append(lambda x: np.allclose(x, x_pec[n,0]) or np.allclose(x, x_pec[n,1]) or np.allclose(x, x_pec[n,2]) or np.allclose(x, x_pec[n,3]) or np.allclose(x, x_pec[n,4]))
         
-            matDimTags = []; defectDimTags = []
+            matDimTags = []; defectDimTags = []; defectDimTags2 = []
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
                 obj = gmsh.model.occ.addSphere(0,0,0, self.object_radius) ## add it to the origin
@@ -230,26 +230,28 @@ class MeshData():
             elif(self.object_geom == 'cubic'):
                 obj = gmsh.model.occ.addBox(-self.object_length/2,-self.object_length/2,-self.object_length/2,self.object_length,self.object_length,self.object_length) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
-            elif(self.object_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
-                part1 = gmsh.model.occ.addSphere(0,0,0, self.object_scale*1.5) ## long ellipsoid in the centre
-                gmsh.model.occ.dilate([(self.tdim, part1)], 0, 0, 0, 1, 0.34, 0.18)
-                gmsh.model.occ.rotate([(self.tdim, part1)], 0, 0, 0, 1, 0, 0, 15*pi/180)
+            elif(self.object_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry. It is also large. Defect should have same name
+                part1 = gmsh.model.occ.addSphere(0,0,0, self.object_scale*1.2) ## long ellipsoid in the centre
+                gmsh.model.occ.dilate([(self.tdim, part1)], 0, 0, 0, 1, 0.374, 0.18)
+                gmsh.model.occ.rotate([(self.tdim, part1)], 0, 0, 0, 0, 1, 0, 15*pi/180)
                 
-                part2 = gmsh.model.occ.addBox(0, 0, 0, self.object_scale*.2, self.object_scale*.8, self.object_scale*.1) ## the 'wings'
-                yrot = 30*pi/180
-                zrot = 55*pi/180
-                gmsh.model.occ.rotate([(self.tdim, part2)], 0, 0, 0, 0, 1, 0, yrot)
-                gmsh.model.occ.rotate([(self.tdim, part2)], 0, 0, 0, 0, 0, 1, zrot)
-                gmsh.model.occ.translate([(self.tdim, part2)], self.object_scale*0.2, self.object_scale*0.2, self.object_scale*0.03)
-                part3 = gmsh.model.occ.addBox(0, 0, 0, self.object_scale*.1, self.object_scale*.6, self.object_scale*.05)
-                gmsh.model.occ.rotate([(self.tdim, part3)], 0, 0, 0, 0, 1, 0, yrot)
-                gmsh.model.occ.rotate([(self.tdim, part3)], 0, 0, 0, 0, 0, 1, -zrot)
-                gmsh.model.occ.translate([(self.tdim, part3)], self.object_scale*0.2, -self.object_scale*0.2, self.object_scale*0.03)
+                part2 = gmsh.model.occ.addBox(0, 0, 0, self.object_scale*.3, self.object_scale*.95, self.object_scale*.2) ## the 'wings'
+                gmsh.model.occ.rotate([(self.tdim, part2)], 0, 0, 0, 0, 1, 0, 22*pi/180)
+                gmsh.model.occ.rotate([(self.tdim, part2)], 0, 0, 0, 0, 0, 1, 38*pi/180)
+                gmsh.model.occ.translate([(self.tdim, part2)], self.object_scale*0.4, -self.object_scale*0.05, -self.object_scale*0.11)
+                part3 = gmsh.model.occ.copy([(self.tdim, part2)])[0][1] ## [0][1] to get the tag
+                gmsh.model.occ.mirror([(self.tdim, part3)], 0, 1, 0, 0)
                 
-                part4 = gmsh.model.occ.addSphere(-self.object_scale*0.66,0,0, self.object_scale*0.4) ## 'tail' in the back
+                part4 = gmsh.model.occ.addSphere(-self.object_scale*2.8,0,0, self.object_scale*0.65) ## 'tail' in the back
                 gmsh.model.occ.dilate([(self.tdim, part4)], 0, 0, 0, 0.2, 1, 0.4)
+                gmsh.model.occ.rotate([(self.tdim, part4)], 0, 0, 0, 1, 0, 0, 12*pi/180)
+                gmsh.model.occ.translate([(self.tdim, part4)], -self.object_scale*0.15, 0, self.object_scale*0.15)
                 
-                obj = gmsh.model.occ.fuse([(self.tdim, part1)], [(self.tdim, part2),(self.tdim, part3),(self.tdim, part4)])[0][0] ## [0][0] to get  dimTags
+                
+                defectPart3 = gmsh.model.occ.copy([(self.tdim, part3)])[0][1] ## [0][1] to get the tag - make part 3 into part of the defect
+                defect3 = gmsh.model.occ.cut([(self.tdim, defectPart3)], [(self.tdim, part1)], removeTool=False)[0][0][1] ## result should just be wing
+                
+                obj = gmsh.model.occ.fuse([(self.tdim, part1)], [(self.tdim, part2),(self.tdim, part3),(self.tdim, part4)])[0][0] ## fuse with everything except defect wing ## [0][0] to get  dimTags
                 matDimTags.append(obj) ## the material fills the object
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
             if(self.defect_geom == 'cylinder'):
@@ -261,17 +263,33 @@ class MeshData():
                     gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
                     gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
                     dimTags.append((self.tdim, defect1))
+                    
+                    ## also a second cylinder
+                    defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/2, self.defect_radius/2)
+                    dimTags.append((self.tdim, defect2))
                     return dimTags
             elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
                 def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too (I have not found a working way to do this with gmsh)
                     dimTags = []
-                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
-                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.23)
-
+                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## small cylinder centered on the origin
+                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.17)
+                    
+                    defect2 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/8,0,0,self.defect_height/4, self.defect_radius*0.3) ## tall cylinder back in the thing
+                    gmsh.model.occ.rotate([(self.tdim, defect2)], 0, 0, 0, 0, 1, 0, 30*pi/180)
+                    gmsh.model.occ.translate([(self.tdim, defect2)], -self.object_scale*0.61, -self.object_scale*0.18, self.object_scale*0.18)
+                    
                     dimTags.append((self.tdim, defect1))
-                    return dimTags
+                    dimTags.append((self.tdim, defect3))
+                    dimTags2 = [] ## for this geometry, have a second set of dimTags so it can be set to a different epsr
+                    dimTags2.append((self.tdim, defect2))
+                    return dimTags, dimTags2
             if(not self.reference):
                 defectDimTags = makeDefect()
+                if(self.defect_geom == 'complex1'): ## not just the one set of defects
+                    defectDimTags2 = defectDimTags[1]
+                    defectDimTags = defectDimTags[0]
+                else:
+                    defectDimTags2 = []
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             
             ## Make the domain and the PML
@@ -307,27 +325,37 @@ class MeshData():
                 FF_surface_dimTags = [(self.tdim, FF_surface)]
             
             # Create fragments and dimtags
-            outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + defectDimTags + FF_surface_dimTags + antennas_DimTags)
-            
+            outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + defectDimTags + defectDimTags2 + FF_surface_dimTags + antennas_DimTags)
             removeDimTags = [] ## remove these surfaces for later addition to PEC or FF surfaces
             if(self.N_antennas > 0):
                 removeDimTags = [x for x in [y[0] for y in outDimTagsMap[-self.N_antennas:]]] ## last few should be the antennas
             if(not self.reference):
-                defectDimTags = [x for x in outDimTagsMap[3] if x not in removeDimTags] ## not x[0] since there is only one (dim, tag) pair for the defect
+                ndefects = len(defectDimTags)
+                mapHere = []
+                for n in np.arange(ndefects):
+                    mapHere = mapHere+outDimTagsMap[3+n]
+                defectDimTags = [x for x in mapHere if x not in removeDimTags]
+                ndefects2 = len(defectDimTags2)
+                mapHere2 = []
+                for n in np.arange(ndefects2):
+                    mapHere2 = mapHere2+outDimTagsMap[3+ndefects+n]
+                defectDimTags2 = [x for x in mapHere2 if x not in removeDimTags+defectDimTags]
             else:
                 defectDimTags = []
+                defectDimTags2 = []
             if(self.object_geom=='None'):
                 matDimTags = []
             else:
-                matDimTags = [x for x in outDimTagsMap[2] if x not in defectDimTags+removeDimTags]
-            domainDimTags = [x for x in outDimTagsMap[1] if x not in removeDimTags+matDimTags+defectDimTags]
-            pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+matDimTags+removeDimTags]
+                matDimTags = [x for x in outDimTagsMap[2] if x not in defectDimTags+defectDimTags2+removeDimTags]
+            domainDimTags = [x for x in outDimTagsMap[1] if x not in removeDimTags+matDimTags+defectDimTags+defectDimTags2]
+            pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+defectDimTags2+matDimTags+removeDimTags]
             gmsh.model.occ.remove(removeDimTags)
             gmsh.model.occ.synchronize()
             
             # Make physical groups for domains and PML
             mat_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in matDimTags])
             defect_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags])
+            defect_marker2 = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags2])
             domain_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in domainDimTags])
             pml_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in pmlDimTags])
             
@@ -418,6 +446,7 @@ class MeshData():
         else: ## some data is also needed for subordinate processes
             mat_marker = None
             defect_marker = None
+            defect_marker2 = None
             domain_marker = None
             pml_marker = None
             pec_surface_marker = None
@@ -426,13 +455,17 @@ class MeshData():
             
         self.mat_marker = self.comm.bcast(mat_marker, root=self.model_rank)
         self.defect_marker = self.comm.bcast(defect_marker, root=self.model_rank)
+        self.defect_marker2 = self.comm.bcast(defect_marker2, root=self.model_rank)
         self.domain_marker = self.comm.bcast(domain_marker, root=self.model_rank)
         self.pml_marker = self.comm.bcast(pml_marker, root=self.model_rank)
         self.pec_surface_marker = self.comm.bcast(pec_surface_marker, root=self.model_rank)
         self.antenna_surface_markers = self.comm.bcast(antenna_surface_markers, root=self.model_rank)
         self.farfield_surface_marker = self.comm.bcast(farfield_surface_marker, root=self.model_rank)
         gmsh.model.mesh.setOrder(self.order) ## It seems I get worse results when using setting the order before generating the mesh... for higher degree FEM elements, need to set this to the degree?
-        self.mesh, self.subdomains, self.boundaries = dolfinx.io.gmshio.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
+        #self.mesh, self.subdomains, self.boundaries = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
+        self.meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
+        self.mesh = self.meshData.mesh
+        ## self.mesh.facet_tags was previously boundaries, self.mesh.cell_tags was previously subdomains
         gmsh.finalize()
         
         self.ncells = self.mesh.topology.index_map(self.mesh.topology.dim).size_global ## all cells, rather than only those in this MPI process

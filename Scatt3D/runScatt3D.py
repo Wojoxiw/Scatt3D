@@ -84,17 +84,17 @@ if __name__ == '__main__':
                 print(f'  RUN {i+1}/{numRuns} ')
                 print('############')
             for h in hs:
-                refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h)
+                refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h)
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum)
                 prevRuns.memTimeAppend(prob, '8nodes24MPI1threads2b')
     
     def actualProfilerRunning(): # Here I call more things explicitly in order to more easily profile the code in separate methods (profiling activated in the methods themselves also).
-        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=1/10) ## this will have around 190000 elements
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=1/10) ## this will have around 190000 elements
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum)
             
     def testRun(h = 1/2): ## A quick test run to check it works. Default settings make this run in a second
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='None', N_antennas=1)
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='None', N_antennas=1)
         prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, Nf=1)
@@ -103,12 +103,12 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.06, .13, .01])} ## settings for the meshMaker
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01])} ## settings for the meshMaker
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         else:
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-        #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+        #dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
@@ -116,27 +116,43 @@ if __name__ == '__main__':
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         
-    def testLargeExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing a large-object example
-        #prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        settings = {'N_antennas': 9, 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
+    def testShiftedExample(h = 1/15, degree = 1, dutOnRefMesh=False): ## Where the separate dut mesh has the object shifted by some amount
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01])} ## settings for the meshMaker
+        settingsDut = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, .1]), 'defect_offset': np.array([-.04, .17, .01])} ## settings for the meshMaker
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         else:
-            refMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, **settings)
-        #dutMesh = meshMaker.MeshData(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+        dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settingsDut)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, computeImmediately=False)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+        prob.saveEFieldsForAnim(True)
+        prob.saveEFieldsForAnim(False)
+        prevRuns.memTimeAppend(prob)
+        
+    def testLargeExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing a large-object example
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        settings = {'N_antennas': 9, 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h, 'defect_height': .37, 'defect_radius': .17} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
+        if(dutOnRefMesh):
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **settings)
+        else:
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, **settings)
+        #dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        #refMesh.plotMeshPartition()
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
         prob.makeOptVectors(skipQs=True)
-        #prob.saveEFieldsForAnim(True)
-        #prob.saveEFieldsForAnim(False)
-        #prevRuns.memTimeAppend(prob)
+        prob.saveEFieldsForAnim(True)
+        prob.saveEFieldsForAnim(False)
+        prevRuns.memTimeAppend(prob)
         degree = 1
         
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
@@ -178,7 +194,7 @@ if __name__ == '__main__':
             elif(convergence == 'dxquaddeg'):
                 probOptions = dict(quaddeg = ks[i])
             
-            refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', FF_surface = True, order=deg, **meshOptions)
+            refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', FF_surface = True, order=deg, **meshOptions)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1-0.01j), Nf=1, fem_degree=deg, **probOptions)
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
             simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
@@ -250,7 +266,7 @@ if __name__ == '__main__':
                     plt.close()
             
     def testSolverSettings(h = 1/12, deg=1): # Varies settings in the ksp solver/preconditioner, plots the time and iterations a computation takes. Uses the sphere-scattering test case
-        refMesh = meshMaker.MeshData(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=3, object_radius = .73, domain_radius=1.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='cylinder', order=deg, FF_surface = False)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=3, object_radius = .73, domain_radius=1.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='cylinder', order=deg, FF_surface = False)
         settings = [] ## list of solver settings
         maxTime = 355 ## max solver time in [s], to cut off overly-long runs. Is only checked between iterations, some of which can take minutes...
         
@@ -416,7 +432,7 @@ if __name__ == '__main__':
                 ts[norms>4e-4] = ts[norms>4e-4] + 10000
                 idxsort = np.argsort(ts)
                 for k in range(10):
-                    print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, norm={norms[idxsort[k]]}, mem={mems[idxsort[k]]:.3e}GiB --- ')
+                    print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, norm={norms[idxsort[k]]}, mem={mems[idxsort[k]]:.3e}GB --- ')
                     print(settings[idxsort[k]])
                     print()
                     
@@ -426,25 +442,33 @@ if __name__ == '__main__':
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    #runName = 'testRunSmall' ## h=1/8 or so
-    runName = 'testRunSmallNumericalNormalization' ## h=1/8 or so
+    runName = 'testRunSmall' ## h=1/8
     #runName = 'testRunLarger' ## h=1/18
     
     #testRun(h=1/3)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    testFullExample(h=1/8, degree=1)
+    #testFullExample(h=1/4.3, degree=2)
     postProcessing.solveFromQs(folder+runName, MPInum)
     
-    #testSphereScattering(h=1/10, degree=1, showPlots=False)
+    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
+    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
+    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
+    
+    #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'testingComplexObject' ## h=1/12
-    #testLargeExample(h=1/8, degree=1)
+    #runName = 'testingComplexObject' ## h=1/12
+    #testLargeExample(h=1/12, degree=1)
+    #postProcessing.solveFromQs(folder+runName, MPInum)
+    
+    runName = 'testingShiftedDut' ## h=1/12
+    testShiftedExample(h=1/12, degree=1)
+    postProcessing.solveFromQs(folder+runName, MPInum)
     
     #===========================================================================
     # runName = 'testRunDeg1'

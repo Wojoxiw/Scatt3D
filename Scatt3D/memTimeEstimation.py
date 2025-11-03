@@ -51,12 +51,12 @@ class runTimesMems():
             :param extraInfo: Optional string one can add to classify the run
             :param mem: Total memory used in the problem
             '''
-            self.meshingTime = prob.FEMmesh_ref.meshData.meshingTime
+            self.meshingTime = prob.FEMmesh_ref.meshInfo.meshingTime
             self.calcTime = prob.calcTime
             self.MPInum = prob.MPInum
             self.Nf = prob.Nf # number of frequencies - computations are for each frequency
-            self.Nants = prob.FEMmesh_ref.meshData.N_antennas # number of antennas - computations are for each antenna pair
-            self.size = prob.FEMmesh_ref.meshData.ncells # Computation size (number of FEM elements)
+            self.Nants = prob.FEMmesh_ref.meshInfo.N_antennas # number of antennas - computations are for each antenna pair
+            self.size = prob.FEMmesh_ref.meshInfo.ncells # Computation size (number of FEM elements)
             self.mem = prob.memCost # Total memory cost
             self.fem_degree = prob.FEMmesh_ref.fem_degree ## Finite element degree
             self.solve_its = prob.solver_its ## Iterations taken to solve the final problem
@@ -72,16 +72,18 @@ class runTimesMems():
         :param extraInfo: Optional string one can add to classify the run
         '''
         if(self.comm.rank == 0): ## only use the master rank
-            prev = np.empty(1, dtype=object)
-            prev[0] = self.runTimeMem(run, extraInfo) ## the runTimeMem, in a numpy array
-            if(hasattr(self, 'prevRuns')): ## check if these exist
-                self.prevRuns = np.hstack((self.prevRuns, prev))
-            else: ## hasn't been made yet
-                self.prevRuns = prev
+            if(hasattr(run, 'calcTime')):
+                prev = np.empty(1, dtype=object)
+                prev[0] = self.runTimeMem(run, extraInfo) ## the runTimeMem, in a numpy array
+                if(hasattr(self, 'prevRuns')): ## check if these exist
+                    self.prevRuns = np.hstack((self.prevRuns, prev))
+                else: ## hasn't been made yet
+                    self.prevRuns = prev
+                np.savez(self.fpath, prevRuns = self.prevRuns)
+            else:
+                print('Run has no time, not appending...')
                 
-                
-            np.savez(self.fpath, prevRuns = self.prevRuns)
-    
+            
     def fitLine(self, x, a, b, c, d):
         '''
         Curve to fit the data to - assume some power dependance on various parameters
@@ -170,7 +172,7 @@ class runTimesMems():
             ax2.grid(True)
             ax2.set_title('Memory Cost by Problem Size')
             ax2.set_xlabel('# FEM Elements')
-            ax2.set_ylabel('Memory [GiB] (Approximate)')
+            ax2.set_ylabel('Memory [GB] (Approximate)')
             ax2.scatter(self.sizes, self.mems, label='recorded runs')
             ax2.plot(xs, self.fitLine([xs, nums], self.memFit[0], self.memFit[1], self.memFit[2], self.memFit[3]), label='curve_fit')
             #if(numCells>0 and Nf>0):
@@ -202,7 +204,7 @@ class runTimesMems():
             ax1.set_xlabel('# FEM Elements')
             ax2.set_xlabel('# FEM Elements')
             ax1.set_ylabel('Time [s]')
-            ax2.set_ylabel('Memory [GiB]')
+            ax2.set_ylabel('Memory [GB]')
             
             for type in runType:
                 MPInum = type[0]

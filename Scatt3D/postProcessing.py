@@ -1,5 +1,5 @@
 # encoding: utf-8
-## this file will have much of the postprocessing and associated functions
+## this file will have much of the postprocessing and associated functions - should only require the datafiles saved from scatteringProblem
 
 from mpi4py import MPI
 import numpy as np
@@ -23,49 +23,75 @@ import psutil, threading, os, time
 from timeit import default_timer as timer
 import scipy
 
-def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, tau=2e-1, sigma=1e-5, verbose=False, solve_settings={}): ## put this in a function to allow gc?
+
+if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently no longer exists - mamba installation doesnt seem to have the newer spgl1
+    np.lib.isreal = np.isreal
+
+
+def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-5, tau=2e-1, mu=1e2, verbose=True, solve_settings={}): ## put this in a function to allow gc?
     N_x = np.shape(A)[1]
     x_cvxpy = cp.Variable(N_x, complex=True)
     if(problemType==0):
         objective_1norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=1))
         problem_cvxpy = cp.Problem(objective_1norm)
-    if(problemType==1):
+    elif(problemType==1):
         objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
         problem_cvxpy = cp.Problem(objective_2norm)
-    if(problemType==2): ## bpdn
+    elif(problemType==2): ## bpdn
         if(cell_volumes is None): ## can normalize with cell volumes, or not
             objective_bpdn = cp.Minimize(cp.norm(x_cvxpy, p=1))
         else:
-            objective_bpdn = cp.Minimize(cp.norm(x_cvxpy*cell_volumes, p=1))
+            objective_bpdn = cp.Minimize(cp.norm(cp.multiply(x_cvxpy, cell_volumes), p=1))
         constraint_bpdn = [cp.norm(A @ x_cvxpy - b, p=2) <= sigma]
         problem_cvxpy = cp.Problem(objective_bpdn, constraint_bpdn)
-    if(problemType==3): ## lasso
+    elif(problemType==3): ## lasso
         objective_2norm = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2))
         if(cell_volumes is None): ## can normalize with cell volumes, or not
             constraint_lasso = [cp.norm(x_cvxpy, p=1) <= tau]
         else:
-            constraint_lasso = [cp.norm(x_cvxpy*cell_volumes, p=1) <= tau]
+            constraint_lasso = [cp.norm(cp.multiply(x_cvxpy, cell_volumes), p=1) <= tau]
         problem_cvxpy = cp.Problem(objective_2norm, constraint_lasso)
-    problem_cvxpy.solve(verbose=verbose, solver=solver, **solve_settings)
+    elif(problemType==4): ## tikhonov
+        objective_tik = cp.Minimize(cp.norm(A @ x_cvxpy - b, p=2) + mu*cp.norm(x_cvxpy, p=2))
+        problem_cvxpy = cp.Problem(objective_tik)
+        
+    try:
+        problem_cvxpy.solve(verbose=verbose, solver=solver, **solve_settings)
+    except Exception as error: ## if the solver 'makes insufficient progress' or something, just skip
+        print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
     if(verbose):
         print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({problemType=})')
     return x_cvxpy.value
     
-def reconstructionError(epsr_rec, epsr_ref, epsr_dut, cell_volumes, printIt=False):
+def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False):
     '''
     Find the 'error' figure of merit in reconstructed delta eps_r
-    :param epsr_rec: Reconstructed delta eps_r
+    :param delta_epsr_rec: The reconstructed delta eps_r
     :param epsr_ref: Reference eps_r
     :param epsr_dut: Dut eps_r
     :param cell_volumes: Volume of each cell - results are normalized by this
+    :param indices: The indices to reconstruct. If '', all. If 'defect', just the defect cells. If 'ap', just the object. If 'non-pml', the non-pml indices. Not needed if the epsrs are already chosen... and most of these options are not implemented yet
+    :param printIt: if True, print the error
     '''
     delta_epsr_actual = epsr_dut-epsr_ref
-    #error = np.mean(np.abs(epsr_rec - delta_epsr_actual) * cell_volumes)
-    error = np.mean(np.abs(epsr_rec/np.mean(epsr_rec + 1e-9) - delta_epsr_actual/np.mean(delta_epsr_actual + 1e-9)) * cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape
-    error = np.mean(np.abs(epsr_rec/np.mean(np.abs(epsr_rec) + 1e-9) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape
+    if(indices=='defect'):
+        idx = np.nonzero(np.abs(delta_epsr_actual) != 0)[0] ## should just be the defect cells
+    else:
+        idx = np.nonzero(epsr_ref != -999)[0] ## should be all indices... not sure how else to write this
+    delta_epsr_actual = delta_epsr_actual[idx]
+    delta_epsr_rec = delta_epsr_rec[idx]
+    epsr_ref = epsr_ref[idx]
+    epsr_dut = epsr_dut[idx]
+    cell_volumes = cell_volumes[idx]
+    
+    #error = np.mean(np.abs(delta_epsr_rec - delta_epsr_actual) * cell_volumes)/np.sum(cell_volumes)
+    #error = np.mean(np.abs(delta_epsr_rec/np.mean(delta_epsr_rec + 1e-9) - delta_epsr_actual/np.mean(delta_epsr_actual + 1e-9)) * cell_volumes)/np.sum(cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape... otherwise a near-zero reconstruction looks good
+    error = np.mean(np.abs(delta_epsr_rec/np.mean(np.abs(delta_epsr_rec) + 1e-9) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes)/np.sum(cell_volumes)
+    #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual)) * cell_volumes/np.sum(cell_volumes))
+    #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
     if(printIt):
         print(f'Reconstruction error: {error:.3e}')
-    if(np.allclose(epsr_rec, 0)):
+    if(np.allclose(delta_epsr_rec, 0)):
         error = 1
     return error
 
@@ -78,14 +104,14 @@ def numpySVDfindOptimal(A, b, epsr_ref, epsr_dut, cell_volumes): ## optimize for
         sinv = np.divide(1, s, where=large)
         sinv[~large] = 0
         A_inv = np.matmul( np.transpose(vt), np.multiply( sinv[..., np.newaxis], np.transpose(u) ) )
-        x_try = np.dot(A_inv, b) ## set the reconstructed indices
+        x_try = np.dot(A_inv, b)[0, :] ## set the reconstructed indices
         err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
         if verbose: ## so I don't spam the console
             print(f'Error calculated as {err:.3e}, svd_t = 10**-{svd_t}')
         if(returnSol):
             return x_try
         else:
-            return err
+            return np.log10(err)
     optsol = scipy.optimize.minimize(calcAccuracy, 2, method='Nelder-Mead')## initially guess that we want to include only up to relative values of 1e-2
     optThresh = optsol.x
     print(f'Optimal threshold calculated as '+str(optThresh))
@@ -120,19 +146,52 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #         settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
     #===========================================================================
     
-    ## spgl settings tests ## it seems iterations after the first few hundred don't have a huge effect, at least for the a-priori case. Using the complex values also seems irrelevant, and the best results have large taus
-    testName = 'spgl_settingstest'
-    for tausigma in [{}, {'tau': 1e-2}, {'tau': 1}, {'tau': 1e2}, {'tau': 1e4}, {'tau': 1e6}, {'sigma': 1e-2}, {'sigma': 1e-4}, {'sigma': 1e-6}, {'sigma': 1e-8}]:
-        for iters in [500, 1000, 9000]:
-            for prevs in [1, 3, 10]:
-                for complexNs in [True, False]:
-                    settings.append( {'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': complexNs, **tausigma} )
+    ## cvxpy sigma test
+    testName = 'cvxpy_sigmatest'
+    for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+        settings.append( {'problemType': 2, 'sigma': sigma} )
+        
+    ## cvxpy tau test
+    testName = 'cvxpy_tautest'
+    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+        settings.append( {'problemType': 3, 'tau': tau} )
+        
+    ## cvxpy sigma test
+    testName = 'cvxpy_mutest'
+    for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2]:
+        settings.append( {'problemType': 4, 'mu': mu} )
+    
+    #===========================================================================
+    # ## spgl settings tests ## it seems iterations after the first few hundred don't have a huge effect, at least for the a-priori case. Using the complex values also seems irrelevant, and the best results have large taus
+    # testName = 'spgl_settingstest'
+    # for tausigma in [{}, {'tau': 1e-2}, {'tau': 1}, {'tau': 1e2}, {'tau': 1e4}, {'tau': 1e6}, {'sigma': 1e-2}, {'sigma': 1e-4}, {'sigma': 1e-6}, {'sigma': 1e-8}]:
+    #     for iters in [500, 1000, 9000]:
+    #         for prevs in [1, 3, 10]:
+    #             for complexNs in [True, False]:
+    #                 settings.append( {'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': complexNs, **tausigma} )
+    #===========================================================================
+        
+    ## spgl sigma test
+    testName = 'spgl_sigmatest'
+    for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+        for iters in [250, 500, 1000, 2500, 9000]:
+            for prevs in [1, 3, 7, 10]:
+                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+                    
+    ## spgl tau test
+    testName = 'spgl_tautest'
+    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+        for iters in [250, 500, 1000, 2500, 9000]:
+            for prevs in [1, 3, 7, 10]:
+                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
            
     num = len(settings)
     for i in range(num):
         print(f'Settings {i}:', settings[i])
         
-    omegas = np.arange(num) ## Number of the setting being varied, if it is not a numerical quantity
+    omegas = np.arange(num) ## Number of the setting being varied
     ts = np.zeros(num)
     errors = np.zeros(num)
     mems = np.zeros(num) ## to get the memories for each run, use psutil on each process with sampling every 0.5 seconds
@@ -206,7 +265,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     print(f'Top {nprint} Options #s:') ## lowest errors
     idxsort = np.argsort(errors)
     for k in range(nprint):
-        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]:3e}, mem={mems[idxsort[k]]:.2f}GiB --- ')
+        print(f'#{idxsort[k]+1}: t={ts[idxsort[k]]:.3e}, error={errors[idxsort[k]]:3e}, mem={mems[idxsort[k]]:.2f}GB --- ')
         print(settings[idxsort[k]])
         print()
     
@@ -333,7 +392,16 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             sys.stdout.flush()
             return x0.data[:, 0]
     
-def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping everything on one process
+def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyAPriori=True):
+    '''
+    Try various solution methods... keeping everything on one process
+    :param problemName: The filename, used to find and save files
+    :param MPInum: Number of MPI processes
+    :param solutionName: Name to be appended to the solution files - default is nothing
+    :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
+    :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
+    :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
+    '''
     gc.collect()
     comm = MPI.COMM_WORLD
     commself = MPI.COMM_SELF
@@ -351,6 +419,12 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         Nb = len(b)
+        
+        #=======================================================================
+        # plt.plot((np.abs(S_ref.flatten()))) ## try plotting the Ss
+        # plt.plot((np.abs(S_dut.flatten())))
+        # plt.show()
+        #=======================================================================
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
@@ -373,12 +447,16 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
             epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
             epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
             N = len(cell_volumes)
-            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1
+            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - these are the indices used for non a-priori reconstructions
             N_non_pml = len(idx_non_pml)
             A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
-            for n in range(Nb):
-                Apart = np.array(f['Function']['real_f'][str(n)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(n)]).squeeze()
-                A[n,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
+            for nf in range(Nf):
+                for m in range(N_antennas):
+                    for n in range(N_antennas):
+                        if( ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) and (nf in frequenciesToUse or len(frequenciesToUse)==0) ):
+                            i = nf*N_antennas*N_antennas + m*N_antennas + n
+                            Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
+                            A[i,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
             del Apart ## maybe this will help with clearing memory
         gc.collect()
                 
@@ -390,8 +468,9 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         print('shape of b:', np.shape(b))
         print('in-object cells:', np.size(idx_ap))
         
-        ## prepare the file
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='w')  
+        ## prepare the solution/output file
+        solutionFile = problemName+'post-process'+solutionName+'.xdmf'
+        f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w')  
         f.write_mesh(mesh)
         cells.x.array[:] = epsr_ref + 0j
         f.write_function(cells, -1)
@@ -401,10 +480,117 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         
         x_temp = np.zeros(N, dtype=complex) ## to hold reconstructed epsr values
         
+        ## optimize for various solver settings here
+        
         #=======================================================================
-        # ## test SVD thresholding, AP and non-AP
+        # ## optimize spgl variables
+        # sigma = 1e-4 ## guess for a good sigma
+        # tau = 6e4 ## guess for a good tau
+        # iter_lim = 5366
+        # spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 0}
+        # 
+        # f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        # ## a-priori
+        # A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
+        # Ak_ap = np.zeros((A1*2, A2*2)) ## real A
+        # Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
+        # Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
+        # Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
+        # Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
+        # bk = np.hstack((np.real(b),np.imag(b))) ## real b
+        # 
+        # def calcAccuracy(sigma, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
+        #     xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, **spgl_settings)
+        #     x_try = xsol[:A2] + 1j*xsol[A2:]
+        #     err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        #     print(f'Error calculated as {err:.3e}, {sigma=}')
+        #     return np.log10(err)
+        # optGoal = functools.partial(calcAccuracy, epsr_ref=epsr_ref[idx_ap], epsr_dut=epsr_dut[idx_ap], cell_volumes=cell_volumes[idx_ap])
+        # optsol = scipy.optimize.minimize(optGoal, sigma)
+        # optSigma = optsol.x
+        # print(f'SPGL optimal {optSigma=}')
+        # xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=optSigma, **spgl_settings)
+        # x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -24)
+        # print(f'Timestep -24 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        # 
+        # def calcAccuracy(tau, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
+        #     xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
+        #     x_try = xsol[:A2] + 1j*xsol[A2:]
+        #     err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        #     print(f'Error calculated as {err:.3e}, {tau=}')
+        #     return np.log10(err)
+        # optGoal = functools.partial(calcAccuracy, epsr_ref=epsr_ref[idx_ap], epsr_dut=epsr_dut[idx_ap], cell_volumes=cell_volumes[idx_ap])
+        # optsol = scipy.optimize.minimize(optGoal, tau)
+        # optTau = optsol.x
+        # print(f'SPGL optimal {optTau=}')
+        # xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=optTau, **spgl_settings)
+        # x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -25)
+        # print(f'Timestep -25 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        # f.close()
+        #=======================================================================
+        
+        #=======================================================================
+        # ## optimize cvxpy variables
+        # sigma = 5e-2 ## guess for a good sigma
+        # tau = 6e4 ## guess for a good tau
+        # mu = 1e2 ## guess for a good mu
+        # 
+        # f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        # 
+        # def calcAccuracy(sigma, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
+        #     x_try = cvxpySolve(A_ap, b, 3, sigma=sigma, cell_volumes=cell_volumes, verbose=False)
+        #     err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        #     print(f'Error calculated as {err:.3e}, {sigma=}')
+        #     return np.log10(err)
+        # optGoal = functools.partial(calcAccuracy, epsr_ref=epsr_ref[idx_ap], epsr_dut=epsr_dut[idx_ap], cell_volumes=cell_volumes[idx_ap])
+        # optsol = scipy.optimize.minimize(optGoal, sigma)
+        # optSigma = optsol.x
+        # print(f'SPGL optimal {optSigma=}')
+        # x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, sigma=optSigma, cell_volumes=cell_volumes)
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -7)
+        # print(f'Timestep -7 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        # 
+        # def calcAccuracy(tau, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
+        #     x_try = cvxpySolve(A_ap, b, 3, tau=tau, cell_volumes=cell_volumes, verbose=False)
+        #     err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        #     print(f'Error calculated as {err:.3e}, {tau=}')
+        #     return np.log10(err)
+        # optGoal = functools.partial(calcAccuracy, epsr_ref=epsr_ref[idx_ap], epsr_dut=epsr_dut[idx_ap], cell_volumes=cell_volumes[idx_ap])
+        # optsol = scipy.optimize.minimize(optGoal, tau)
+        # optTau = optsol.x
+        # print(f'SPGL optimal {optTau=}')
+        # x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, tau=optTau, cell_volumes=cell_volumes)
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -8)
+        # print(f'Timestep -8 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        # 
+        # def calcAccuracy(mu, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
+        #     x_try = cvxpySolve(A_ap, b, 3, mu=mu, cell_volumes=cell_volumes, verbose=False)
+        #     err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        #     print(f'Error calculated as {err:.3e}, {mu=}')
+        #     return np.log10(err)
+        # optGoal = functools.partial(calcAccuracy, epsr_ref=epsr_ref[idx_ap], epsr_dut=epsr_dut[idx_ap], cell_volumes=cell_volumes[idx_ap])
+        # optsol = scipy.optimize.minimize(optGoal, mu)
+        # optMu = optsol.x
+        # print(f'SPGL optimal {optMu=}')
+        # x_temp[idx_ap] = cvxpySolve(A_ap, b, 4, mu=optMu, cell_volumes=cell_volumes)
+        # cells.x.array[:] = x_temp + 0j
+        # f.write_function(cells, -9)
+        # print(f'Timestep -9 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        # 
+        # f.close()
+        #=======================================================================
+        
+        
+        #=======================================================================
+        # ## optimize SVD threshold, AP and non-AP
         # ##
-        # f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') 
+        # f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         # x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
         # cells.x.array[:] = x_temp + 0j
         # f.write_function(cells, -5) 
@@ -416,6 +602,15 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         # ##
         #=======================================================================
         
+        mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+        mems = comm.gather(mem_usage, root=0)
+        if( comm.rank == 0 ):
+            totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+            print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
+            
+            
+        #return ## exit
+            
         ## test other solver settings
         ##
         
@@ -443,72 +638,78 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         # testSolverSettings(Ak, bk, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
         #=======================================================================
         
-        #testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        #exit()
+        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        return
         ##
         ##
         
-        print('Solving with scalapack least squares and numpy svd...')
-        ## non a-priori
-        #A_inv = np.linalg.pinv(A, rcond=1e-3)
-        b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary, but reshape it to fit what scalapack expects
-        b_now[:, 0] = b
-        x_temp = np.zeros(N, dtype=complex)
-        x_temp[idx_non_pml] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
-    else: ## on other processes, call it with nothing
-        scalapackLeastSquares(comm, MPInum)
+    #===========================================================================
+    #     print('Solving with scalapack least squares...') ## always has huge |x|, basically just noise
+    #     ## non a-priori
+    #     #A_inv = np.linalg.pinv(A, rcond=1e-3)
+    #     b_now = np.array(np.zeros((np.size(b), 1)), order = 'F') ## not sure how much of this is necessary, but reshape it to fit what scalapack expects
+    #     b_now[:, 0] = b
+    #     x_temp = np.zeros(N, dtype=complex)
+    #     if(not onlyAPriori):
+    #         x_temp[idx_non_pml] = scalapackLeastSquares(comm, MPInum, A, b_now, True) ## only the master process gets the result
+    # else: ## on other processes, call it with nothing
+    #     if(not onlyAPriori):
+    #         scalapackLeastSquares(comm, MPInum)
+    #     
+    # ## a priori lsq
+    # if(comm.rank == 0):
+    #     x_ap = np.zeros(N, dtype=complex)
+    #     x_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A_ap, b_now, True) ## only the master process gets the result
+    #     
+    #     print('done scalapack solution')
+    # else: ## on other processes, call it with nothing
+    #     scalapackLeastSquares(comm, MPInum)
+    #     
+    # mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+    # mems = comm.gather(mem_usage, root=0)
+    # if( comm.rank == 0 ):
+    #     totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+    #     print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
+    # 
+    # if(comm.rank == 0):
+    #     ## write back the result
+    #     f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
+    #     ## a-priori
+    #     cells.x.array[:] = x_ap + 0j
+    #     f.write_function(cells, 1)
+    #     print(f'Timestep 1 reconstruction error: {reconstructionError(x_ap[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+    #     ## non a-priori
+    #     if(not onlyAPriori):
+    #         cells.x.array[:] = x_temp + 0j
+    #         f.write_function(cells, 2)    
+    #         print(f'Timestep 2 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+    #     f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
+    #===========================================================================
         
-    ## a priori lsq
-    if(comm.rank == 0):
-        x_ap = np.zeros(N, dtype=complex)
-        x_ap[idx_ap] = scalapackLeastSquares(comm, MPInum, A_ap, b_now, True) ## only the master process gets the result
-        
-        print('done scalapack + numpy solution')
-    else: ## on other processes, call it with nothing
-        scalapackLeastSquares(comm, MPInum)
-        
-    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
-    mems = comm.gather(mem_usage, root=0)
-    if( comm.rank == 0 ):
-        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
-    
-    if(comm.rank == 0):
-        ## write back the result
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a')
-        ## non a-priori
-        cells.x.array[:] = x_ap + 0j
-        f.write_function(cells, 1)
-        print(f'Timestep 1 reconstruction error: {reconstructionError(x_ap, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        ## a-priori
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 2)    
-        print(f'Timestep 2 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
-        
-        print('Scalapack done, computing numpy solutions...') ## can either optimization for rcond, or just pick one
-        rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a')
+        print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
+        rcond = 10**-1.65 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
+        f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
         
         x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])#np.linalg.pinv(A_ap, rcond = rcond) @ b
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 3)
-        print(f'Timestep 3 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])#np.linalg.pinv(A, rcond = rcond) @ b
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 4)  
-        print(f'Timestep 4 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        print(f'Timestep 3 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        if(not onlyAPriori):
+            x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])#np.linalg.pinv(A, rcond = rcond) @ b
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 4)  
+            print(f'Timestep 4 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
         
         f.close()
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-        sigma = 1e-2 ## guess for a good sigma
-        tau = 2e4 ## guess for a good tau
-        iter_lim = 9366
-        spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True}
+        sigma = 5e-2 ## guess for a good sigma
+        tau = 6e4 ## guess for a good tau
+        iter_lim = 5366
+        spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 1}
           
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## a-priori
         A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
         Ak_ap = np.zeros((A1*2, A2*2)) ## real A
@@ -518,60 +719,60 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
         bk = np.hstack((np.real(b),np.imag(b))) ## real b
          
-        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, verbosity=1, **spgl_settings)
+        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, **spgl_settings)
         x_temp = np.zeros(N, dtype=complex)
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 13)
-        print(f'Timestep 13 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        f.write_function(cells, 23)
+        print(f'Timestep 23 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
           
-        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, verbosity=1, **spgl_settings)
+        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, **spgl_settings)
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 14)
-        print(f'Timestep 14 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        f.write_function(cells, 24)
+        print(f'Timestep 24 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
           
-        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, verbosity=1, **spgl_settings)
+        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 15)
-        print(f'Timestep 15 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        f.write_function(cells, 25)
+        print(f'Timestep 25 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
          
         f.close()
-         
-        iter_lim = 3366
-        spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True}
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
-        ## non a-priori
-        A1, A2 = np.shape(A)[0], np.shape(A)[1]
-        Ak = np.zeros((A1*2, A2*2)) ## real A
-        Ak[:A1,:A2] = np.real(A) ## A11
-        Ak[:A1,A2:] = -1*np.imag(A) ## A12
-        Ak[A1:,:A2] = 1*np.imag(A) ## A21
-        Ak[A1:,A2:] = np.real(A) ## A22
-         
-        xsol, resid, grad, info = spgl1.spgl1(Ak, bk, verbosity=1, **spgl_settings)
-        x_temp = np.zeros(N, dtype=complex)
-        x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 16)
-        print(f'Timestep 16 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-         
-        xsol, resid, grad, info = spgl1.spgl1(Ak, bk, sigma=sigma, verbosity=1, **spgl_settings)
-        x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 17)
-        print(f'Timestep 17 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        if(not onlyAPriori):
+            iter_lim = 1366
+            spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 1}
+            f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+            ## non a-priori
+            A1, A2 = np.shape(A)[0], np.shape(A)[1]
+            Ak = np.zeros((A1*2, A2*2)) ## real A
+            Ak[:A1,:A2] = np.real(A) ## A11
+            Ak[:A1,A2:] = -1*np.imag(A) ## A12
+            Ak[A1:,:A2] = 1*np.imag(A) ## A21
+            Ak[A1:,A2:] = np.real(A) ## A22
+             
+            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, **spgl_settings)
+            x_temp = np.zeros(N, dtype=complex)
+            x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 26)
+            print(f'Timestep 26 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+             
+            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, sigma=sigma, **spgl_settings)
+            x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 27)
+            print(f'Timestep 27 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+              
+            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, tau=tau, **spgl_settings)
+            x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 28)
+            print(f'Timestep 28 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            f.close()
           
-        xsol, resid, grad, info = spgl1.spgl1(Ak, bk, tau=tau, verbosity=1, **spgl_settings)
-        x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 18)
-        print(f'Timestep 18 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        f.close()
-          
-        del Ak ## maybe this will help with clearing memory
-        gc.collect()
+            del Ak ## maybe this will help with clearing memory
+            gc.collect()
          
         print('done spgl solution')
         
@@ -586,56 +787,66 @@ def solveFromQs(problemName, MPInum): ## Try various solution methods... keeping
         print('solving with cvxpy...')
         t_cvx = timer()
 
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+        f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## a-priori
         
         x_temp = np.zeros(N, dtype=complex)
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap], solver = 'GLPK') ## GLPK where it can be used - seems faster and possibly better than CLARABEL. GLPK_MI seems faster, but possibly worse
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 5)
-        print(f'Timestep 5 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        print(f'Timestep 5 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 1, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 6)
-        print(f'Timestep 6 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        print(f'Timestep 6 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 7)
-        print(f'Timestep 7 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        print(f'Timestep 7 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         
         x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 8)
-        print(f'Timestep 8 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        print(f'Timestep 8 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         
-        f.close()
-        
-        f = dolfinx.io.XDMFFile(comm=commself, filename=problemName+'post-process.xdmf', file_mode='a') ## 'a' is append mode? to add more functions, hopefully
-        ## then non a-priori:
-        
-        x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml], solver = 'GLPK')
+        x_temp[idx_ap] = cvxpySolve(A_ap, b, 4, cell_volumes=cell_volumes[idx_ap])
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 9)
-        print(f'Timestep 9 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        
-        x_temp[idx_non_pml] = cvxpySolve(A, b, 1, cell_volumes=cell_volumes[idx_non_pml])
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 10)
-        print(f'Timestep 10 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        
-        x_temp[idx_non_pml] = cvxpySolve(A, b, 2, cell_volumes=cell_volumes[idx_non_pml])
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 11)
-        print(f'Timestep 11 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
-        
-        x_temp[idx_non_pml] = cvxpySolve(A, b, 3, cell_volumes=cell_volumes[idx_non_pml])
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 12)
-        print(f'Timestep 12 reconstruction error: {reconstructionError(x_temp, epsr_ref, epsr_dut, cell_volumes):.3e}')
+        print(f'Timestep 9 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         
         f.close()
+        
+        if(not onlyAPriori): ## then non a-priori:
+            f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
+            
+            x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml], solver = 'GLPK')
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 10)
+            print(f'Timestep 10 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            
+            x_temp[idx_non_pml] = cvxpySolve(A, b, 1, cell_volumes=cell_volumes[idx_non_pml])
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 11)
+            print(f'Timestep 11 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            
+            x_temp[idx_non_pml] = cvxpySolve(A, b, 2, cell_volumes=cell_volumes[idx_non_pml])
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 12)
+            print(f'Timestep 12 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            
+            x_temp[idx_non_pml] = cvxpySolve(A, b, 3, cell_volumes=cell_volumes[idx_non_pml])
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 13)
+            print(f'Timestep 13 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            
+            x_temp[idx_non_pml] = cvxpySolve(A, b, 4, cell_volumes=cell_volumes[idx_non_pml])
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 14)
+            print(f'Timestep 14 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            
+            f.close()
         
         print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')
         

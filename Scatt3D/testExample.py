@@ -29,9 +29,11 @@ import memTimeEstimation
 import postProcessing
 
 
-pc = PETSc.PC().create()
-pc.setType("hpddm")
-print("HPDDM loaded OK")
+#===============================================================================
+# pc = PETSc.PC().create() ## to test if hpddm is installed
+# pc.setType("hpddm")
+# print("HPDDM loaded OK")
+#===============================================================================
 
 #===============================================================================
 # print(ctypes.util.find_library("scalapack"))
@@ -98,7 +100,7 @@ boundary_facets = dolfinx.mesh.exterior_facet_indices(mesh.topology)
 boundary_dofs = dolfinx.fem.locate_dofs_topological(V, mesh.topology.dim-1, boundary_facets)
 bc = dolfinx.fem.dirichletbc(u_c, boundary_dofs)
 petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"}
-problem = dolfinx.fem.petsc.LinearProblem(a, L, bcs=[bc], petsc_options=petsc_options)
+problem = dolfinx.fem.petsc.LinearProblem(a, L, bcs=[bc], petsc_options=petsc_options, petsc_options_prefix='testProblem')
 if(comm.rank == 0):
     print('solving problem')
 sys.stdout.flush()
