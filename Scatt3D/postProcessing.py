@@ -183,15 +183,13 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #                 settings.append( {'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': complexNs, **tausigma} )
     #===========================================================================
         
-    #===========================================================================
-    # ## spgl sigma test
-    # testName = 'spgl_sigmatest'
-    # for sigma in [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
-    #     for iters in [250, 500, 1000, 2500, 9000]:
-    #         for prevs in [1, 3, 7, 10]:
-    #             for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
-    #                 settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
-    #===========================================================================
+    ## spgl sigma test
+    testName = 'spgl_sigmatest'
+    for sigma in [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+        for iters in [250, 500, 1000, 2500, 9000]:
+            for prevs in [1, 4, 10]:
+                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
                     
     #===========================================================================
     # ## spgl tau test
@@ -228,10 +226,10 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
             t.start()
             starTime = timer()
             
-            #xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, x0=np.hstack((epsr_ref, epsr_ref)), **settings[i])
-            #size = np.size(epsr_ref)
-            #_rec = xsol[:size] + 1j*xsol[size:]
-            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
+            xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, x0=np.hstack((epsr_ref, epsr_ref)), **settings[i])
+            size = np.size(epsr_ref)
+            x_rec = xsol[:size] + 1j*xsol[size:]
+            #x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
             
             ts[i] = timer() - starTime
             errors[i] = reconstructionError(x_rec, epsr_ref, epsr_dut, cell_volumes)
@@ -630,17 +628,15 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         ## test other solver settings
         ##
         
-        #=======================================================================
-        # ## a-priori
-        # A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
-        # Ak_ap = np.zeros((A1*2, A2*2)) ## real A
-        # Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
-        # Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
-        # Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
-        # Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
-        # bk = np.hstack((np.real(b),np.imag(b))) ## real b
-        # testSolverSettings(Ak_ap, bk, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        #=======================================================================
+        ## a-priori
+        A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
+        Ak_ap = np.zeros((A1*2, A2*2)) ## real A
+        Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
+        Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
+        Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
+        Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
+        bk = np.hstack((np.real(b),np.imag(b))) ## real b
+        testSolverSettings(Ak_ap, bk, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
         
         #=======================================================================
         # ## non a-priori
@@ -654,7 +650,7 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         # testSolverSettings(Ak, bk, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
         #=======================================================================
         
-        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        #testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
         return
         ##
         ##
