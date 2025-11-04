@@ -185,23 +185,23 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #                 settings.append( {'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': complexNs, **tausigma} )
     #===========================================================================
         
-    ## spgl sigma test
-    testName = 'spgl_sigmatest'
-    for sigma in [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
-        for iters in [250, 500, 1000, 2500, 9000]:
-            for prevs in [1, 4, 10]:
-                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
-                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
-                    
     #===========================================================================
-    # ## spgl tau test
-    # testName = 'spgl_tautest'
-    # for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+    # ## spgl sigma test
+    # testName = 'spgl_sigmatest'
+    # for sigma in [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
     #     for iters in [250, 500, 1000, 2500, 9000]:
-    #         for prevs in [1, 3, 7, 10]:
+    #         for prevs in [1, 4, 10]:
     #             for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
     #                 settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
     #===========================================================================
+                    
+    ## spgl tau test
+    testName = 'spgl_tautest'
+    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+        for iters in [250, 500, 1000, 2500, 9000]:
+            for prevs in [1, 3, 7, 10]:
+                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
            
     num = len(settings)
     for i in range(num):
