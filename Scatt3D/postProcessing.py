@@ -201,7 +201,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
         for iters in [250, 500, 1000, 2500, 9000]:
             for prevs in [1, 3, 7, 10]:
                 for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
-                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+                    settings.append( {'tau': tau, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
            
     num = len(settings)
     for i in range(num):
@@ -422,6 +422,7 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
     comm = MPI.COMM_WORLD
     commself = MPI.COMM_SELF
     if(comm.rank == 0):
+        print(f'Postprocessing of {problemName}, {solutionName} starting:')
     
         ## load in all the data
         data = np.load(problemName+'output.npz')
