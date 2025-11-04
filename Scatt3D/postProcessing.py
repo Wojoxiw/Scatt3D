@@ -76,6 +76,9 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     delta_epsr_actual = epsr_dut-epsr_ref
     if(indices=='defect'):
         idx = np.nonzero(np.abs(delta_epsr_actual) != 0)[0] ## should just be the defect cells
+        idxNonDef = np.nonzero(np.abs(delta_epsr_actual) == 0)[0]
+        noiseVol = np.sum(cell_volumes[idxNonDef])
+        noiseError = np.mean(np.abs(delta_epsr_rec[idxNonDef]/np.mean(np.abs(delta_epsr_rec[idxNonDef]) + 1e-9) - delta_epsr_actual[idxNonDef]/np.mean(np.abs(delta_epsr_actual[idxNonDef]) + 1e-9)) * cell_volumes[idxNonDef])/noiseVol ## add a 'noise' term
     else:
         idx = np.nonzero(epsr_ref != -999)[0] ## should be all indices... not sure how else to write this
     delta_epsr_actual = delta_epsr_actual[idx]
@@ -89,6 +92,9 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     error = np.mean(np.abs(delta_epsr_rec/np.mean(np.abs(delta_epsr_rec) + 1e-9) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes)/np.sum(cell_volumes)
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual)) * cell_volumes/np.sum(cell_volumes))
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
+    if(indices=='defect'):
+        error = error + noiseError/2
+    
     if(printIt):
         print(f'Reconstruction error: {error:.3e}')
     if(np.allclose(delta_epsr_rec, 0)):
@@ -137,29 +143,35 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #     settings.append( {'solver': solver, 'problemType': 1} )
     #===========================================================================
         
-    #===========================================================================
-    # ## CLARABEL settings tests
-    # testName = 'cvxpy_CLARABEL_settingstest' ## If I give large tolerances, it can solve faster but with worse results... just leaving settings at default
-    # for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
-    #     for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
-    #         solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt}
-    #         settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
-    #===========================================================================
+    ## CLARABEL settings tests
+    testName = 'cvxpy_CLARABEL_settingstest' ## If I give large tolerances, it can solve faster but with worse results... just leaving settings at default
+    for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
+        for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
+            for stepFrac in [.97, .98, .99, .995]:
+                for directKKT in [{}, {'direct_kkt_solver': True}]:
+                    solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt, 'max_step_fraction': stepFrac, **directKKT}
+                    settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
     
-    ## cvxpy sigma test
-    testName = 'cvxpy_sigmatest'
-    for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
-        settings.append( {'problemType': 2, 'sigma': sigma} )
+    #===========================================================================
+    # ## cvxpy sigma test
+    # testName = 'cvxpy_sigmatest'
+    # for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+    #     settings.append( {'problemType': 2, 'sigma': sigma} )
+    #===========================================================================
         
-    ## cvxpy tau test
-    testName = 'cvxpy_tautest'
-    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
-        settings.append( {'problemType': 3, 'tau': tau} )
+    #===========================================================================
+    # ## cvxpy tau test
+    # testName = 'cvxpy_tautest'
+    # for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+    #     settings.append( {'problemType': 3, 'tau': tau} )
+    #===========================================================================
         
-    ## cvxpy sigma test
-    testName = 'cvxpy_mutest'
-    for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2]:
-        settings.append( {'problemType': 4, 'mu': mu} )
+    #===========================================================================
+    # ## cvxpy mu test
+    # testName = 'cvxpy_mutest'
+    # for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2, 1e-4, 1e-6]:
+    #     settings.append( {'problemType': 4, 'mu': mu} )
+    #===========================================================================
     
     #===========================================================================
     # ## spgl settings tests ## it seems iterations after the first few hundred don't have a huge effect, at least for the a-priori case. Using the complex values also seems irrelevant, and the best results have large taus
@@ -171,21 +183,25 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #                 settings.append( {'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': complexNs, **tausigma} )
     #===========================================================================
         
-    ## spgl sigma test
-    testName = 'spgl_sigmatest'
-    for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
-        for iters in [250, 500, 1000, 2500, 9000]:
-            for prevs in [1, 3, 7, 10]:
-                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
-                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+    #===========================================================================
+    # ## spgl sigma test
+    # testName = 'spgl_sigmatest'
+    # for sigma in [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+    #     for iters in [250, 500, 1000, 2500, 9000]:
+    #         for prevs in [1, 3, 7, 10]:
+    #             for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+    #                 settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+    #===========================================================================
                     
-    ## spgl tau test
-    testName = 'spgl_tautest'
-    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
-        for iters in [250, 500, 1000, 2500, 9000]:
-            for prevs in [1, 3, 7, 10]:
-                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
-                    settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+    #===========================================================================
+    # ## spgl tau test
+    # testName = 'spgl_tautest'
+    # for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+    #     for iters in [250, 500, 1000, 2500, 9000]:
+    #         for prevs in [1, 3, 7, 10]:
+    #             for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+    #                 settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+    #===========================================================================
            
     num = len(settings)
     for i in range(num):
@@ -212,10 +228,10 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
             t.start()
             starTime = timer()
             
-            xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, x0=np.hstack((epsr_ref, epsr_ref)), **settings[i])
-            size = np.size(epsr_ref)
-            x_rec = xsol[:size] + 1j*xsol[size:]
-            #x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
+            #xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, x0=np.hstack((epsr_ref, epsr_ref)), **settings[i])
+            #size = np.size(epsr_ref)
+            #_rec = xsol[:size] + 1j*xsol[size:]
+            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
             
             ts[i] = timer() - starTime
             errors[i] = reconstructionError(x_rec, epsr_ref, epsr_dut, cell_volumes)
@@ -704,9 +720,9 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         f.close()
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-        sigma = 5e-2 ## guess for a good sigma
+        sigma = -1#5e-2 ## guess for a good sigma
         tau = 6e4 ## guess for a good tau
-        iter_lim = 5366
+        iter_lim = 250
         spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 1}
           
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully

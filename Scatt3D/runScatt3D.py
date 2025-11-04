@@ -450,11 +450,11 @@ if __name__ == '__main__':
     #actualProfilerRunning()
     
     #testFullExample(h=1/4.3, degree=2)
-    postProcessing.solveFromQs(folder+runName, MPInum)
+    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='')
     
-    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
-    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
-    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
+    #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
+    #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
+    #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
@@ -466,9 +466,9 @@ if __name__ == '__main__':
     #testLargeExample(h=1/12, degree=1)
     #postProcessing.solveFromQs(folder+runName, MPInum)
     
-    runName = 'testingShiftedDut' ## h=1/12
-    testShiftedExample(h=1/12, degree=1)
-    postProcessing.solveFromQs(folder+runName, MPInum)
+    #runName = 'testingShiftedDut' ## h=1/12
+    #testShiftedExample(h=1/12, degree=1)
+    #postProcessing.solveFromQs(folder+runName, MPInum)
     
     #===========================================================================
     # runName = 'testRunDeg1'
