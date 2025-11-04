@@ -226,7 +226,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
             t.start()
             starTime = timer()
             
-            xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, x0=np.hstack((epsr_ref, epsr_ref)), **settings[i])
+            xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, **settings[i])
             size = np.size(epsr_ref)
             x_rec = xsol[:size] + 1j*xsol[size:]
             #x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
