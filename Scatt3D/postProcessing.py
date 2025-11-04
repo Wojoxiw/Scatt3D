@@ -143,14 +143,16 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #     settings.append( {'solver': solver, 'problemType': 1} )
     #===========================================================================
         
-    ## CLARABEL settings tests
-    testName = 'cvxpy_CLARABEL_settingstest' ## If I give large tolerances, it can solve faster but with worse results... just leaving settings at default
-    for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
-        for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
-            for stepFrac in [.97, .98, .99, .995]:
-                for directKKT in [{}, {'direct_kkt_solver': True}]:
-                    solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt, 'max_step_fraction': stepFrac, **directKKT}
-                    settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
+    #===========================================================================
+    # ## CLARABEL settings tests
+    # testName = 'cvxpy_CLARABEL_settingstest' ## If I give large tolerances, it can solve faster but with worse results... just leaving settings at default
+    # for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
+    #     for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
+    #         for stepFrac in [.97, .98, .99, .995]:
+    #             for directKKT in [{}, {'direct_kkt_solver': True}]:
+    #                 solvsetts = {'tol_gap_abs': tolgab, 'tol_ktratio': tolkt, 'max_step_fraction': stepFrac, **directKKT}
+    #                 settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
+    #===========================================================================
     
     #===========================================================================
     # ## cvxpy sigma test
