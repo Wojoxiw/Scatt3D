@@ -166,17 +166,17 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #     settings.append( {'problemType': 2, 'sigma': sigma} )
     #===========================================================================
         
-    ## cvxpy tau test
-    testName = 'cvxpy_tautest'
-    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
-        settings.append( {'problemType': 3, 'tau': tau} )
+    #===========================================================================
+    # ## cvxpy tau test
+    # testName = 'cvxpy_tautest'
+    # for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+    #     settings.append( {'problemType': 3, 'tau': tau} )
+    #===========================================================================
         
-    #===========================================================================
-    # ## cvxpy mu test
-    # testName = 'cvxpy_mutest'
-    # for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2, 1e-4, 1e-6]:
-    #     settings.append( {'problemType': 4, 'mu': mu} )
-    #===========================================================================
+    ## cvxpy mu test
+    testName = 'cvxpy_mutest'
+    for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2, 1e-4, 1e-6]:
+        settings.append( {'problemType': 4, 'mu': mu} )
     
     #===========================================================================
     # ## spgl settings tests ## it seems iterations after the first few hundred don't have a huge effect, at least for the a-priori case. Using the complex values also seems irrelevant, and the best results have large taus
