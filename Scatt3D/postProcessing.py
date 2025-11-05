@@ -159,17 +159,17 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #                 settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
     #===========================================================================
     
-    ## cvxpy sigma test
-    testName = 'cvxpy_sigmatest'
-    for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
-        settings.append( {'problemType': 2, 'sigma': sigma} )
+    #===========================================================================
+    # ## cvxpy sigma test
+    # testName = 'cvxpy_sigmatest'
+    # for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+    #     settings.append( {'problemType': 2, 'sigma': sigma} )
+    #===========================================================================
         
-    #===========================================================================
-    # ## cvxpy tau test
-    # testName = 'cvxpy_tautest'
-    # for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
-    #     settings.append( {'problemType': 3, 'tau': tau} )
-    #===========================================================================
+    ## cvxpy tau test
+    testName = 'cvxpy_tautest'
+    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+        settings.append( {'problemType': 3, 'tau': tau} )
         
     #===========================================================================
     # ## cvxpy mu test
