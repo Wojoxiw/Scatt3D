@@ -29,6 +29,8 @@ if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently
 
 
 def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-5, tau=2e-1, mu=1e2, verbose=True, solve_settings={}): ## put this in a function to allow gc?
+    if(solver=='CLARABEL'): ## some settings for this that maybe make a marginal difference in solve time
+        solve_settings = {'max_step_fraction': 0.95, 'tol_ktratio': 1e-5, 'tol_gap_abs': 1e-6, **solve_settings}
     N_x = np.shape(A)[1]
     x_cvxpy = cp.Variable(N_x, complex=True)
     if(problemType==0):
@@ -94,6 +96,9 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
     if(indices=='defect'):
         error = error + noiseError/2
+        
+    zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes)/np.sum(cell_volumes)
+    error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
     
     if(printIt):
         print(f'Reconstruction error: {error:.3e}')
@@ -145,7 +150,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
         
     #===========================================================================
     # ## CLARABEL settings tests
-    # testName = 'cvxpy_CLARABEL_settingstest' ## If I give large tolerances, it can solve faster but with worse results... just leaving settings at default
+    # testName = 'cvxpy_CLARABEL_settingstest' ## testing this, I see almost no difference between any runs. Presumably I could make the tolerances larger and accept a worse result... just picked the marginally fastest settings
     # for tolgab in [1e-10, 1e-8, 1e-7, 1e-6, 1e-5, 1e-4]:
     #     for tolkt in [1e-5, 1e-4, 1e-6, 1e-7]:
     #         for stepFrac in [.97, .98, .99, .995]:
@@ -154,12 +159,10 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #                 settings.append( {'solver': 'CLARABEL', 'problemType': 1, 'solve_settings': solvsetts} )
     #===========================================================================
     
-    #===========================================================================
-    # ## cvxpy sigma test
-    # testName = 'cvxpy_sigmatest'
-    # for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
-    #     settings.append( {'problemType': 2, 'sigma': sigma} )
-    #===========================================================================
+    ## cvxpy sigma test
+    testName = 'cvxpy_sigmatest'
+    for sigma in [-1, 1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
+        settings.append( {'problemType': 2, 'sigma': sigma} )
         
     #===========================================================================
     # ## cvxpy tau test
@@ -186,7 +189,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #===========================================================================
         
     #===========================================================================
-    # ## spgl sigma test
+    # ## spgl sigma test ## best results seems to come with many iterations, sigma between 1e-2 and 1e-5, 4 or 10 nprevs, and any x0
     # testName = 'spgl_sigmatest'
     # for sigma in [1e-4, 5e-4, 1e-3, 5e-3, 1e-2, 1e-5, 1e-6, 1e-7, 1e-8]:
     #     for iters in [250, 500, 1000, 2500, 9000]:
@@ -195,13 +198,15 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #                 settings.append( {'sigma': sigma, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
     #===========================================================================
                     
-    ## spgl tau test
-    testName = 'spgl_tautest'
-    for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
-        for iters in [250, 500, 1000, 2500, 9000]:
-            for prevs in [1, 3, 7, 10]:
-                for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
-                    settings.append( {'tau': tau, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+    #===========================================================================
+    # ## spgl tau test ## tau between 1e4 and 1e5, start with x0 of ones so it has to go down, small iter lim and n_prev_vals ?
+    # testName = 'spgl_tautest'
+    # for tau in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5]:
+    #     for iters in [250, 500, 1000, 2500, 9000]:
+    #         for prevs in [1, 3, 7, 10]:
+    #             for x0 in [np.hstack((epsr_ref, epsr_ref)), np.hstack((np.zeros(np.shape(epsr_ref)), np.zeros(np.shape(epsr_ref)))), np.hstack((np.ones(np.shape(epsr_ref)), np.ones(np.shape(epsr_ref))))]:
+    #                 settings.append( {'tau': tau, 'iter_lim': iters, 'n_prev_vals': prevs, 'iscomplex': True, 'x0': x0} )
+    #===========================================================================
            
     num = len(settings)
     for i in range(num):
@@ -228,10 +233,11 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
             t.start()
             starTime = timer()
             
-            xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, **settings[i])
-            size = np.size(epsr_ref)
-            x_rec = xsol[:size] + 1j*xsol[size:]
-            #x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i])
+            #xsol, resid, grad, info = spgl1.spgl1(A, b, verbosity=1, **settings[i]) ## for spgl
+            #size = np.size(epsr_ref)
+            #x_rec = xsol[:size] + 1j*xsol[size:]
+            
+            x_rec = cvxpySolve(A, b, cell_volumes=cell_volumes, verbose=True, **settings[i]) ## for cvxpy
             
             ts[i] = timer() - starTime
             errors[i] = reconstructionError(x_rec, epsr_ref, epsr_dut, cell_volumes)
@@ -275,7 +281,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     
     fig.tight_layout()
     fig.tight_layout() ## need both of these for some reason
-    #plt.savefig(prob.dataFolder+prob.name+testName+'_post-processing_solversettingsplot.png')
+    plt.savefig('data3D/'+testName+'_post-processing_solversettingsplot.png')
     
     nprint = min(num, 10)
     print(f'Top {nprint} Options #s:') ## lowest errors
@@ -285,7 +291,7 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
         print(settings[idxsort[k]])
         print()
     
-    plt.show()
+    #plt.show()
 
 def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     '''
@@ -631,15 +637,17 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         ## test other solver settings
         ##
         
-        ## a-priori
-        A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
-        Ak_ap = np.zeros((A1*2, A2*2)) ## real A
-        Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
-        Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
-        Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
-        Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
-        bk = np.hstack((np.real(b),np.imag(b))) ## real b
-        testSolverSettings(Ak_ap, bk, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        #=======================================================================
+        # ## a-priori
+        # A1, A2 = np.shape(A_ap)[0], np.shape(A_ap)[1]
+        # Ak_ap = np.zeros((A1*2, A2*2)) ## real A
+        # Ak_ap[:A1,:A2] = np.real(A_ap) ## A11
+        # Ak_ap[:A1,A2:] = -1*np.imag(A_ap) ## A12
+        # Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
+        # Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
+        # bk = np.hstack((np.real(b),np.imag(b))) ## real b
+        # testSolverSettings(Ak_ap, bk, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        #=======================================================================
         
         #=======================================================================
         # ## non a-priori
@@ -653,7 +661,7 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         # testSolverSettings(Ak, bk, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
         #=======================================================================
         
-        #testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
         return
         ##
         ##
@@ -719,9 +727,8 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         f.close()
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-        sigma = -1#5e-2 ## guess for a good sigma
-        tau = 6e4 ## guess for a good tau
-        iter_lim = 250
+        sigma = 1e-2 ## guess for a good sigma
+        iter_lim = 5633
         spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 1}
           
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
@@ -746,7 +753,9 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 24)
         print(f'Timestep 24 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
-          
+        
+        tau = 6e4 ## guess for a good tau
+        iter_lim = 633
         xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
         x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
         cells.x.array[:] = x_temp + 0j

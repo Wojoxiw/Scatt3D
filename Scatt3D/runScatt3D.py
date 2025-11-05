@@ -132,9 +132,25 @@ if __name__ == '__main__':
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         
+    def testSlightlyShiftedExampleNoDefects(h = 1/15, degree = 1, dutOnRefMesh=False): ## Where the separate dut mesh has the object shifted by some amount
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_geom': ''} ## settings for the meshMaker
+        settingsDut = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, .03]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_geom': ''} ## settings for the meshMaker
+        if(dutOnRefMesh):
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+        else:
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+        dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settingsDut)
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        #refMesh.plotMeshPartition()
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+        prob.saveEFieldsForAnim(True)
+        prob.saveEFieldsForAnim(False)
+        prevRuns.memTimeAppend(prob)
+        
     def testLargeExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing a large-object example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        settings = {'N_antennas': 9, 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h, 'defect_height': .37, 'defect_radius': .17} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
+        settings = {'N_antennas': 9, 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h, 'defect_height': .37, 'defect_radius': .17, 'object_radius': 1.06} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
         if(dutOnRefMesh):
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **settings)
         else:
@@ -462,13 +478,21 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #runName = 'testingComplexObject' ## h=1/12
-    #testLargeExample(h=1/12, degree=1)
-    #postProcessing.solveFromQs(folder+runName, MPInum)
+    #===========================================================================
+    # runName = 'testingComplexObject' ## h=1/12
+    # testLargeExample(h=1/12, degree=1)
+    # postProcessing.solveFromQs(folder+runName, MPInum)
+    #===========================================================================
     
     #runName = 'testingShiftedDut' ## h=1/12
     #testShiftedExample(h=1/12, degree=1)
     #postProcessing.solveFromQs(folder+runName, MPInum)
+    
+    #===========================================================================
+    # runName = 'testingSlightlyShiftedDutNoDefects' ## h=1/12
+    # testSlightlyShiftedExampleNoDefects(h=1/12, degree=1)
+    # postProcessing.solveFromQs(folder+runName, MPInum)
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunDeg1'

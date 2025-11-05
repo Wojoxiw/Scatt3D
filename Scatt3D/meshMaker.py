@@ -254,42 +254,32 @@ class MeshInfo():
                 obj = gmsh.model.occ.fuse([(self.tdim, part1)], [(self.tdim, part2),(self.tdim, part3),(self.tdim, part4)])[0][0] ## fuse with everything except defect wing ## [0][0] to get  dimTags
                 matDimTags.append(obj) ## the material fills the object
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
+            defectDimTags = []
+            defectDimTags2 = [] ## for some geometry, have a second set of dimTags so it can be set to a different epsr
             if(self.defect_geom == 'cylinder'):
-                def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too (I have not found a working way to do this with gmsh)
-                    dimTags = []
-                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
-                    ## apply some rotations around the origin, and each axis
-                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 1, 0, 0, self.defect_angles[0])
-                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
-                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
-                    dimTags.append((self.tdim, defect1))
-                    
-                    ## also a second cylinder
-                    defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/2, self.defect_radius/2)
-                    dimTags.append((self.tdim, defect2))
-                    return dimTags
+                defectDimTags = []
+                defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
+                ## apply some rotations around the origin, and each axis
+                gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 1, 0, 0, self.defect_angles[0])
+                gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
+                gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
+                defectDimTags.append((self.tdim, defect1))
+                
+                ## also a second cylinder
+                defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/2, self.defect_radius/2)
+                defectDimTags.append((self.tdim, defect2))
             elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
-                def makeDefect(): ## use a function so I can mark corresponding cells in the reference mesh too (I have not found a working way to do this with gmsh)
-                    dimTags = []
-                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## small cylinder centered on the origin
-                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.17)
-                    
-                    defect2 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/8,0,0,self.defect_height/4, self.defect_radius*0.3) ## tall cylinder back in the thing
-                    gmsh.model.occ.rotate([(self.tdim, defect2)], 0, 0, 0, 0, 1, 0, 30*pi/180)
-                    gmsh.model.occ.translate([(self.tdim, defect2)], -self.object_scale*0.61, -self.object_scale*0.18, self.object_scale*0.18)
-                    
-                    dimTags.append((self.tdim, defect1))
-                    dimTags.append((self.tdim, defect3))
-                    dimTags2 = [] ## for this geometry, have a second set of dimTags so it can be set to a different epsr
-                    dimTags2.append((self.tdim, defect2))
-                    return dimTags, dimTags2
+                defectDimTags = []
+                defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## small cylinder centered on the origin
+                gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.17)
+                
+                defect2 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/8,0,0,self.defect_height/4, self.defect_radius*0.3) ## tall cylinder back in the thing
+                gmsh.model.occ.rotate([(self.tdim, defect2)], 0, 0, 0, 0, 1, 0, 30*pi/180)
+                gmsh.model.occ.translate([(self.tdim, defect2)], -self.object_scale*0.61, -self.object_scale*0.18, self.object_scale*0.18)
+                defectDimTags.append((self.tdim, defect1))
+                defectDimTags.append((self.tdim, defect3))
+                defectDimTags2.append((self.tdim, defect2))
             if(not self.reference):
-                defectDimTags = makeDefect()
-                if(self.defect_geom == 'complex1'): ## not just the one set of defects
-                    defectDimTags2 = defectDimTags[1]
-                    defectDimTags = defectDimTags[0]
-                else:
-                    defectDimTags2 = []
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             
             ## Make the domain and the PML

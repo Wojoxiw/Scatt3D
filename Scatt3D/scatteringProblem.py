@@ -61,7 +61,10 @@ class FEMmesh():
         self.Wspace = dolfinx.fem.functionspace(self.meshInfo.mesh, ("DG", 0))
         # Create measures for subdomains and surfaces
         self.dx = ufl.Measure('dx', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.cell_tags, metadata={'quadrature_degree': self.dxquaddeg})
-        self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker))
+        if(self.meshInfo.defect_geom == 'complex1'):
+            self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker, self.meshInfo.defect_marker2))
+        else:
+            self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker))
         self.dx_pml = self.dx(self.meshInfo.pml_marker)
         self.ds = ufl.Measure('ds', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.facet_tags) ## changing quadrature degree on ds/dS doesn't seem to have any effect
         self.dS = ufl.Measure('dS', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.facet_tags) ## capital S for internal facets (shared between two cells?)
