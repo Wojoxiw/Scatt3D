@@ -193,8 +193,8 @@ class MeshInfo():
             gmsh.model.add('The Model') ## name for the whole thing
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.h)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.h)
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.h/4)
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.h*2)
             gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
             gmsh.logger.start() ## I don't know what these logs are, or how to view them
              
@@ -368,8 +368,23 @@ class MeshInfo():
             pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, pec_surface)
             antenna_surface_markers = [gmsh.model.addPhysicalGroup(self.fdim, [s]) for s in antenna_surface]
             farfield_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, farfield_surface)
-            gmsh.model.occ.synchronize()
-            gmsh.model.mesh.generate(self.tdim)
+            
+            if(True): ### one option - Try to reduce the mesh size within the object to h/2, h outside. Reality has h/2 inside, slow dropoff to h outside
+                objectMeshField = gmsh.model.mesh.field.add("Constant")
+                gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/2)
+                gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
+                gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [x[1] for x in matDimTags+defectDimTags+defectDimTags2])
+                 
+                domainMeshField = gmsh.model.mesh.field.add("Constant")
+                gmsh.model.mesh.field.setNumber(domainMeshField, "VIn", self.h)
+                 
+                minMeshField = gmsh.model.mesh.field.add("Min") ## currently this is the same as just using the one constant field
+                gmsh.model.mesh.field.setNumbers(minMeshField, "FieldsList", [objectMeshField, domainMeshField])
+ 
+                gmsh.model.mesh.field.setAsBackgroundMesh(minMeshField)
+                
+                gmsh.model.occ.synchronize()
+                gmsh.model.mesh.generate(self.tdim)
             #gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out
             
             ## Apparently gmsh's Python bindings don't allow all that I need for the below to work...

@@ -112,8 +112,8 @@ if __name__ == '__main__':
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
-        prob.saveEFieldsForAnim(True)
-        prob.saveEFieldsForAnim(False)
+        #prob.saveEFieldsForAnim(True)
+        #prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         
     def testShiftedExample(h = 1/15, degree = 1, dutOnRefMesh=False): ## Where the separate dut mesh has the object shifted by some amount
@@ -465,7 +465,7 @@ if __name__ == '__main__':
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    #testFullExample(h=1/4.3, degree=2)
+    #testFullExample(h=1/13, degree=1)
     postProcessing.solveFromQs(folder+runName, MPInum, solutionName='')
     
     #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
@@ -495,9 +495,22 @@ if __name__ == '__main__':
     #===========================================================================
     
     #===========================================================================
-    # runName = 'testRunDeg1'
-    # postProcessing.solveFromQs('data3D/'+runName, MPInum)
+    # for oh in np.arange(2.5, 5, 7): ## degree 3
+    #     h = 1/oh
+    #     runName = f'degree3ho{oh:.1f}'
+    #     testFullExample(h=1/oh, degree=3)
+    #     
+    # for oh in np.arange(3, 7.45, 7): ## degree 2
+    #     h = 1/oh
+    #     runName = f'degree3ho{oh:.1f}'
+    #     testFullExample(h=1/oh, degree=3)
+    #     
+    # for oh in np.arange(3, 17, 7): ## degree 1
+    #     h = 1/oh
+    #     runName = f'degree3ho{oh:.1f}'
+    #     testFullExample(h=1/oh, degree=3)
     #===========================================================================
+        
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

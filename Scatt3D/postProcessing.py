@@ -28,7 +28,7 @@ if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently
     np.lib.isreal = np.isreal
 
 
-def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-5, tau=2e-1, mu=1e2, verbose=True, solve_settings={}): ## put this in a function to allow gc?
+def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-2, tau=5e4, mu=1e2, verbose=True, solve_settings={}): ## put this in a function to allow gc?
     if(solver=='CLARABEL'): ## some settings for this that maybe make a marginal difference in solve time
         solve_settings = {'max_step_fraction': 0.95, 'tol_ktratio': 1e-5, 'tol_gap_abs': 1e-6, **solve_settings}
     N_x = np.shape(A)[1]
@@ -95,7 +95,7 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual)) * cell_volumes/np.sum(cell_volumes))
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
     if(indices=='defect'):
-        error = error + noiseError/2
+        error = error #+ noiseError/4
         
     zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes)/np.sum(cell_volumes)
     error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
@@ -496,8 +496,10 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w')  
         f.write_mesh(mesh)
         cells.x.array[:] = epsr_ref + 0j
-        f.write_function(cells, -1)
+        f.write_function(cells, -2)
         cells.x.array[:] = epsr_dut + 0j
+        f.write_function(cells, -1)
+        cells.x.array[:] = epsr_dut-epsr_ref + 0j
         f.write_function(cells, 0)
         f.close()
         
