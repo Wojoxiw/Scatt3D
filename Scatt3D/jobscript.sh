@@ -4,11 +4,11 @@
 #SBATCH -A lu2024-2-93 ##from projinfo command
 
 #SBATCH -N 1 ##number of nodes that will be allocated - must use --ntasks-per-node or --cpus-per-task to use more than 1 core per node
-#SBATCH --tasks-per-node=12 ##number of cores used per task? - up to 48 per node for COSMOS. Presumably this is what I want, using MPI
+#SBATCH --tasks-per-node=48 ##number of cores used per task? - up to 48 per node for COSMOS. Presumably this is what I want, using MPI
 
 #SBATCH -o jobresults/%j.out ## result filename, %j becomes the job number
 #SBATCH -e jobresults/%j.err ## errors filename - should be empty unless an error occurs
-#SBATCH -J cvxmu ##puts a job name, to identify it
+#SBATCH -J deg3runs ##puts a job name, to identify it
 
 cat $0 ## unix command - outputs this script to the top of the job's output file
 echo ## newline

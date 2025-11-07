@@ -94,7 +94,7 @@ if __name__ == '__main__':
             
     def testRun(h = 1/2): ## A quick test run to check it works. Default settings make this run in a second
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='None', N_antennas=1)
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', N_antennas=1)
         prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, Nf=1)
@@ -177,6 +177,18 @@ if __name__ == '__main__':
         if(showPlots):
             prob.calcNearField(direction='side')
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
+        prevRuns.memTimeAppend(prob)
+        
+    def testPatchPattern(h = 1/12, degree=1): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+        runName = 'patchPatternTest'
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patch', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
+        #refMesh.plotMeshPartition()
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        freqs = np.linspace(10e9, 12e9, 1)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='patch', freqs = freqs, fem_degree=degree)
+        prob.saveEFieldsForAnim()
+        prob.calcFarField(reference=True, plotFF=True, showPlots=True)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -458,15 +470,15 @@ if __name__ == '__main__':
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    runName = 'testRunSmall' ## h=1/8
+    #runName = 'testRunSmall' ## h=1/8
     #runName = 'testRunLarger' ## h=1/18
     
-    #testRun(h=1/3)
+    #testRun(h=1/2)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
     #testFullExample(h=1/13, degree=1)
-    postProcessing.solveFromQs(folder+runName, MPInum, solutionName='')
+    #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='')
     
     #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, MPInum, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
@@ -477,6 +489,8 @@ if __name__ == '__main__':
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
+    
+    #testPatchPattern(h=1/10, degree=1)
     
     #===========================================================================
     # runName = 'testingComplexObject' ## h=1/12
@@ -494,17 +508,17 @@ if __name__ == '__main__':
     # postProcessing.solveFromQs(folder+runName, MPInum)
     #===========================================================================
     
+    for oh in np.arange(2.5, 5, 7): ## degree 3
+        h = 1/oh
+        runName = f'degree3ho{oh:.1f}'
+        testFullExample(h=1/oh, degree=3)
+         
     #===========================================================================
-    # for oh in np.arange(2.5, 5, 7): ## degree 3
-    #     h = 1/oh
-    #     runName = f'degree3ho{oh:.1f}'
-    #     testFullExample(h=1/oh, degree=3)
-    #     
     # for oh in np.arange(3, 7.45, 7): ## degree 2
     #     h = 1/oh
     #     runName = f'degree3ho{oh:.1f}'
     #     testFullExample(h=1/oh, degree=3)
-    #     
+    #      
     # for oh in np.arange(3, 17, 7): ## degree 1
     #     h = 1/oh
     #     runName = f'degree3ho{oh:.1f}'

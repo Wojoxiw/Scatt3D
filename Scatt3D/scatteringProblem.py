@@ -164,7 +164,7 @@ class Scatt3DProblem():
                  computeRef = True, # If computing immediately, computes the reference simulation, where defects are not included
                  ErefEdut = False, # compute optimization vectors with Eref*Edut, a less-approximated version of the equation. Should provide better results, but can only be used in simulation
                  dutOnRefMesh = True, # If true, rather than compute DUT things on its own, separate mesh, then interpolate between meshes (gives error for large, higher-order meshes) - just use the same mesh. Must have DUT mesh
-                 excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise 'antennas' excitation as normal
+                 excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise 'antennas' excitation for the waveguides as normal. 'patch' for the patch antenna test
                  PW_dir = np.array([0, 0, 1]), ## incident direction of the plane-wave, if used above. Default is coming in from the z-axis, to align with miepython
                  PW_pol = np.array([1, 0, 0]), ## incident polarization of the plane-wave, if used above. Default is along the x-axis
                  makeOptVects = True, ## if True, compute and saves the optimization vectors. Turn False if not needed
@@ -342,6 +342,17 @@ class Scatt3DProblem():
             :param x: Some vector of positions you want to find the field on
             """
             Ep = np.zeros((3, x.shape[1]), dtype=complex)
+            if(self.excitation == 'patch'): ## for now, just quickly return.
+                centre = np.array([meshInfo.feed_offsetx, 0, -meshInfo.antenna_height/2])## centre of the radiating face
+                y = (x.T-centre).T ## local position
+                r = np.sqrt(y[0]**2 + y[1]**2)
+                rhat = np.array([y[0], y[1], y[0]*0])/r
+                E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor
+                Ep = Ep + E
+                Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
+                Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
+                Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
+                return Ep
             for p in range(meshInfo.N_antennas):
                 center = meshInfo.pos_antennas[p]
                 phi = -meshInfo.rot_antennas[p] # Note rotation by the negative of antenna rotation
@@ -358,10 +369,10 @@ class Scatt3DProblem():
                 #simple, inexact confinement conditions
                 #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
                 ##if I confine it to just the 'empty face' of the waveguide thing. After testing, this seems to make no difference to just selecting the entire antenna via a sphere, with the above line
-                Ep_loc[:, np.abs(loc_x[0])  > meshInfo.antenna_width*.54] = 0 ## no field outside of the antenna's width
-                Ep_loc[:, np.abs(loc_x[1])  > meshInfo.antenna_depth*.04] = 0 ## no field outside of the antenna's depth - origin should be on this face - it is a face so no depth
+                Ep_loc[:, np.abs(loc_x[0])  > meshInfo.antenna_width*.5] = 0 ## no field outside of the antenna's width
+                Ep_loc[:, np.abs(loc_x[1])  > 1e-5] = 0 ## no field outside of the antenna's depth - origin should be on this face - it is a face so no depth... I take a small depth (maybe not necessary)
                 #for both
-                Ep_loc[:,np.abs(loc_x[2]) > meshInfo.antenna_height*.54] = 0 ## no field outside of the antenna's height.. plus a small extra (no idea if that matters)
+                Ep_loc[:,np.abs(loc_x[2]) > meshInfo.antenna_height*.5] = 0 ## no field outside of the antenna's height
                 
                 Ep_global = np.dot(Rmat, Ep_loc)
                 Ep = Ep + Ep_global
@@ -379,6 +390,7 @@ class Scatt3DProblem():
                 E_pw[2, :] = self.PW_pol[2] ## just use the same amplitude as the polarization has
                 k_pw = k*self.PW_dir ## direction (should be given normalized)
                 E_pw[:] = E_pw[:]*np.exp(-1j*np.dot(k_pw, x))
+            
             return E_pw
     
         #=======================================================================
@@ -813,23 +825,19 @@ class Scatt3DProblem():
             #self.epsr.name = 'epsr_dut'
             xdmf.write_function(FEMm.epsr, -1)
         elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-            try:
-                epsr_dut_dut = dolfinx.fem.Function(self.FEMmesh_DUT.Wspace)
-                epsr_dut_dut.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
-                epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
-                
-                fine_mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
-                num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
-                cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                epsr_dut.interpolate_nonmatching(epsr_dut_dut, cells, interpolation_data=interpolation_data)
-                epsr_dut.x.scatter_forward()
-                FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
-                #self.epsr.name = 'epsr_dut'
-                xdmf.write_function(FEMm.epsr, -1)
-            except Exception as error: ## sometimes get RuntimeError: GJK error - max iteration limit reached when creating interpolation data...
-                #if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
-                print(f'Rank {self.comm.rank}: Error creating interpolation data (probably): {error}')
+            epsr_dut_dut = dolfinx.fem.Function(self.FEMmesh_DUT.Wspace)
+            epsr_dut_dut.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
+            epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
+            
+            fine_mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
+            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Wspace, self.FEMmesh_DUT.Wspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            epsr_dut.interpolate_nonmatching(epsr_dut_dut, cells, interpolation_data=interpolation_data)
+            epsr_dut.x.scatter_forward()
+            FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
+            #self.epsr.name = 'epsr_dut'
+            xdmf.write_function(FEMm.epsr, -1)
             
         
         if(not DUTMesh and not skipQs): ## Do the interpolation to find qs, then save them
@@ -976,7 +984,7 @@ class Scatt3DProblem():
             print('   '+self.name+textextra+' E-fields animation complete.')
             sys.stdout.flush()
             
-    def calcFarField(self, reference, compareToMie = False, showPlots=False, returnConvergenceVals=False, angles = None):
+    def calcFarField(self, reference, compareToMie = False, showPlots=False, returnConvergenceVals=False, angles = None, plotFF=False):
         '''
         Calculates the farfield at each frequency point at at given angles, using the farfield boundary in the mesh - must have mesh.FF_surface = True
         Returns an array of [E_theta, E_phi] at each angle, to the master process only
@@ -985,6 +993,7 @@ class Scatt3DProblem():
         :param showPlots: If True, plt.show(). Plots are still saved, though. This must be False for cluster use
         :param returnConvergenceVals: If True, returns some convergence values instead of the regular Mie scattering comparison or anything else. Angles should be default for this, so first/second are forward/backward
         :param angles: Is an array of theta and phi angles to calculate at [in degrees]. Incoming plane waves should be from (90, 0). Default asks for forward and backward scattering, depending on what is being asked for.
+        :param plotFF: If True, ignores everything else and just plots the FF-pattern, currently along 2 cuts
         '''
         t1 = timer()
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
@@ -997,9 +1006,9 @@ class Scatt3DProblem():
             FEMm = self.FEMmesh_DUT
             sols = self.solutions_dut
         ## check what angles to compute
-        if(self.Nf > 2 and not returnConvergenceVals):
+        if(self.Nf > 2 and not returnConvergenceVals and not plotFF):
             angles = np.array([[0, 0], [180, 0]]) ## forward + backward
-        elif(returnConvergenceVals or compareToMie):
+        elif(returnConvergenceVals or compareToMie or plotFF):
             nvals = 2*int(360/4) ## must be divisible by 2
             angles = np.zeros((nvals*2, 2))
             angles[:nvals, 0] = np.linspace(-180, 180, nvals) ## first half is the H-plane
@@ -1095,7 +1104,7 @@ class Scatt3DProblem():
                     
         if(self.comm.rank == 0): ## plotting and returning
                                         
-            if(compareToMie and self.Nf < 3): ## make some plots by angle if few freqs. (assuming here that we have many angles)
+            if((compareToMie and self.Nf < 3) or plotFF): ## make some plots by angle if few freqs. (assuming here that we have many angles)
                 for b in range(self.Nf):
                     fig = plt.figure()
                     ax1 = plt.subplot(1, 1, 1)
@@ -1108,29 +1117,31 @@ class Scatt3DProblem():
                     ax1.plot(angles[:nvals, 0], mag[:nvals], label = 'Integrated (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
                     ax1.plot(angles[nvals:, 0], mag[nvals:], label = 'Integrated (E-plane)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
                     
-                    ##Calculate Mie scattering
                     lambdat = c0/freq
-                    m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
-                    mie = np.zeros_like(angles[:, 1])
-                    x = 2*pi*FEMm.meshInfo.object_radius/lambdat
-                    for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
-                        if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
-                            mie[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi since it seems backwards => forwards
-                        else: ## if not, we are changing theta angles and in the parallel plane
-                            mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi/2 since it seems backwards => forwards
-                    
-                    ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
-                    ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = 1.2, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
-                    
-                    ##plot error
-                    ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = 1.2, color = 'blue', linestyle = ':')
-                    ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = 1.2, color = 'red', linestyle = ':')
-                    print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
-                    plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
+                    if(compareToMie): ##Calculate Mie scattering
+                        m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
+                        mie = np.zeros_like(angles[:, 1])
+                        x = 2*pi*FEMm.meshInfo.object_radius/lambdat
+                        for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
+                            if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
+                                mie[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi since it seems backwards => forwards
+                            else: ## if not, we are changing theta angles and in the parallel plane
+                                mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi/2 since it seems backwards => forwards
+                        
+                        ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
+                        ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = 1.2, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
+                        
+                        ##plot error
+                        ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = 1.2, color = 'blue', linestyle = ':')
+                        ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = 1.2, color = 'red', linestyle = ':')
+                        print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
+                        plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
+                    else:
+                        plt.title(f'FF E-field Intensity ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
                     ax1.legend()
                     #ax1.set_yscale('log')
                     ax1.grid(True)
-                    plt.savefig(self.dataFolder+self.name+'miecomp.png')
+                    plt.savefig(self.dataFolder+self.name+'FFs.png')
                     if(showPlots):
                         plt.show()
                     plt.clf()

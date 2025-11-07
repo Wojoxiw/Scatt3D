@@ -1,0 +1,203 @@
+This file describes how I installed the necessary packages and what I need to run before/after using the jobscript.sh (using LUNARC's COSMOS computing cluster, and a local wsl installation)
+Can use 'projinfo' to see project, user, and time allocation (must first deactivate mamba/conda). 'snicquota' shows storage quotas.
+#Installation should only need to be run once, to set up/install packages on the submission node. It needs to be activated every log-in, though.
+
+First download my python scripts from github with: 
+
+git clone https://github.com/Wojoxiw/Scatt3D
+cd Scatt3D/	
+git checkout
+## to update the scripts (overwriting local changes {I make none})
+git fetch --all 
+git reset --hard origin/master
+
+Then install the needed packages in an env:
+module load foss
+module save ## to make this default so it autoloads. Currently not doing this... just in case?
+
+
+Once stuff is installed, must make sure the env is activated (and test the 'textExample.py' script for ImportErrors) before running jobscript:
+module load foss/2024.05 ## I guess a new version was released, which gives an error (would need to reinstall to use it) - so use this ver.
+. ./spack/share/spack/setup-env.sh ## when in the folder containing the spack folder
+spack env activate Scatt3D
+spack load py-pip
+python testExample.py
+
+To run the jobscript:
+sbatch jobscript.sh
+
+Then sync output folder with my local output folder, so I have the files locally... by running the following script locally, afterward (may need to deactivate spack environment for this)
+
+rsync -ar --info=progress2 alepal@cosmos.lunarc.lu.se:/home/alepal/Alexandros/scatt3D/Scatt3D/Scatt3D/data3D/ "/mnt/d/Microwave Imaging/Scatt3D/Scatt3D/data3DLUNARC"
+cp -p "/mnt/d/Microwave Imaging/Scatt3D/Scatt3D/data3DLUNARC/prevRuns.npz" "/mnt/d/Microwave Imaging/Scatt3D/Scatt3D/data3D/prevRuns.npz"
+## then move over the new prevRuns file for use
+
+#rsync -ar --info=progress2 alepal@cosmos.lunarc.lu.se:/home/alepal/Alexandros/scatt3DTesting/DD2358-Stuff/DD2358_Proj/Project/prevRuns.info "/mnt/d/Microwave Imaging/repository/DD2358_Proj/Project/prevRuns.info" # this is unneeded now
+
+Some info:
+## login with ssh cosmos.lunarc.lu.se -l alepal
+## or ssh alepal@cosmos.lunarc.lu.se
+## COSMOS node local disk has ~1.6 TB SSD, default 5300MB RAM per core. can do #SBATCH --mem-per-cpu=10600
+## variable SNIC_TMP addresses the node-local disk
+
+#### find job with squeue -u alepal, or squeue --me
+#read something? with more slurm-job#.out
+##cancel job with scancel job#
+## queue jobs sequentially with sbatch -d afterok:firstjobid run_script.sh
+
+
+# Actual installation (starting with deleting a previous one). Could also be a /home/alepal/.spack to remove?
+##Installing PETSc with HPDDM:
+module load foss/2024.05
+# spacktest:
+git clone https://github.com/spack/spack.git
+. ./spack/share/spack/setup-env.sh
+spack env create Scatt3D
+spack env activate Scatt3D
+spack compiler find
+spack external find openmpi
+
+spack install --add python@3.12 ## need less than v. 3.13 for dolfinx currently?
+
+spack add py-cython py-setuptools py-numpy mumps~openmp ## get openmp error after installing py-fenics-dolfinx??
+spack install
+git clone -b release https://gitlab.com/petsc/petsc.git
+cd petsc
+
+#export MPI_HOME=/sw/easybuild_milan/software/OpenMPI/5.0.3-GCC-13.3.0 ## try to make sure libpressio doesn't give an error about finding mpi.h in petsc
+#export MPI_C_INCLUDE_PATH=$MPI_HOME/include
+#export MPI_C_LIBRARIES=$MPI_HOME/lib/libmpi.so
+#export MPICC=$MPI_HOME/bin/mpicc
+#export MPICXX=$MPI_HOME/bin/mpicxx
+#export MPIFC=$MPI_HOME/bin/mpif90
+
+
+./configure --with-scalar-type=complex --with-petscpy --download-slepc --download-hpddm --enable-download-hpddm --with-mumps=1 --with-mumps-dir=$(spack location -i mumps) --with-scalapack=1 MPICC=$MPICC MPICXX=$MPICXX MPIFC=$MPIFC --with-mpi=1 --with-pkg-config=1 --prefix=/home/alepal/Alexandros/petsc-install ## then make and check
+
+export PYTHONPATH=/home/alepal/Alexandros/petsc-install/lib:$PYTHONPATH ## add petsc4py to the path so spack python can see it
+### add it to spack's packages, after deactivating spack:
+emacs spack/var/spack/environments/Scatt3D/spack.yaml
+petsc:
+      externals:
+      - spec: petsc@3.23.6+complex+mumps+hpddm
+        prefix: /home/alepal/Alexandros/petsc-install
+      buildable: false
+py-petsc4py:
+      externals:
+      - spec: py-petsc4py@3.23.6
+        prefix: /home/alepal/Alexandros/petsc-install/lib/petsc4py
+      buildable: false
+      
+spack add libpressio+mpi fenics-dolfinx+adios2 ^petsc py-fenics-dolfinx+petsc4py cflags="-O3" fflags="-O3 -ffree-line-length-none"
+spack install
+
+
+spack add py-gmsh py-scipy py-memory-profiler py-matplotlib
+spack install
+spack env deactivate
+spack env activate Scatt3D
+
+#spack find -p libfabric ## export this path as the libfabric library path
+#export LD_LIBRARY_PATH=.../lib:$LD_LIBRARY_PATH
+
+
+## Must reactivate environment afterwards, or I get some libfabric 1.8 error
+## May get an error on libpressio or other packages - try adding it with the above flags, then spack concretize --force, then install again
+## Then install miepython (not sure if this can be done with the previous steps)
+spack install py-pip
+spack load py-pip ## I suspect this causes an error to show up about multiple MPI libraries - it does not seem to matter
+pip install miepython PyScalapack cvxpy cvxopt
+
+
+
+# on wsl, spack needs fortran:
+git clone https://github.com/spack/spack.git
+. ./spack/share/spack/setup-env.sh
+spack env create Scatt3D
+spack env activate Scatt3D
+spack install --add python@3.12
+
+spack add mpich openblas scalapack py-cython py-setuptools py-numpy mumps^mpich
+spack install
+
+git clone -b release https://gitlab.com/petsc/petsc.git
+cd petsc
+./configure --with-scalar-type=complex --with-petsc4py --download-slepc --download-hpddm --enable-download-hpddm --download-mumps --download-scalapack --with-pkg-config=1 --with-mpi=1 --with-mpich --prefix=/mnt/d/petsc-install
+export PYTHONPATH=/mnt/d/petsc-install/lib:$PYTHONPATH
+emacs spack/var/spack/environments/Scatt3D/spack.yaml
+
+petsc:
+      externals:
+      - spec: petsc@3.23.6+complex+mumps+hpddm
+        prefix: /mnt/d/petsc-install
+      buildable: false
+
+spack add libpressio+mpi fenics-dolfinx+adios2 ^petsc py-fenics-dolfinx+petsc4py cflags="-O3" fflags="-O3 -ffree-line-length-none"
+spack add py-gmsh py-scipy py-memory-profiler py-matplotlib py-numpy py-h5py
+spack install
+spack env deactivate
+spack env activate Scatt3D
+spack install py-pip
+spack load py-pip ## I suspect this causes an error to show up about multiple MPI libraries - it does not seem to matter
+pip install miepython PyScalapack
+
+
+##
+OLD STUFF BELOW - DEPRECATED
+##
+Old way to install: use mamba/conda to install. This is easy and faster, but cannot use MPI across nodes. Also current way to install on local computer
+Can install mamba from https://github.com/conda-forge/miniforge#mambaforge, otherwise just use conda
+
+mamba create --name Scatt3D
+mamba activate Scatt3D
+# mamba env remove -n Scatt3D # to remove it for reinstalling.
+mamba install fenics-dolfinx mpich petsc=*=complex*
+mamba install scipy matplotlib python-gmsh pyvista pyvistaqt spgl1 h5py psutil memory_profiler numpy miepython cvxpy cvxopt
+pip install PyScalapack imageio[ffmpeg]
+##
+
+Potential jobscript thing to send/retrieve data to node-local disks:
+
+## NODE LOCAL DISK
+## if using node-local disk, move files over to it before running, then back after
+srun -n $SLURM_NNODES -N $SLURM_NNODES cp -p runScatt3D.py $SNIC_TMP ## reads this file into the node-local disks/execution directories. I first update it with git pull origin master
+srun -n $SLURM_NNODES -N $SLURM_NNODES cp -p meshMaker.py $SNIC_TMP
+srun -n $SLURM_NNODES -N $SLURM_NNODES cp -p memTimeEstimation.py $SNIC_TMP
+srun -n $SLURM_NNODES -N $SLURM_NNODES cp -p scatteringProblem.py $SNIC_TMP
+cd $SNIC_TMP ## go to that directory to make the data 3D folder so I can move my input file(s) there... then go back to move stuff.
+mkdir data3D ## Presumably (hopefully) the rank 0 process is here, so all files will be saved in this directory
+cd $SLURM_SUBMIT_DIR
+cp -p data3D/prevRuns.npz $SNIC_TMP"/data3D"
+cd $SNIC_TMP ## go to that directory to run the script
+
+#time python Scatt3D.py ### then run it... and time it
+export MPInum=12 ## number of MPI processes
+time mpirun -n $MPInum python runScatt3D.py ## run the main process, and time it
+#mpirun --bind-to core python runScatt3D.py
+
+# cp -p prevRuns.info $SLURM_SUBMIT_DIR ## copies this file out to whatever directory you were in when using sbatch jobscript.sh
+cp -rp data3D $SLURM_SUBMIT_DIR/ ## copy the data folder over also
+## NODE LOCAL DISK
+
+## OLD INSTALLATION METHOD on cluster
+module load foss/2025b
+rm -rf spack
+rm -rf .spack
+git clone https://github.com/spack/spack.git
+. ./spack/share/spack/setup-env.sh
+spack env create Scatt3D
+spack env activate Scatt3D
+spack add fenics-dolfinx+adios2@main ^petsc+complex+mumps py-fenics-dolfinx@main libpressio cflags="-O3" fflags="-O3"
+spack add py-gmsh py-scipy py-memory-profiler py-h5py py-matplotlib
+spack compiler find
+spack external find openmpi
+spack install
+spack env deactivate
+spack env activate Scatt3D
+## Must reactivate environment afterwards, or I get some libfabric 1.8 error
+## May get an error on libpressio or other packages - try adding it with the above flags, then spack concretize --force, then install again
+## Then install miepython (not sure if this can be done with the previous steps)
+spack install py-pip
+spack load py-pip ## I suspect this causes an error to show up about multiple MPI libraries - it does not seem to matter
+pip install miepython cvxpy cvxopt
+

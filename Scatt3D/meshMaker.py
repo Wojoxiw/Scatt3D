@@ -41,7 +41,8 @@ class MeshInfo():
                  dome_height = 0.5,
                  antenna_width = 0.7625, 
                  antenna_height = 0.3625,
-                 antenna_depth = 1/10,      
+                 antenna_depth = 1/10,
+                 antenna_type = 'waveguide',
                  N_antennas = 10,
                  antenna_radius = 0,
                  antenna_z_offset = 0,
@@ -75,6 +76,7 @@ class MeshInfo():
         :param antenna_width: Width of antenna apertures, 22.86 mm
         :param antenna_height: Height of antenna apertures
         :param antenna_depth: Depth of antenna box
+        :param antenna_type: If 'waveguide', use the above geometry. If 'patch', testing patch antenna
         :param N_antennas:
         :param antenna_radius: Radius at which antennas are placed
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
@@ -137,6 +139,7 @@ class MeshInfo():
         ## Antenna geometry/other parameters:
         
         self.N_antennas = N_antennas ## number of antennas
+        self.antenna_type = antenna_type
         if(antenna_radius == 0): ## if not given a radius, put them near the edge of the domain
             self.antenna_radius = self.domain_radius - antenna_height * self.lambda0
         else:
@@ -145,6 +148,15 @@ class MeshInfo():
         self.antenna_width = antenna_width * self.lambda0
         self.antenna_height = antenna_height * self.lambda0
         self.antenna_depth = antenna_depth * self.lambda0
+        if(self.antenna_type == 'patch'): ## specify the dimensions here, for a patch active near 10 GHz
+            self.antenna_width = 26e-3 ## the width
+            self.antenna_height = 1e-3 ## the height
+            self.antenna_depth = 18e-3 ## the length (in x)
+            self.patch_length = 9e-3
+            self.patch_width = 13e-3
+            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
+            self.feed_offsetx = 2e-3
+        
         self.phi_antennas = np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## placement angles
         self.pos_antennas = np.array([[self.antenna_radius*np.cos(phi), self.antenna_radius*np.sin(phi), self.antenna_z_offset] for phi in self.phi_antennas]) ## placement positions
         self.rot_antennas = self.phi_antennas + np.pi/2 ## rotation so that they face the center
@@ -159,7 +171,7 @@ class MeshInfo():
             self.object_length = object_radius * self.lambda0
         elif(object_geom == 'complex1'):
             self.object_scale = object_radius * self.lambda0
-        elif(object_geom == 'None'):
+        elif(object_geom == '' or object_geom is None):
             pass
         else:
             print('Nonvalid object geom, exiting...')
@@ -175,7 +187,7 @@ class MeshInfo():
         elif(defect_geom == 'complex1'):
             self.defect_radius = defect_radius * self.lambda0
             self.defect_height = defect_height * self.lambda0
-        elif(defect_geom == ''):
+        elif(defect_geom == '' or defect_geom is None):
             pass ## no defect
         else:
             print('Nonvalid defect geom, exiting...')
@@ -200,26 +212,53 @@ class MeshInfo():
              
             inPECSurface = []; inAntennaSurface = []; antennas_DimTags = []
             ## Make the antennas
-            x_antenna = np.zeros((self.N_antennas, 3))
-            x_pec = np.zeros((self.N_antennas, 5, 3)) ### for each antenna, and PEC surface (of which there are 5), a position of that surface
-            for n in range(self.N_antennas): ## make each antenna, and prepare its surfaces to either be PEC or be the excitation surface
-                box = gmsh.model.occ.addBox(-self.antenna_width/2, -self.antenna_depth, -self.antenna_height/2, self.antenna_width, self.antenna_depth, self.antenna_height) ## the antenna surface at (0, 0, 0)
-                gmsh.model.occ.rotate([(self.tdim, box)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
-                gmsh.model.occ.translate([(self.tdim, box)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
-                antennas_DimTags.append((self.tdim, box))
-                x_antenna[n] = self.pos_antennas[n, :] ## the translation to the antenna's position
-                Rmat = np.array([[np.cos(self.rot_antennas[n]), -np.sin(self.rot_antennas[n]), 0],
-                                 [np.sin(self.rot_antennas[n]), np.cos(self.rot_antennas[n]), 0],
-                                 [0, 0, 1]]) ## matrix for rotation about the z-axis
-                x_pec[n, 0] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth/2, -self.antenna_height/2])) ## bottom surface (in z)
-                x_pec[n, 1] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth/2,  self.antenna_height/2])) ## top surface (in z)
-                x_pec[n, 2] = x_antenna[n] + np.dot(Rmat, np.array([-self.antenna_width/2, -self.antenna_depth/2, 0])) ## left surface (in x)
-                x_pec[n, 3] = x_antenna[n] + np.dot(Rmat, np.array([self.antenna_width/2, -self.antenna_depth/2, 0])) ## right surface (in x)
-                x_pec[n, 4] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth, 0])) ## back surface (in y)
-                inAntennaSurface.append(lambda x: np.allclose(x, x_antenna[n])) ## (0, 0, 0) - the antenna surface
-                inPECSurface.append(lambda x: np.allclose(x, x_pec[n,0]) or np.allclose(x, x_pec[n,1]) or np.allclose(x, x_pec[n,2]) or np.allclose(x, x_pec[n,3]) or np.allclose(x, x_pec[n,4]))
-        
+            if(self.antenna_type == 'waveguide'):
+                x_antenna = np.zeros((self.N_antennas, 3))
+                x_pec = np.zeros((self.N_antennas, 5, 3)) ### for each antenna, and PEC surface (of which there are 5), a position of that surface
+                for n in range(self.N_antennas): ## make each antenna, and prepare its surfaces to either be PEC or be the excitation surface
+                    box = gmsh.model.occ.addBox(-self.antenna_width/2, -self.antenna_depth, -self.antenna_height/2, self.antenna_width, self.antenna_depth, self.antenna_height) ## the antenna surface at (0, 0, 0)
+                    gmsh.model.occ.rotate([(self.tdim, box)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
+                    gmsh.model.occ.translate([(self.tdim, box)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    antennas_DimTags.append((self.tdim, box))
+                    x_antenna[n] = self.pos_antennas[n, :] ## the translation to the antenna's position
+                    Rmat = np.array([[np.cos(self.rot_antennas[n]), -np.sin(self.rot_antennas[n]), 0],
+                                     [np.sin(self.rot_antennas[n]), np.cos(self.rot_antennas[n]), 0],
+                                     [0, 0, 1]]) ## matrix for rotation about the z-axis
+                    x_pec[n, 0] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth/2, -self.antenna_height/2])) ## bottom surface (in z)
+                    x_pec[n, 1] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth/2,  self.antenna_height/2])) ## top surface (in z)
+                    x_pec[n, 2] = x_antenna[n] + np.dot(Rmat, np.array([-self.antenna_width/2, -self.antenna_depth/2, 0])) ## left surface (in x)
+                    x_pec[n, 3] = x_antenna[n] + np.dot(Rmat, np.array([self.antenna_width/2, -self.antenna_depth/2, 0])) ## right surface (in x)
+                    x_pec[n, 4] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth, 0])) ## back surface (in y)
+                    inAntennaSurface.append(lambda x: np.allclose(x, x_antenna[n])) ## (0, 0, 0) - the antenna surface
+                    inPECSurface.append(lambda x: np.allclose(x, x_pec[n,0]) or np.allclose(x, x_pec[n,1]) or np.allclose(x, x_pec[n,2]) or np.allclose(x, x_pec[n,3]) or np.allclose(x, x_pec[n,4]))
+            elif(self.antenna_type == 'patch'): # 1 patch antenna near the centre, for now
+                box = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2, self.antenna_depth, self.antenna_width, self.antenna_height) ## box for antenna surface + dielectric + GP at (0, 0, 0)
+                patch = gmsh.model.occ.addRectangle(-self.patch_length/2, -self.patch_width/2, self.antenna_height/2, self.patch_length, self.patch_width) ## the patch itself
+                ## now fragment the surface so that it will have the patch-shape in it
+                gmsh.model.occ.fragment([(3, box)], [(2, patch)])
+                
+                coax_outer = gmsh.model.occ.addCylinder(self.feed_offsetx,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh, self.coax_outr)
+                coax_inner = gmsh.model.occ.addCylinder(self.feed_offsetx,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh+self.antenna_height, self.coax_inr)
+                inAntennaSurface.append(lambda x: np.allclose(x, np.array([self.feed_offsetx, 0, -self.antenna_height/2]))) ## the surface where the coax enters the box - the radiating port
+                patch_centre = np.array([0, 0, self.antenna_height/2])
+                ground_centre = np.array([0, 0, -self.antenna_height/2])
+                coax_outr_centre = np.array([self.feed_offsetx, 0, -self.antenna_height/2-self.coax_outh])
+                coax_inr_top = np.array([self.feed_offsetx, 0, self.antenna_height/2]) ## maybe needed?
+                
+                #===============================================================
+                # ## subtract the outer coax from the box, then the inner coax from the outer
+                # box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
+                # coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                #===============================================================
+                
+                antennas_DimTags.append((self.tdim, coax_inner))
+                #antennas_DimTags.append((self.tdim, coax_outer))
+                inPECSurface.append(lambda x: np.allclose(x, patch_centre) or np.allclose(x, ground_centre) or np.allclose(x, coax_outr_centre) or np.allclose(x, coax_inr_top)) ## the patch surface, the outer and inner coax surfaces, and the bottom ground-plane
+                
             matDimTags = []; defectDimTags = []; defectDimTags2 = []
+            if(self.antenna_type == 'patch'): ## the interior of the patch is dielectric; for now it is the object
+                matDimTags.append((self.tdim, box))
+                matDimTags.append((self.tdim, coax_outer))
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
                 obj = gmsh.model.occ.addSphere(0,0,0, self.object_radius) ## add it to the origin
@@ -256,30 +295,30 @@ class MeshInfo():
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
             defectDimTags = []
             defectDimTags2 = [] ## for some geometry, have a second set of dimTags so it can be set to a different epsr
-            if(self.defect_geom == 'cylinder'):
-                defectDimTags = []
-                defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
-                ## apply some rotations around the origin, and each axis
-                gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 1, 0, 0, self.defect_angles[0])
-                gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
-                gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
-                defectDimTags.append((self.tdim, defect1))
-                
-                ## also a second cylinder
-                defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/2, self.defect_radius/2)
-                defectDimTags.append((self.tdim, defect2))
-            elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
-                defectDimTags = []
-                defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## small cylinder centered on the origin
-                gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.17)
-                
-                defect2 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/8,0,0,self.defect_height/4, self.defect_radius*0.3) ## tall cylinder back in the thing
-                gmsh.model.occ.rotate([(self.tdim, defect2)], 0, 0, 0, 0, 1, 0, 30*pi/180)
-                gmsh.model.occ.translate([(self.tdim, defect2)], -self.object_scale*0.61, -self.object_scale*0.18, self.object_scale*0.18)
-                defectDimTags.append((self.tdim, defect1))
-                defectDimTags.append((self.tdim, defect3))
-                defectDimTags2.append((self.tdim, defect2))
             if(not self.reference):
+                if(self.defect_geom == 'cylinder'):
+                    defectDimTags = []
+                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
+                    ## apply some rotations around the origin, and each axis
+                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 1, 0, 0, self.defect_angles[0])
+                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
+                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
+                    defectDimTags.append((self.tdim, defect1))
+                    
+                    ## also a second cylinder
+                    defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/2, self.defect_radius/2)
+                    defectDimTags.append((self.tdim, defect2))
+                elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
+                    defectDimTags = []
+                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## small cylinder centered on the origin
+                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.17)
+                    
+                    defect2 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/8,0,0,self.defect_height/4, self.defect_radius*0.3) ## tall cylinder back in the thing
+                    gmsh.model.occ.rotate([(self.tdim, defect2)], 0, 0, 0, 0, 1, 0, 30*pi/180)
+                    gmsh.model.occ.translate([(self.tdim, defect2)], -self.object_scale*0.61, -self.object_scale*0.18, self.object_scale*0.18)
+                    defectDimTags.append((self.tdim, defect1))
+                    defectDimTags.append((self.tdim, defect3))
+                    defectDimTags2.append((self.tdim, defect2))
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             
             ## Make the domain and the PML
@@ -318,7 +357,10 @@ class MeshInfo():
             outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + defectDimTags + defectDimTags2 + FF_surface_dimTags + antennas_DimTags)
             removeDimTags = [] ## remove these surfaces for later addition to PEC or FF surfaces
             if(self.N_antennas > 0):
-                removeDimTags = [x for x in [y[0] for y in outDimTagsMap[-self.N_antennas:]]] ## last few should be the antennas
+                if(self.antenna_type=='patch'):
+                    removeDimTags = [x for x in [y[0] for y in outDimTagsMap[-self.N_antennas*2:]]] ## double from the regular waveguide since it has two volumes to remove
+                else:
+                    removeDimTags = [x for x in [y[0] for y in outDimTagsMap[-self.N_antennas:]]] ## last few should be the antennas
             if(not self.reference):
                 ndefects = len(defectDimTags)
                 mapHere = []
@@ -365,6 +407,10 @@ class MeshInfo():
                 if(self.FF_surface):
                     if(np.isclose(bbox[0], -self.FF_surface_radius)): ## bbox[0] should be the minimum x-coordinate? As a sphere, this should be the radius
                         farfield_surface.append(boundary[1])
+                if(self.antenna_type == 'patch'):
+                    if(np.isclose(bbox[0], self.feed_offsetx-self.coax_outr) or np.isclose(bbox[0], self.feed_offsetx-self.coax_inr)): ## try to catch the inner and outer cylinders here, using their x-coords
+                        pec_surface.append(boundary[1])
+                    
             pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, pec_surface)
             antenna_surface_markers = [gmsh.model.addPhysicalGroup(self.fdim, [s]) for s in antenna_surface]
             farfield_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, farfield_surface)
@@ -445,6 +491,8 @@ class MeshInfo():
             #===================================================================
                 
             if(viewGMSH):
+                print(mat_marker, domain_marker, pml_marker, pec_surface_marker, farfield_surface_marker, antenna_surface_markers)
+                print(matDimTags, domainDimTags, pmlDimTags, pec_surface, farfield_surface, antenna_surface)
                 gmsh.fltk.run() ## gives a PETSc error when run in a spack installation
                 exit()
             

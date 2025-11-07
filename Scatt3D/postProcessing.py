@@ -28,7 +28,7 @@ if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently
     np.lib.isreal = np.isreal
 
 
-def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-2, tau=5e4, mu=1e2, verbose=True, solve_settings={}): ## put this in a function to allow gc?
+def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-4, tau=5e4, mu=1e0, verbose=False, solve_settings={}): ## put this in a function to allow gc?
     if(solver=='CLARABEL'): ## some settings for this that maybe make a marginal difference in solve time
         solve_settings = {'max_step_fraction': 0.95, 'tol_ktratio': 1e-5, 'tol_gap_abs': 1e-6, **solve_settings}
     N_x = np.shape(A)[1]
@@ -173,10 +173,12 @@ def testSolverSettings(A, b, epsr_ref, epsr_dut, cell_volumes): # Varies setting
     #     settings.append( {'problemType': 3, 'tau': tau} )
     #===========================================================================
         
-    ## cvxpy mu test
-    testName = 'cvxpy_mutest'
-    for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2, 1e-4, 1e-6]:
-        settings.append( {'problemType': 4, 'mu': mu} )
+    #===========================================================================
+    # ## cvxpy mu test
+    # testName = 'cvxpy_mutest' ## every value of mu above 1e-4 just gave a zero result, and below 1e-4 were worse than a zero
+    # for mu in [1e4, 1e3, 1e2, 1e1, 1, 5, 50, 5e-1, 500, 5000, 1e5, 1e-1, 1e-2, 1e-4, 1e-6]:
+    #     settings.append( {'problemType': 4, 'mu': mu} )
+    #===========================================================================
     
     #===========================================================================
     # ## spgl settings tests ## it seems iterations after the first few hundred don't have a huge effect, at least for the a-priori case. Using the complex values also seems irrelevant, and the best results have large taus
@@ -663,8 +665,8 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         # testSolverSettings(Ak, bk, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
         #=======================================================================
         
-        testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        return
+        #testSolverSettings(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        #return
         ##
         ##
         
@@ -731,7 +733,7 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
         sigma = 1e-2 ## guess for a good sigma
         iter_lim = 5633
-        spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 1}
+        spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 0}
           
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
         ## a-priori
