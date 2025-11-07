@@ -518,13 +518,13 @@ if __name__ == '__main__':
     for oh in np.arange(3, 7.45, 7): ## degree 2
         h = 1/oh
         runName = f'degree3ho{oh:.1f}'
-        testFullExample(h=1/oh, degree=3)
+        testFullExample(h=1/oh, degree=2)
           
     #===========================================================================
     # for oh in np.arange(3, 17, 7): ## degree 1
     #     h = 1/oh
     #     runName = f'degree3ho{oh:.1f}'
-    #     testFullExample(h=1/oh, degree=3)
+    #     testFullExample(h=1/oh, degree=1)
     #===========================================================================
         
     
