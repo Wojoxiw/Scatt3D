@@ -416,11 +416,10 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             sys.stdout.flush()
             return x0.data[:, 0]
     
-def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyAPriori=True):
+def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyAPriori=True):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find and save files
-    :param MPInum: Number of MPI processes
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
@@ -441,6 +440,7 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
         epsr_mat = data['epsr_mat']
         epsr_defect = data['epsr_defect']
         N_antennas = data['N_antennas']
+        antenna_radius = data['antenna_radius'] ## radius at which the antennas are placed
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         Nb = len(b)
@@ -472,7 +472,13 @@ def solveFromQs(problemName, MPInum, solutionName='', antennasToUse=[], frequenc
             epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idx]
             epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idx] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idx]
             N = len(cell_volumes)
-            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - these are the indices used for non a-priori reconstructions
+            
+            #idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - these are the indices used for non a-priori reconstructions
+            
+            midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
+            dist = np.linalg.norm(midpoints, axis=1)
+            idx_non_pml = np.nonzero(dist < antenna_radius*0.8)[0] ## alternative reconstruction cells - those within a sphere of the centre
+            
             N_non_pml = len(idx_non_pml)
             A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
             for nf in range(Nf):

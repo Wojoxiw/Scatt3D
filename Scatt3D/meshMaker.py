@@ -30,7 +30,6 @@ class MeshInfo():
                  reference = True,
                  f0 = 10e9,
                  verbosity = 0,
-                 model_rank = 0,
                  h = 1/15,
                  domain_geom = 'sphere',#'domedCyl', 
                  object_geom = 'cubic',#'complex1'
@@ -65,7 +64,6 @@ class MeshInfo():
         :param f0: Design frequency - things will be scaled by the corresponding wavelength
         :param h: typical mesh size, in fractions of a wavelength
         :param verbosity: This is passed to gmsh, also if > 0, I print more stuff
-        :param model_rank: Rank of the master model - for saving, plotting, etc.
         :param domain_geom: The geometry of the domain (and PML).
         :param object_geom: Geometry of the object ('sphere', 'cylinder', 'cubic', 'None')
         :param defect_geom: Geometry of the defect.
@@ -93,7 +91,7 @@ class MeshInfo():
         '''
         
         self.comm = comm                               # MPI communicator
-        self.model_rank = model_rank                   # Model rank
+        self.model_rank = 0                   # Rank of the master model - for saving, plotting, etc.
         self.lambda0 = c0/f0                         # Design wavelength (things are scaled from this)
         if(fname == ''): # if not given a name, just use 'mesh'
             fname = 'mesh.msh'
@@ -210,7 +208,9 @@ class MeshInfo():
             gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
             gmsh.logger.start() ## I don't know what these logs are, or how to view them
              
-            inPECSurface = []; inAntennaSurface = []; antennas_DimTags = []
+            PECSurfacePts = []; ## points that are on only PEC surfaces
+            antennaSurfacePts = []; ## points that are on only the antenna surface
+            antennas_DimTags = []
             ## Make the antennas
             if(self.antenna_type == 'waveguide'):
                 x_antenna = np.zeros((self.N_antennas, 3))
@@ -229,36 +229,33 @@ class MeshInfo():
                     x_pec[n, 2] = x_antenna[n] + np.dot(Rmat, np.array([-self.antenna_width/2, -self.antenna_depth/2, 0])) ## left surface (in x)
                     x_pec[n, 3] = x_antenna[n] + np.dot(Rmat, np.array([self.antenna_width/2, -self.antenna_depth/2, 0])) ## right surface (in x)
                     x_pec[n, 4] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth, 0])) ## back surface (in y)
-                    inAntennaSurface.append(lambda x: np.allclose(x, x_antenna[n])) ## (0, 0, 0) - the antenna surface
-                    inPECSurface.append(lambda x: np.allclose(x, x_pec[n,0]) or np.allclose(x, x_pec[n,1]) or np.allclose(x, x_pec[n,2]) or np.allclose(x, x_pec[n,3]) or np.allclose(x, x_pec[n,4]))
+                    antennaSurfacePts.append(x_antenna[n]) ## (0, 0, 0) - the antenna surface
+                    for i in range(5):
+                        PECSurfacePts.append(x_pec[n, i])
             elif(self.antenna_type == 'patch'): # 1 patch antenna near the centre, for now
                 box = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2, self.antenna_depth, self.antenna_width, self.antenna_height) ## box for antenna surface + dielectric + GP at (0, 0, 0)
                 patch = gmsh.model.occ.addRectangle(-self.patch_length/2, -self.patch_width/2, self.antenna_height/2, self.patch_length, self.patch_width) ## the patch itself
                 ## now fragment the surface so that it will have the patch-shape in it
-                gmsh.model.occ.fragment([(3, box)], [(2, patch)])
+                gmsh.model.occ.fragment([(2, box)], [(2, patch)]) ## fragment the surface, otherwise the patch is subsumed
                 
                 coax_outer = gmsh.model.occ.addCylinder(self.feed_offsetx,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh, self.coax_outr)
                 coax_inner = gmsh.model.occ.addCylinder(self.feed_offsetx,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh+self.antenna_height, self.coax_inr)
-                inAntennaSurface.append(lambda x: np.allclose(x, np.array([self.feed_offsetx, 0, -self.antenna_height/2]))) ## the surface where the coax enters the box - the radiating port
-                patch_centre = np.array([0, 0, self.antenna_height/2])
-                ground_centre = np.array([0, 0, -self.antenna_height/2])
-                coax_outr_centre = np.array([self.feed_offsetx, 0, -self.antenna_height/2-self.coax_outh])
-                coax_inr_top = np.array([self.feed_offsetx, 0, self.antenna_height/2]) ## maybe needed?
-                
-                #===============================================================
-                # ## subtract the outer coax from the box, then the inner coax from the outer
-                # box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
-                # coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
-                #===============================================================
+                ## subtract the outer coax from the box, then the inner coax from the outer
+                box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
+                coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                dielectric = gmsh.model.occ.fuse([(self.tdim, box)], [(self.tdim, coax_outer)])[0][0]
                 
                 antennas_DimTags.append((self.tdim, coax_inner))
-                #antennas_DimTags.append((self.tdim, coax_outer))
-                inPECSurface.append(lambda x: np.allclose(x, patch_centre) or np.allclose(x, ground_centre) or np.allclose(x, coax_outr_centre) or np.allclose(x, coax_inr_top)) ## the patch surface, the outer and inner coax surfaces, and the bottom ground-plane
+                
+                antennaSurfacePts.append([self.feed_offsetx, self.coax_inr/2+self.coax_outr/2, -self.antenna_height/2-self.coax_outh]) ## the surface of the bottom of the outer cylinder of the coax - the radiating port
+                PECSurfacePts.append([0, 0, self.antenna_height/2]) ## centre of the patch
+                PECSurfacePts.append([-self.feed_offsetx, 0, -self.antenna_height/2]) ## should be in just the ground plane
+                PECSurfacePts.append([self.feed_offsetx, 0, -self.antenna_height/2-self.coax_outh]) ## bottom circle of the inner coax
+                PECSurfacePts.append([self.feed_offsetx, 0, self.antenna_height/2]) ## top circle of the inner coax
                 
             matDimTags = []; defectDimTags = []; defectDimTags2 = []
             if(self.antenna_type == 'patch'): ## the interior of the patch is dielectric; for now it is the object
-                matDimTags.append((self.tdim, box))
-                matDimTags.append((self.tdim, coax_outer))
+                matDimTags.append(dielectric)
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
                 obj = gmsh.model.occ.addSphere(0,0,0, self.object_radius) ## add it to the origin
@@ -352,9 +349,10 @@ class MeshInfo():
                 FF_c = np.array([0, 0, 0]) ## centred on the origin.
                 FF_surface = gmsh.model.occ.addSphere(FF_c[0], FF_c[1], FF_c[2], self.FF_surface_radius)
                 FF_surface_dimTags = [(self.tdim, FF_surface)]
-            
+                
             # Create fragments and dimtags
             outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + defectDimTags + defectDimTags2 + FF_surface_dimTags + antennas_DimTags)
+            
             removeDimTags = [] ## remove these surfaces for later addition to PEC or FF surfaces
             if(self.N_antennas > 0):
                 if(self.antenna_type=='patch'):
@@ -383,7 +381,6 @@ class MeshInfo():
             pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+defectDimTags2+matDimTags+removeDimTags]
             gmsh.model.occ.remove(removeDimTags)
             gmsh.model.occ.synchronize()
-            
             # Make physical groups for domains and PML
             mat_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in matDimTags])
             defect_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags])
@@ -395,22 +392,34 @@ class MeshInfo():
             pec_surface = []
             antenna_surface = []
             farfield_surface = []
+            
+            distTol = 1e-6 ## close enough?
             for boundary in gmsh.model.occ.getEntities(dim=self.fdim):
+                #print('boundary',boundary, gmsh.model.getType(2, boundary[1]))
                 CoM = gmsh.model.occ.getCenterOfMass(boundary[0], boundary[1]) ## 'centre of mass'
                 bbox = gmsh.model.getBoundingBox(boundary[0], boundary[1]) ## 'bounding box'
-                for n in range(len(inPECSurface)): ## iterate over all of these
-                    if inPECSurface[n](CoM):
+                
+                for point in PECSurfacePts: ## any surface with this point is assumed to be PEC
+                    pt = gmsh.model.occ.addPoint(point[0], point[1], point[2]) ## just for finding distance
+                    dist = gmsh.model.occ.getDistance(boundary[0], boundary[1], 0, pt)[0]
+                    if(dist<distTol):
                         pec_surface.append(boundary[1])
-                for n in range(len(inAntennaSurface)): ## iterate over all of these
-                    if (inAntennaSurface[n](CoM)):
+                        print('inPEC', boundary[1])
+                    gmsh.model.occ.remove([(0, pt)]) ## clean-up
+                    
+                for point in antennaSurfacePts: ## any surface with this point is assumed to be an antenna radiating surface
+                    pt = gmsh.model.occ.addPoint(point[0], point[1], point[2]) ## just for finding distance
+                    dist = gmsh.model.occ.getDistance(boundary[0], boundary[1], 0, pt)[0]
+                    if(dist<distTol):
                         antenna_surface.append(boundary[1])
+                        print('inAnt', boundary[1])
+                    gmsh.model.occ.remove([(0, pt)]) ## clean-up
+                    
                 if(self.FF_surface):
                     if(np.isclose(bbox[0], -self.FF_surface_radius)): ## bbox[0] should be the minimum x-coordinate? As a sphere, this should be the radius
                         farfield_surface.append(boundary[1])
-                if(self.antenna_type == 'patch'):
-                    if(np.isclose(bbox[0], self.feed_offsetx-self.coax_outr) or np.isclose(bbox[0], self.feed_offsetx-self.coax_inr)): ## try to catch the inner and outer cylinders here, using their x-coords
-                        pec_surface.append(boundary[1])
-                    
+                        
+                        
             pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, pec_surface)
             antenna_surface_markers = [gmsh.model.addPhysicalGroup(self.fdim, [s]) for s in antenna_surface]
             farfield_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, farfield_surface)
@@ -429,10 +438,13 @@ class MeshInfo():
  
                 gmsh.model.mesh.field.setAsBackgroundMesh(minMeshField)
                 
-                gmsh.model.occ.synchronize()
-                gmsh.model.mesh.generate(self.tdim)
-            #gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out
+            gmsh.model.occ.synchronize()
             
+            for boundary in gmsh.model.occ.getEntities(dim=self.fdim):
+                print('boundary',boundary, gmsh.model.getType(2, boundary[1]))
+            
+            gmsh.model.mesh.generate(self.tdim)
+            #gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out
             ## Apparently gmsh's Python bindings don't allow all that I need for the below to work...
             #===================================================================
             # if(self.reference): ## mark the cells corresponding to the defect now. Need to make this after mesh generation so it does not affect the meshing... there must be a better way to do this
@@ -505,7 +517,6 @@ class MeshInfo():
             pec_surface_marker = None
             antenna_surface_markers = None
             farfield_surface_marker = None
-            
         self.mat_marker = self.comm.bcast(mat_marker, root=self.model_rank)
         self.defect_marker = self.comm.bcast(defect_marker, root=self.model_rank)
         self.defect_marker2 = self.comm.bcast(defect_marker2, root=self.model_rank)
@@ -522,7 +533,6 @@ class MeshInfo():
         gmsh.finalize()
         
         self.ncells = self.mesh.topology.index_map(self.mesh.topology.dim).size_global ## all cells, rather than only those in this MPI process
-        
         self.meshingTime = timer() - t1 ## Time it took to make the mesh. Given to mem-time estimator
         if(self.verbosity > 0 and self.comm.rank == self.model_rank): ## start by giving some estimated calculation times/memory costs
             nloc = self.mesh.topology.index_map(self.mesh.topology.dim).size_local
