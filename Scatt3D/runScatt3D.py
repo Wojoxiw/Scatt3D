@@ -494,17 +494,20 @@ if __name__ == '__main__':
                 postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
     
     
+    
+    errorTestPlots()
+    
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    runName = 'testRunSmall' ## h=1/8
+    #runName = 'testRunSmall' ## h=1/8
     #runName = 'testRunLarger' ## h=1/18
     
     #testRun(h=1/2)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    testFullExample(h=1/8, degree=1)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #testFullExample(h=1/8, degree=1)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
