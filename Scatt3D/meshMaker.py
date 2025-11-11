@@ -234,9 +234,15 @@ class MeshInfo():
                         PECSurfacePts.append(x_pec[n, i])
             elif(self.antenna_type == 'patch'): # 1 patch antenna near the centre, for now
                 box = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2, self.antenna_depth, self.antenna_width, self.antenna_height) ## box for antenna surface + dielectric + GP at (0, 0, 0)
-                patch = gmsh.model.occ.addRectangle(-self.patch_length/2, -self.patch_width/2, self.antenna_height/2, self.patch_length, self.patch_width) ## the patch itself
-                ## now fragment the surface so that it will have the patch-shape in it
-                gmsh.model.occ.fragment([(2, box)], [(2, patch)]) ## fragment the surface, otherwise the patch is subsumed
+                patch = gmsh.model.occ.addBox(-self.patch_length/2, -self.patch_width/2, self.antenna_height/2, self.patch_length, self.patch_width, 50e-6) ## box for the patch. I was unable to modify the box surface to split into the patch and non-patch sections... I tried so many things
+                
+                #===============================================================
+                # patch = gmsh.model.occ.addRectangle(-self.patch_length/2, -self.patch_width/2, self.antenna_height/2, self.patch_length, self.patch_width) ## the patch itself
+                # ## now fragment the surface so that it will have the patch-shape in it
+                # gmsh.model.occ.synchronize()
+                # #print('test',gmsh.model.getBoundary([(3, box)], oriented=False))
+                # gmsh.model.occ.fragment([(3, box)], [(2, patch)]) ## fragment the surface, otherwise the patch is subsumed
+                #===============================================================
                 
                 coax_outer = gmsh.model.occ.addCylinder(self.feed_offsetx,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh, self.coax_outr)
                 coax_inner = gmsh.model.occ.addCylinder(self.feed_offsetx,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh+self.antenna_height, self.coax_inr)
@@ -246,12 +252,22 @@ class MeshInfo():
                 dielectric = gmsh.model.occ.fuse([(self.tdim, box)], [(self.tdim, coax_outer)])[0][0]
                 
                 antennas_DimTags.append((self.tdim, coax_inner))
+                antennas_DimTags.append((self.tdim, patch))
                 
                 antennaSurfacePts.append([self.feed_offsetx, self.coax_inr/2+self.coax_outr/2, -self.antenna_height/2-self.coax_outh]) ## the surface of the bottom of the outer cylinder of the coax - the radiating port
-                PECSurfacePts.append([0, 0, self.antenna_height/2]) ## centre of the patch
+                #PECSurfacePts.append([0, 0, self.antenna_height/2]) ## centre of the patch
                 PECSurfacePts.append([-self.feed_offsetx, 0, -self.antenna_height/2]) ## should be in just the ground plane
                 PECSurfacePts.append([self.feed_offsetx, 0, -self.antenna_height/2-self.coax_outh]) ## bottom circle of the inner coax
                 PECSurfacePts.append([self.feed_offsetx, 0, self.antenna_height/2]) ## top circle of the inner coax
+                PECSurfacePts.append([self.feed_offsetx, self.coax_outr, -self.antenna_height/2-self.coax_outh/2]) ## outer coax cylinder
+                PECSurfacePts.append([self.feed_offsetx, self.coax_inr, -self.antenna_height/2-self.coax_outh/2]) ## inner coax cylinder
+                PECSurfacePts.append([self.feed_offsetx, self.coax_inr, -self.antenna_height/2+self.antenna_height/2]) ## inner coax cylinder - part that's inside the substrate
+                gmsh.model.occ.synchronize()
+                patchSurfaces = gmsh.model.getBoundary([(3, patch)], oriented=False)
+                for surface in patchSurfaces:
+                    #print(surface)
+                    #print(gmsh.model.occ.getCenterOfMass(surface[0], surface[1]))
+                    PECSurfacePts.append(gmsh.model.occ.getCenterOfMass(surface[0], surface[1])) ## patch faces
                 
             matDimTags = []; defectDimTags = []; defectDimTags2 = []
             if(self.antenna_type == 'patch'): ## the interior of the patch is dielectric; for now it is the object
@@ -396,7 +412,7 @@ class MeshInfo():
             distTol = 1e-6 ## close enough?
             for boundary in gmsh.model.occ.getEntities(dim=self.fdim):
                 #print('boundary',boundary, gmsh.model.getType(2, boundary[1]))
-                CoM = gmsh.model.occ.getCenterOfMass(boundary[0], boundary[1]) ## 'centre of mass'
+                #CoM = gmsh.model.occ.getCenterOfMass(boundary[0], boundary[1]) ## 'centre of mass' As it happens, many surfaces have coincident centres, so I don't use this anymore
                 bbox = gmsh.model.getBoundingBox(boundary[0], boundary[1]) ## 'bounding box'
                 
                 for point in PECSurfacePts: ## any surface with this point is assumed to be PEC
