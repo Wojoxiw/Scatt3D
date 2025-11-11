@@ -516,19 +516,19 @@ if __name__ == '__main__':
     #     postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
     #===========================================================================
           
-    for oh in np.linspace(3, 7.45, 7): ## degree 2
-        h = 1/oh
-        runName = f'degree3ho{oh:.1f}'
-        testFullExample(h=1/oh, degree=2)
-        postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
-    
     #===========================================================================
-    # for oh in np.linspace(4, 17, 7): ## degree 1
+    # for oh in np.linspace(3, 7.45, 7): ## degree 2
     #     h = 1/oh
     #     runName = f'degree3ho{oh:.1f}'
-    #     testFullExample(h=1/oh, degree=1)
+    #     testFullExample(h=1/oh, degree=2)
     #     postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
     #===========================================================================
+    
+    for oh in np.linspace(4, 17, 7): ## degree 1
+        h = 1/oh
+        runName = f'degree3ho{oh:.1f}'
+        testFullExample(h=1/oh, degree=1)
+        postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):
