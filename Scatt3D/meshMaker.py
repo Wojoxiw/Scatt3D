@@ -411,7 +411,7 @@ class MeshInfo():
             
             distTol = 1e-6 ## close enough?
             for boundary in gmsh.model.occ.getEntities(dim=self.fdim):
-                #print('boundary',boundary, gmsh.model.getType(2, boundary[1]))
+                #print('boundary',boundary, gmsh.model.getType(2, boundary[1])) ## print the tags and types
                 #CoM = gmsh.model.occ.getCenterOfMass(boundary[0], boundary[1]) ## 'centre of mass' As it happens, many surfaces have coincident centres, so I don't use this anymore
                 bbox = gmsh.model.getBoundingBox(boundary[0], boundary[1]) ## 'bounding box'
                 
@@ -420,7 +420,7 @@ class MeshInfo():
                     dist = gmsh.model.occ.getDistance(boundary[0], boundary[1], 0, pt)[0]
                     if(dist<distTol):
                         pec_surface.append(boundary[1])
-                        print('inPEC', boundary[1])
+                        #print('inPEC', boundary[1])
                     gmsh.model.occ.remove([(0, pt)]) ## clean-up
                     
                 for point in antennaSurfacePts: ## any surface with this point is assumed to be an antenna radiating surface
@@ -428,7 +428,7 @@ class MeshInfo():
                     dist = gmsh.model.occ.getDistance(boundary[0], boundary[1], 0, pt)[0]
                     if(dist<distTol):
                         antenna_surface.append(boundary[1])
-                        print('inAnt', boundary[1])
+                        #print('inAnt', boundary[1])
                     gmsh.model.occ.remove([(0, pt)]) ## clean-up
                     
                 if(self.FF_surface):
@@ -455,9 +455,6 @@ class MeshInfo():
                 gmsh.model.mesh.field.setAsBackgroundMesh(minMeshField)
                 
             gmsh.model.occ.synchronize()
-            
-            for boundary in gmsh.model.occ.getEntities(dim=self.fdim):
-                print('boundary',boundary, gmsh.model.getType(2, boundary[1]))
             
             gmsh.model.mesh.generate(self.tdim)
             #gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out

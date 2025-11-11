@@ -182,7 +182,7 @@ if __name__ == '__main__':
     def testPatchPattern(h = 1/12, degree=1): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = 'patchPatternTest'
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patch', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patch', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
@@ -466,19 +466,45 @@ if __name__ == '__main__':
                     
             
             plt.show()
+            
+    def errorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
+    
+        for oh in np.linspace(2.5, 5, 7): ## degree 3
+            h = 1/oh
+            runName = f'degree3ho{oh:.1f}'
+            if(sims):
+                testFullExample(h=1/oh, degree=3)
+            else:
+                postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
+              
+        for oh in np.linspace(3, 7.45, 7): ## degree 2
+            h = 1/oh
+            runName = f'degree3ho{oh:.1f}'
+            if(sims):
+                testFullExample(h=1/oh, degree=2)
+            else:
+                postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
+        
+        for oh in np.linspace(4, 17, 7): ## degree 1
+            h = 1/oh
+            runName = f'degree3ho{oh:.1f}'
+            if(sims):
+                testFullExample(h=1/oh, degree=1)
+            else:
+                postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
     
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    #runName = 'testRunSmall' ## h=1/8
+    runName = 'testRunSmall' ## h=1/8
     #runName = 'testRunLarger' ## h=1/18
     
     #testRun(h=1/2)
     #profilingMemsTimes()
     #actualProfilerRunning()
     
-    #testFullExample(h=1/13, degree=1)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    testFullExample(h=1/8, degree=1)
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
@@ -508,27 +534,6 @@ if __name__ == '__main__':
     # postProcessing.solveFromQs(folder+runName)
     #===========================================================================
     
-    #===========================================================================
-    # for oh in np.linspace(2.5, 5, 7): ## degree 3
-    #     h = 1/oh
-    #     runName = f'degree3ho{oh:.1f}'
-    #     testFullExample(h=1/oh, degree=3)
-    #     postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
-    #===========================================================================
-          
-    #===========================================================================
-    # for oh in np.linspace(3, 7.45, 7): ## degree 2
-    #     h = 1/oh
-    #     runName = f'degree3ho{oh:.1f}'
-    #     testFullExample(h=1/oh, degree=2)
-    #     postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
-    #===========================================================================
-    
-    for oh in np.linspace(4, 17, 7): ## degree 1
-        h = 1/oh
-        runName = f'degree3ho{oh:.1f}'
-        testFullExample(h=1/oh, degree=1)
-        postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
     
     #===========================================================================
     # for k in np.arange(10, 35, 4):

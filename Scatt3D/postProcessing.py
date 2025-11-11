@@ -59,11 +59,12 @@ def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e
         
     try:
         problem_cvxpy.solve(verbose=verbose, solver=solver, **solve_settings)
+        if(verbose):
+            print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({problemType=})')
+        return x_cvxpy.value
     except Exception as error: ## if the solver 'makes insufficient progress' or something, just skip
         print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
-    if(verbose):
-        print(f'cvxpy norm of residual: {cp.norm(A @ x_cvxpy - b, p=2).value} ({problemType=})')
-    return x_cvxpy.value
+        return np.zeros(N_x)
     
 def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False):
     '''
@@ -91,13 +92,18 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     
     #error = np.mean(np.abs(delta_epsr_rec - delta_epsr_actual) * cell_volumes)/np.sum(cell_volumes)
     #error = np.mean(np.abs(delta_epsr_rec/np.mean(delta_epsr_rec + 1e-9) - delta_epsr_actual/np.mean(delta_epsr_actual + 1e-9)) * cell_volumes)/np.sum(cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape... otherwise a near-zero reconstruction looks good
-    error = np.mean(np.abs(delta_epsr_rec/np.mean(np.abs(delta_epsr_rec) + 1e-9) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes)/np.sum(cell_volumes)
+    error = np.mean(np.abs(delta_epsr_rec/np.mean(np.abs(delta_epsr_rec) + 1e-16) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)/np.sum(cell_volumes)
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual)) * cell_volumes/np.sum(cell_volumes))
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
     if(indices=='defect'):
-        error = error #+ noiseError/4
+        error = error + noiseError/5
         
-    zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-9)) * cell_volumes)/np.sum(cell_volumes)
+    zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)/np.sum(cell_volumes)
+    
+    error = np.sum(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes)
+    zeroError = np.sum(np.abs(delta_epsr_actual)*cell_volumes)
+    
+    
     error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
     
     if(printIt):
@@ -498,6 +504,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
         print('shape of b:', np.shape(b))
         print('in-object cells:', np.size(idx_ap))
+        sys.stdout.flush()
         
         ## prepare the solution/output file
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
@@ -640,7 +647,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         if( comm.rank == 0 ):
             totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
-            
+        sys.stdout.flush()
             
         #return ## exit
             
@@ -720,6 +727,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
     #===========================================================================
         
         print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
+        sys.stdout.flush()
         rcond = 10**-1.65 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
@@ -737,6 +745,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         f.close()
         
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
+        sys.stdout.flush()
         sigma = 1e-2 ## guess for a good sigma
         iter_lim = 5633
         spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 0}
@@ -775,7 +784,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         f.close()
         if(not onlyAPriori):
             iter_lim = 1366
-            spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 1}
+            spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 0}
             f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
             ## non a-priori
             A1, A2 = np.shape(A)[0], np.shape(A)[1]
@@ -809,6 +818,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
             gc.collect()
          
         print('done spgl solution')
+        sys.stdout.flush()
         
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
     mems = comm.gather(mem_usage, root=0)
@@ -819,6 +829,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         print()
         print()
         print('solving with cvxpy...')
+        sys.stdout.flush()
         t_cvx = timer()
 
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
@@ -883,6 +894,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
             f.close()
         
         print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')
+        sys.stdout.flush()
         
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
     mems = comm.gather(mem_usage, root=0)
