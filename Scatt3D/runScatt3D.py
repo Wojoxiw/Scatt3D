@@ -193,7 +193,7 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(5, 14, 13)
+            ks = np.linspace(5, 14, 6)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
@@ -222,14 +222,14 @@ if __name__ == '__main__':
             elif(convergence == 'dxquaddeg'):
                 probOptions = dict(quaddeg = ks[i])
             
-            refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', FF_surface = True, order=deg, **meshOptions)
+            refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=deg, **meshOptions)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1-0.01j), Nf=1, fem_degree=deg, **probOptions)
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
             simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
             prevRuns.memTimeAppend(prob)
             if(comm.rank == model_rank): ## only needed for main process
                 areaVals.append(newval)
-                ndofs[i] = prob.ndofs
+                ndofs[i] = prob.FEMmesh_ref.ndofs
                 calcT[i] = prob.calcTime
                 khatRmsErrs[i] = np.sqrt(np.sum(khats**2)/np.size(khats))
                 khatMaxErrs[i] = np.max(khats)
@@ -244,7 +244,7 @@ if __name__ == '__main__':
                 if(verbosity>1):
                     print(f'Run {i+1}/{len(ks)} completed')
                 ## Plot each iteration for case of OOM or such
-                real_area = 4*pi*prob.refMeshdata.FF_surface_radius**2
+                real_area = 4*pi*prob.FEMmesh_ref.meshInfo.FF_surface_radius**2
                 
                 
                 if(convergence == 'meshsize'): ## plot 3 times - also vs time and ndofs
@@ -479,7 +479,7 @@ if __name__ == '__main__':
               
         for oh in np.linspace(3, 7.45, 7): ## degree 2
             h = 1/oh
-            runName = f'degree3ho{oh:.1f}'
+            runName = f'degree2ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=2)
             else:
@@ -487,7 +487,7 @@ if __name__ == '__main__':
         
         for oh in np.linspace(4, 17, 7): ## degree 1
             h = 1/oh
-            runName = f'degree3ho{oh:.1f}'
+            runName = f'degree1ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=1)
             else:
@@ -515,7 +515,7 @@ if __name__ == '__main__':
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
-    #convergenceTestPlots('meshsize', deg=3)
+    #convergenceTestPlots('meshsize', deg=1)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
@@ -554,7 +554,6 @@ if __name__ == '__main__':
     otherprevs = [] ## if adding other files here, specify here (i.e. prevRuns.npz.old)
     #prevRuns = memTimeEstimation.runTimesMems(folder, comm, otherPrevs = otherprevs, filename = filename)
     #prevRuns.makePlots(MPInum = comm.size)
-    #prevRuns.makePlotsSTD()
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s, exiting...')

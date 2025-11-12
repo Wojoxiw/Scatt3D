@@ -347,7 +347,7 @@ class Scatt3DProblem():
                 y = (x.T-centre).T ## local position
                 r = np.sqrt(y[0]**2 + y[1]**2)
                 rhat = np.array([y[0], y[1], y[0]*0])/r
-                E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor
+                E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get .472727272)
                 Ep = Ep + E
                 Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
                 Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
@@ -411,6 +411,11 @@ class Scatt3DProblem():
                 normFactor = None
             normFactor= self.comm.bcast(normFactor, root=self.model_rank)
             #print(normFactor)
+            
+            areaCalc = 1*FEMm.ds_antennas[0] ## calculate area
+            area = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
+            print(dolfinx.fem.assemble.assemble_scalar(area))
+             
             expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.Vspace.element.interpolation_points)
             Ep.interpolate(expr)
         
