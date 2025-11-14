@@ -61,11 +61,10 @@ class FEMmesh():
         self.Wspace = dolfinx.fem.functionspace(self.meshInfo.mesh, ("DG", 0))
         # Create measures for subdomains and surfaces
         self.dx = ufl.Measure('dx', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.cell_tags, metadata={'quadrature_degree': self.dxquaddeg})
-        if(self.meshInfo.defect_geom == 'complex1'):
-            self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker, self.meshInfo.defect_marker2))
-        else:
-            self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker))
-        self.dx_pml = self.dx(self.meshInfo.pml_marker)
+        
+        #self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker))
+        #self.dx_pml = self.dx(self.meshInfo.pml_marker)
+        
         self.ds = ufl.Measure('ds', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.facet_tags) ## changing quadrature degree on ds/dS doesn't seem to have any effect
         self.dS = ufl.Measure('dS', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.facet_tags) ## capital S for internal facets (shared between two cells?)
         self.ds_antennas = [self.ds(m) for m in self.meshInfo.antenna_surface_markers]
@@ -74,7 +73,7 @@ class FEMmesh():
         self.Ezero.x.array[:] = 0.0
         self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.Vspace, entity_dim=self.fdim, entities=self.meshInfo.meshData.facet_tags.find(self.meshInfo.pec_surface_marker))
         self.bc_pec = dolfinx.fem.dirichletbc(self.Ezero, self.pec_dofs)
-        if(self.meshInfo.FF_surface): ## if there is a farfield surface
+        if(self.meshInfo.FF_surface): ## if there is a farfield surface, mark cells on the surface
             self.dS_farfield = self.dS(self.meshInfo.farfield_surface_marker)
             cells = []
             ff_facets = self.meshInfo.meshData.facet_tags.find(self.meshInfo.farfield_surface_marker)
@@ -88,15 +87,24 @@ class FEMmesh():
         else:
             self.farfield_cells = []
             
-    def InitializeMaterial(self, material_epsr, material_mur, defect_epsr, defect_mur, epsr_bkg, mur_bkg):
+    def InitializeMaterial(self, material_epsrs, material_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg):
         # Set up material parameters. Not changing mur for now, need to edit this if doing so
+        if(len(material_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
+            material_epsrs = [material_epsrs[0] for x in self.meshInfo.mat_markers]
+            material_murs = [material_murs[0] for x in self.meshInfo.mat_markers]
+        if(len(defect_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
+            defect_epsrs = [defect_epsrs[0] for x in self.meshInfo.defect_markers]
+            defect_murs = [defect_murs[0] for x in self.meshInfo.defect_markers]
+        
+        
         ## First find dofs for different 'materials'
-        self.mat_dofs = self.meshInfo.meshData.cell_tags.find(self.meshInfo.mat_marker)
-        self.defect_dofs = self.meshInfo.meshData.cell_tags.find(self.meshInfo.defect_marker)
-        if(self.meshInfo.defect_geom == 'complex1'):
-            self.defect_dofs2 = self.meshInfo.meshData.cell_tags.find(self.meshInfo.defect_marker2)
-            defect_epsr2 = (material_epsr - defect_epsr)/2
-            defect_mur2 = (material_mur - defect_mur)/2
+        self.mat_dofsList = []
+        for mat_marker in self.meshInfo.mat_markers:
+            self.mat_dofsList.append(self.meshInfo.meshData.cell_tags.find(mat_marker))
+            
+        self.defect_dofsList = []
+        for defect_marker in self.meshInfo.defect_markers:
+            self.defect_dofsList.append(self.meshInfo.meshData.cell_tags.find(defect_marker))
             
         self.pml_dofs = self.meshInfo.meshData.cell_tags.find(self.meshInfo.pml_marker)
         self.domain_dofs = self.meshInfo.meshData.cell_tags.find(self.meshInfo.domain_marker)
@@ -105,14 +113,15 @@ class FEMmesh():
         
         self.epsr = dolfinx.fem.Function(self.Wspace)
         self.mur = dolfinx.fem.Function(self.Wspace)
+        
         ## make a dof-map to start
         self.epsr.x.array[:] = np.nan
         self.epsr.x.array[self.domain_dofs] = 0
         self.epsr.x.array[self.pml_dofs] = -1
-        self.epsr.x.array[self.defect_dofs] = 3
-        if(self.meshInfo.defect_geom == 'complex1'):
-            self.epsr.x.array[self.defect_dofs2] = 4
-        self.epsr.x.array[self.mat_dofs] = 2
+        for k in range(len(self.mat_dofsList)):
+            self.epsr.x.array[self.mat_dofsList[k]] = 2+k
+        for k in range(len(self.defect_dofsList)):
+            self.epsr.x.array[self.defect_dofsList[k]] = 2+len(self.mat_dofsList)+k
         self.epsr.x.array[self.pec_dofs] = 5
         self.epsr.x.array[self.farfield_cells] = 1
         self.dofs_map = self.epsr.x.array.copy()
@@ -120,20 +129,18 @@ class FEMmesh():
         ## then the cases - first, set reference values
         self.epsr.x.array[:] = epsr_bkg
         self.mur.x.array[:] = mur_bkg
-        self.epsr.x.array[self.mat_dofs] = material_epsr
-        self.mur.x.array[self.mat_dofs] = material_mur
-        self.epsr.x.array[self.defect_dofs] = material_epsr
-        self.mur.x.array[self.defect_dofs] = material_mur
-        if(self.meshInfo.defect_geom == 'complex1'):
-            self.epsr.x.array[self.defect_dofs2] = material_epsr
-            self.mur.x.array[self.defect_dofs2] = material_mur
+        for k in range(len(self.mat_dofsList)):
+            self.epsr.x.array[self.mat_dofsList[k]] = material_epsrs[k]
+            self.mur.x.array[self.mat_dofsList[k]] = material_murs[k]
+        for k in range(len(self.defect_dofsList)):
+            self.epsr.x.array[self.defect_dofsList[k]] = material_epsrs[-1] ## for now, just take the last material's values
+            self.mur.x.array[self.defect_dofsList[k]] = material_murs[-1]
         self.epsr_array_ref = self.epsr.x.array.copy()
+        
         ## then, set dut values
-        self.epsr.x.array[self.defect_dofs] = defect_epsr
-        self.mur.x.array[self.defect_dofs] = defect_mur
-        if(self.meshInfo.defect_geom == 'complex1'):
-            self.epsr.x.array[self.defect_dofs2] = defect_epsr2
-            self.mur.x.array[self.defect_dofs2] = defect_mur2
+        for k in range(len(self.defect_dofsList)):
+            self.epsr.x.array[self.defect_dofsList[k]] = defect_epsrs[k]
+            self.mur.x.array[self.defect_dofsList[k]] = defect_murs[k]
         self.epsr_array_dut = self.epsr.x.array.copy()
     
 
@@ -147,10 +154,10 @@ class Scatt3DProblem():
                  f0=10e9,             # Frequency of the problem
                  epsr_bkg=1,          # Permittivity of the background medium
                  mur_bkg=1,           # Permeability of the background medium
-                 material_epsr=3.0*(1 - 0.01j),  # Permittivity of object
-                 material_mur=1+0j,   # Permeability of object
-                 defect_epsr=4.0*(1 - 0.01j),      # Permittivity of defect
-                 defect_mur=1+0j,       # Permeability of defect
+                 material_epsrs=[3.0*(1 - 0.01j)],  # Permittivity of the objects, given as a list. If only one, used for all materials
+                 material_murs=[1+0j],   # Permeability of the objects, given as a list
+                 defect_epsrs=[4.0*(1 - 0.01j)],      # Permittivity of the defects, given as a list. If only one, used for all defects
+                 defect_murs=[1+0j],       # Permeability of the defects, given as a list
                  fem_degree=1,            # Degree of finite elements
                  model_rank=0,        # Rank of the master model - for saving, plotting, etc.
                  MPInum = 1,          # Number of MPI processes
@@ -206,10 +213,11 @@ class Scatt3DProblem():
             
         self.epsr_bkg = epsr_bkg
         self.mur_bkg = mur_bkg
-        self.material_epsr = material_epsr
-        self.material_mur = material_mur
-        self.defect_epsr = defect_epsr
-        self.defect_mur = defect_mur
+        self.material_epsrs = material_epsrs
+        self.material_murs = material_murs
+        self.defect_epsrs = defect_epsrs
+        self.defect_murs = defect_murs
+        
         self.antenna_pol = pol
         self.excitation = excitation
         
@@ -218,10 +226,10 @@ class Scatt3DProblem():
 
         # Set up mesh information
         self.FEMmesh_ref = FEMmesh(refMeshdata, fem_degree, quaddeg)
-        self.FEMmesh_ref.InitializeMaterial(material_epsr, material_mur, defect_epsr, defect_mur, epsr_bkg, mur_bkg)
+        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
         if(DUTMeshdata != None):
             self.FEMmesh_DUT = FEMmesh(DUTMeshdata, fem_degree, quaddeg)
-            self.FEMmesh_DUT.InitializeMaterial(material_epsr, material_mur, defect_epsr, defect_mur, epsr_bkg, mur_bkg)
+            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
             
         # Calculate solutions
         if(computeImmediately):
@@ -343,7 +351,7 @@ class Scatt3DProblem():
             """
             Ep = np.zeros((3, x.shape[1]), dtype=complex)
             if(self.excitation == 'patch'): ## for now, just quickly return.
-                centre = np.array([meshInfo.feed_offsetx, 0, -meshInfo.antenna_height/2])## centre of the radiating face
+                centre = np.array([meshInfo.feed_offsetx, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh])## centre of the radiating face
                 y = (x.T-centre).T ## local position
                 r = np.sqrt(y[0]**2 + y[1]**2)
                 rhat = np.array([y[0], y[1], y[0]*0])/r
@@ -412,10 +420,6 @@ class Scatt3DProblem():
             normFactor= self.comm.bcast(normFactor, root=self.model_rank)
             #print(normFactor)
             
-            areaCalc = 1*FEMm.ds_antennas[0] ## calculate area
-            area = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
-            print(dolfinx.fem.assemble.assemble_scalar(area))
-             
             expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.Vspace.element.interpolation_points)
             Ep.interpolate(expr)
         
@@ -433,11 +437,16 @@ class Scatt3DProblem():
         F_antennas_str = '0' ## seems to give an error when evaluating an empty string
         for n in range(meshInfo.N_antennas):
             F_antennas_str += f"""+ 1j*k00/Zrel*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}] - 1j*k00/Zrel*2*a[{n}]*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}]"""
-        F = ufl.inner(1/FEMm.mur*curl_E, curl_v)*FEMm.dx_dom \
-            - ufl.inner(k00**2*FEMm.epsr*E, v)*FEMm.dx_dom \
-            + ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx_pml \
-            - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx_pml \
-            - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx_dom + eval(F_antennas_str) ## background field and antenna terms
+        #=======================================================================
+        # F = ufl.inner(1/FEMm.mur*curl_E, curl_v)*FEMm.dx_dom \
+        #     - ufl.inner(k00**2*FEMm.epsr*E, v)*FEMm.dx_dom \
+        #     + ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx_pml \
+        #     - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx_pml \
+        #     - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx_dom + eval(F_antennas_str) ## background field and antenna terms
+        #=======================================================================
+        F = ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx \
+            - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx \
+            - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx + eval(F_antennas_str) ## background field and antenna terms
         bcs = [FEMm.bc_pec]
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
@@ -730,7 +739,7 @@ class Scatt3DProblem():
                             mems = self.comm.gather(mem_usage, root=self.model_rank)
                             if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
                                 firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*self.Nf*meshInfo.N_antennas:.2f} hours')
+                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*meshInfo.N_antennas-1):.2f} hours')
                             sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
@@ -886,13 +895,16 @@ class Scatt3DProblem():
                     xdmf.write_function(q, nf)
         xdmf.close()
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
-            if( hasattr(self, 'S_dut') and hasattr(self, 'S_ref')): ## need both computed - otherwise, do not save
+            if( hasattr(self, 'S_ref')): ## need at least S_ref - otherwise, do not save
+                if(not hasattr(self, 'S_dut')):
+                    self.S_dut = None
+                
                 b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
                 for nf in range(self.Nf):
                     for m in range(meshInfo.N_antennas):
                         for n in range(meshInfo.N_antennas):
                             b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mat=self.material_epsr, epsr_defect=self.defect_epsr, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius)
+                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius)
                 
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
             print(f'   done.')
@@ -1092,7 +1104,7 @@ class Scatt3DProblem():
                     print(f'khat calc first angle (should be zero): {np.abs(khatResults[0]):.5e}')
                     print(f'Farfield-surface area, calculated vs real (expected): {np.abs(areaResult)} vs {real_area}. Error: {np.abs(areaResult-real_area):.3e}, rel. error: {np.abs((areaResult-real_area)/real_area):.3e}')
                       
-                m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
+                m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
                 mies = np.zeros_like(angles[:, 1])
                 lambdat = c0/freq
                 x = 2*pi*FEMm.meshInfo.object_radius/lambdat
@@ -1119,12 +1131,36 @@ class Scatt3DProblem():
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,0]), label = 'theta-pol')
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,1]), label = 'phi-pol')'
                     mag = np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2
-                    ax1.plot(angles[:nvals, 0], mag[:nvals], label = 'Integrated (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
-                    ax1.plot(angles[nvals:, 0], mag[nvals:], label = 'Integrated (E-plane)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                    
+                    if(plotFF):
+                        if True:## normalize and compare to FEKO values
+                            ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
+                            ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                            
+                            fekof = 'TestStuff/FEKO patch gain.dat'
+                            fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+                            print(np.shape(fekoData))
+                            ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
+                        else: ## don't normalize, compare FFs
+                            ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
+                            ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                            
+                            fekof = 'TestStuff/FEKO patch Efield.dat' ## FEKO seems to normalize to 1 Watt output power, so do that for this code when comparing
+                            fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+                            print(np.shape(fekoData))
+                            ax1.plot(fekoData[0], fekoData[2], label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[1], label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
+                        
+                    else:
+                        ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated (H-plane/$\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
+                        ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated (E-plane/$\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                    
+                    plt.xlabel('Theta [degrees]')
                     
                     lambdat = c0/freq
                     if(compareToMie): ##Calculate Mie scattering
-                        m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
+                        m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
                         mie = np.zeros_like(angles[:, 1])
                         x = 2*pi*FEMm.meshInfo.object_radius/lambdat
                         for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
@@ -1153,7 +1189,7 @@ class Scatt3DProblem():
             
             if(compareToMie and self.Nf > 2): ## do plots by frequency for forward+backward scattering
                 ##Calculate Mie scattering
-                m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
+                m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
                 mieForward = np.zeros_like(self.fvec)
                 mieBackward = np.zeros_like(self.fvec)
                 for i in range(len(self.fvec)): ## get a miepython error if I use a vector of x, so:
@@ -1273,7 +1309,7 @@ class Scatt3DProblem():
             ax3 = plt.subplot(1, 1, 1)
             ax3.grid(True)
             
-            m = np.sqrt(self.material_epsr) ## complex index of refraction - if it is not PEC
+            m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
             freq = self.fvec[0]
             lambdat = c0/freq
             k = 2*pi/lambdat

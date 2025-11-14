@@ -73,24 +73,6 @@ if __name__ == '__main__':
     if(comm.rank == model_rank):
         print(f'runScatt3D starting with {MPInum} MPI process(es) (main process on {MPI.Get_processor_name()=}):')
     sys.stdout.flush()
-    
-    def profilingMemsTimes(): ## as used to make plots for the report
-        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = '8nodes24MPI1threads2b.npz') ## make sure to change to filename so it doesn't get overwritten - the data is stored here
-        numRuns = 1 ## run these 10 times to find averages/stds
-        hs = [1/10, 1/11, 1/12, 1/13, 1/14, 1/15, 1/16, 1/17, 1/18, 1/19, 1/20] ## run it for different mesh sizes
-        for i in range(numRuns):
-            if(comm.rank == model_rank):
-                print('############')
-                print(f'  RUN {i+1}/{numRuns} ')
-                print('############')
-            for h in hs:
-                refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h)
-                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum)
-                prevRuns.memTimeAppend(prob, '8nodes24MPI1threads2b')
-    
-    def actualProfilerRunning(): # Here I call more things explicitly in order to more easily profile the code in separate methods (profiling activated in the methods themselves also).
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=1/10) ## this will have around 190000 elements
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum)
             
     def testRun(h = 1/2): ## A quick test run to check it works. Default settings make this run in a second
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -158,7 +140,7 @@ if __name__ == '__main__':
         #dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, defect_epsrs=[4.0*(1 - 0.01j), 4.0*(1 - 0.01j), 2.0*(1 - 0.01j)])
         prob.makeOptVectors(skipQs=True)
         prob.saveEFieldsForAnim(True)
         prob.saveEFieldsForAnim(False)
@@ -172,23 +154,22 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsr=2.0*(1-0.01j), fem_degree=degree)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
         #prob.saveEFieldsForAnim()
         if(showPlots):
             prob.calcNearField(direction='side')
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
         prevRuns.memTimeAppend(prob)
         
-    def testPatchPattern(h = 1/12, degree=1): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+    def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9])): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = 'patchPatternTest'
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patch', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        freqs = np.linspace(10e9, 12e9, 1)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='patch', freqs = freqs, fem_degree=degree)
-        prob.saveEFieldsForAnim()
-        prob.calcFarField(reference=True, plotFF=True, showPlots=True)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='patch', freqs = freqs, fem_degree=degree, material_epsrs=[2.1])
+        #prob.saveEFieldsForAnim()
+        #prob.calcFarField(reference=True, plotFF=True, showPlots=True)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -223,7 +204,7 @@ if __name__ == '__main__':
                 probOptions = dict(quaddeg = ks[i])
             
             refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=deg, **meshOptions)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsr=2.0*(1-0.01j), Nf=1, fem_degree=deg, **probOptions)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsrs=[2.0*(1-0.01j)], Nf=1, fem_degree=deg, **probOptions)
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
             simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
             prevRuns.memTimeAppend(prob)
@@ -402,7 +383,7 @@ if __name__ == '__main__':
             try:
                 t = threading.Thread(target=getMem)
                 t.start()
-                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsr=2.0*(1 - 0.01j), Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsrs=[2.0*(1 - 0.01j)], Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
                 memGather = comm.gather(process_mem, root=model_rank)
                 if(comm.rank == model_rank):
                     memTotal = sum(memGather) ## keep the total usage. Only the master rank should be used, so this should be fine
@@ -495,11 +476,11 @@ if __name__ == '__main__':
     
     
     
-    errorTestPlots()
+    #errorTestPlots()
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    #runName = 'testRunSmall' ## h=1/8
+    runName = 'testRunSmall' ## h=1/8
     #runName = 'testRunLarger' ## h=1/18
     
     #testRun(h=1/2)
@@ -519,7 +500,9 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #testPatchPattern(h=1/10, degree=1)
+    runName = 'patchPatternTest'
+    testPatchPattern(h=1/4, degree=3, freqs = np.linspace(8e9, 12e9, 30))
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
     # runName = 'testingComplexObject' ## h=1/12

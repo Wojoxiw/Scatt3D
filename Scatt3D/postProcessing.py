@@ -443,19 +443,17 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         fvec = data['fvec']
         S_ref = data['S_ref']
         S_dut = data['S_dut']
-        epsr_mat = data['epsr_mat']
-        epsr_defect = data['epsr_defect']
+        #epsr_mat = data['epsr_mat']
+        #epsr_defect = data['epsr_defect']
         N_antennas = data['N_antennas']
         antenna_radius = data['antenna_radius'] ## radius at which the antennas are placed
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         Nb = len(b)
         
-        #=======================================================================
-        # plt.plot((np.abs(S_ref.flatten()))) ## try plotting the Ss
-        # plt.plot((np.abs(S_dut.flatten())))
-        # plt.show()
-        #=======================================================================
+        plt.plot((np.abs(S_ref.flatten()))) ## try plotting the Ss
+        plt.plot((np.abs(S_dut.flatten())))
+        plt.show()
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:

@@ -310,7 +310,6 @@ class MeshInfo():
                 matDimTags.append(obj) ## the material fills the object
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
             defectDimTags = []
-            defectDimTags2 = [] ## for some geometry, have a second set of dimTags so it can be set to a different epsr
             if(not self.reference):
                 if(self.defect_geom == 'cylinder'):
                     defectDimTags = []
@@ -334,7 +333,7 @@ class MeshInfo():
                     gmsh.model.occ.translate([(self.tdim, defect2)], -self.object_scale*0.61, -self.object_scale*0.18, self.object_scale*0.18)
                     defectDimTags.append((self.tdim, defect1))
                     defectDimTags.append((self.tdim, defect3))
-                    defectDimTags2.append((self.tdim, defect2))
+                    defectDimTags.append((self.tdim, defect2))
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             
             ## Make the domain and the PML
@@ -385,28 +384,23 @@ class MeshInfo():
                 for n in np.arange(ndefects):
                     mapHere = mapHere+outDimTagsMap[2+nmats+n]
                 defectDimTags = [x for x in mapHere if x not in removeDimTags]
-                ndefects2 = len(defectDimTags2)
-                mapHere2 = []
-                for n in np.arange(ndefects2):
-                    mapHere2 = mapHere2+outDimTagsMap[2+nmats+ndefects+n]
-                defectDimTags2 = [x for x in mapHere2 if x not in removeDimTags+defectDimTags]
             else:
                 defectDimTags = []
-                defectDimTags2 = []
             mapHere = []
             for n in np.arange(nmats):
                 mapHere = mapHere+outDimTagsMap[2+n]
-            matDimTags = [x for x in mapHere if x not in removeDimTags+defectDimTags+defectDimTags2]
-            domainDimTags = [x for x in outDimTagsMap[1] if x not in removeDimTags+matDimTags+defectDimTags+defectDimTags2]
-            pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+defectDimTags2+matDimTags+removeDimTags]
+            matDimTags = [x for x in mapHere if x not in removeDimTags+defectDimTags]
+            domainDimTags = [x for x in outDimTagsMap[1] if x not in removeDimTags+matDimTags+defectDimTags]
+            pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+matDimTags+removeDimTags]
             gmsh.model.occ.remove(removeDimTags)
             gmsh.model.occ.synchronize()
             # Make physical groups for domains and PML
-            mat_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in matDimTags])
-            defect_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags])
-            defect_marker2 = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in defectDimTags2])
+            mat_markers = [gmsh.model.addPhysicalGroup(self.tdim, [x[1]]) for x in matDimTags]
+            defect_markers = [gmsh.model.addPhysicalGroup(self.tdim, x[[1]]) for x in defectDimTags]
             domain_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in domainDimTags])
             pml_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in pmlDimTags])
+            
+            print(f'Mesh made with {len(mat_markers)} material groups, and {len(defect_markers)} defect groups.')
             
             # Identify antenna surfaces and make physical groups (by checking the Center-of-Mass of each surface entity)
             pec_surface = []
@@ -525,23 +519,21 @@ class MeshInfo():
             #===================================================================
                 
             if(viewGMSH):
-                print(f'{mat_marker=}, {domain_marker=}, {pml_marker=}, {pec_surface_marker=}, {farfield_surface_marker=}, {antenna_surface_markers=}')
+                print(f'{mat_markers=}, {defect_markers=}, {domain_marker=}, {pml_marker=}, {pec_surface_marker=}, {farfield_surface_marker=}, {antenna_surface_markers=}')
                 print(f'{matDimTags=}, {domainDimTags=}, {pmlDimTags=}, {pec_surface=}, {farfield_surface=}, {antenna_surface=}')
                 gmsh.fltk.run() ## gives a PETSc error when run in a spack installation
                 exit()
             
         else: ## some data is also needed for subordinate processes
-            mat_marker = None
-            defect_marker = None
-            defect_marker2 = None
+            mat_markers = None
+            defect_markers = None
             domain_marker = None
             pml_marker = None
             pec_surface_marker = None
             antenna_surface_markers = None
             farfield_surface_marker = None
-        self.mat_marker = self.comm.bcast(mat_marker, root=self.model_rank)
-        self.defect_marker = self.comm.bcast(defect_marker, root=self.model_rank)
-        self.defect_marker2 = self.comm.bcast(defect_marker2, root=self.model_rank)
+        self.mat_markers = self.comm.bcast(mat_markers, root=self.model_rank)
+        self.defect_markers = self.comm.bcast(defect_markers, root=self.model_rank)
         self.domain_marker = self.comm.bcast(domain_marker, root=self.model_rank)
         self.pml_marker = self.comm.bcast(pml_marker, root=self.model_rank)
         self.pec_surface_marker = self.comm.bcast(pec_surface_marker, root=self.model_rank)
