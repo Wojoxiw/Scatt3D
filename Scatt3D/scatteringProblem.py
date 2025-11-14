@@ -897,8 +897,8 @@ class Scatt3DProblem():
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
             if( hasattr(self, 'S_ref')): ## need at least S_ref - otherwise, do not save
                 if(not hasattr(self, 'S_dut')):
-                    self.S_dut = None
-                    b = None
+                    self.S_dut = []
+                    b = []
                 else:
                     b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
                     for nf in range(self.Nf):

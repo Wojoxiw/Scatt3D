@@ -500,8 +500,8 @@ if __name__ == '__main__':
     
     
     
-    errorTestPlots()
-    errorTestPlots(False)
+    #errorTestPlots()
+    #errorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
@@ -525,8 +525,8 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #runName = 'patchPatternTest'
-    #testPatchPattern(h=1/7, degree=3, freqs = np.linspace(8e9, 12e9, 30))
+    runName = 'patchPatternTest'
+    testPatchPattern(h=1/4, degree=3, freqs = np.linspace(8e9, 12e9, 30))
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
