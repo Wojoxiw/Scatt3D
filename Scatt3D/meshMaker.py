@@ -396,7 +396,7 @@ class MeshInfo():
             gmsh.model.occ.synchronize()
             # Make physical groups for domains and PML
             mat_markers = [gmsh.model.addPhysicalGroup(self.tdim, [x[1]]) for x in matDimTags]
-            defect_markers = [gmsh.model.addPhysicalGroup(self.tdim, x[[1]]) for x in defectDimTags]
+            defect_markers = [gmsh.model.addPhysicalGroup(self.tdim, [x[1]]) for x in defectDimTags]
             domain_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in domainDimTags])
             pml_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in pmlDimTags])
             
