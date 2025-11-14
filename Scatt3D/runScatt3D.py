@@ -456,7 +456,7 @@ if __name__ == '__main__':
             if(sims):
                 testFullExample(h=1/oh, degree=3)
             else:
-                postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
+                errs = postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28])
               
         for oh in np.linspace(3, 7.45, 7): ## degree 2
             h = 1/oh
@@ -464,7 +464,7 @@ if __name__ == '__main__':
             if(sims):
                 testFullExample(h=1/oh, degree=2)
             else:
-                postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
+                errs = postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28])
         
         for oh in np.linspace(4, 17, 7): ## degree 1
             h = 1/oh
@@ -472,7 +472,7 @@ if __name__ == '__main__':
             if(sims):
                 testFullExample(h=1/oh, degree=1)
             else:
-                postProcessing.solveFromQs(folder+runName, onlyAPriori=False)
+                errs = postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28])
     
     
     

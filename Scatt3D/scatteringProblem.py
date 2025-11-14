@@ -83,7 +83,7 @@ class FEMmesh():
                     if cell not in cells:
                         cells.append(cell)
             cells.sort()
-            self.farfield_cells = np.array(cells)
+            self.farfield_cells = cells
         else:
             self.farfield_cells = []
             
