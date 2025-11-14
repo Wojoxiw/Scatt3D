@@ -422,7 +422,7 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             sys.stdout.flush()
             return x0.data[:, 0]
     
-def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyAPriori=True):
+def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyAPriori=True, returnResults=[]):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find and save files
@@ -430,6 +430,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
     :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
+    :param returnResult: List of timesteps to compute + return the error from - if empty, this is ignored
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -451,9 +452,11 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         Np = S_ref.shape[-1]
         Nb = len(b)
         
-        plt.plot((np.abs(S_ref.flatten()))) ## try plotting the Ss
-        plt.plot((np.abs(S_dut.flatten())))
-        plt.show()
+        #=======================================================================
+        # plt.plot((np.abs(S_ref.flatten()))) ## try plotting the Ss
+        # plt.plot((np.abs(S_dut.flatten())))
+        # plt.show()
+        #=======================================================================
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
@@ -757,27 +760,37 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         Ak_ap[A1:,:A2] = 1*np.imag(A_ap) ## A21
         Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
         bk = np.hstack((np.real(b),np.imag(b))) ## real b
-         
-        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, **spgl_settings)
         x_temp = np.zeros(N, dtype=complex)
-        x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 23)
-        print(f'Timestep 23 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
-          
-        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, **spgl_settings)
-        x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 24)
-        print(f'Timestep 24 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        errs = [] ## in case I want to return errors
+        
+        if(not returnResults or 23 in returnResults): ## if it is empty, or requested
+            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, **spgl_settings)
+            x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 23)
+            err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+            errs.append(err)
+            print(f'Timestep 23 reconstruction error: {err:.3e}')
+        
+        if(not returnResults or 24 in returnResults): ## if it is empty, or needed
+            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, **spgl_settings)
+            x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 24)
+            err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+            errs.append(err)
+            print(f'Timestep 24 reconstruction error: {err:.3e}')
         
         tau = 6e4 ## guess for a good tau
         iter_lim = 633
-        xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
-        x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 25)
-        print(f'Timestep 25 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        if(not returnResults or 25 in returnResults): ## if it is empty, or needed
+            xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
+            x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
+            cells.x.array[:] = x_temp + 0j
+            f.write_function(cells, 25)
+            err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+            errs.append(err)
+            print(f'Timestep 25 reconstruction error: {err:.3e}')
          
         f.close()
         if(not onlyAPriori):
@@ -791,25 +804,34 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
             Ak[:A1,A2:] = -1*np.imag(A) ## A12
             Ak[A1:,:A2] = 1*np.imag(A) ## A21
             Ak[A1:,A2:] = np.real(A) ## A22
-             
-            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, **spgl_settings)
             x_temp = np.zeros(N, dtype=complex)
-            x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 26)
-            print(f'Timestep 26 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
              
-            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, sigma=sigma, **spgl_settings)
-            x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 27)
-            print(f'Timestep 27 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
-              
-            xsol, resid, grad, info = spgl1.spgl1(Ak, bk, tau=tau, **spgl_settings)
-            x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 28)
-            print(f'Timestep 28 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            if(not returnResults or 26 in returnResults): ## if it is empty, or needed
+                xsol, resid, grad, info = spgl1.spgl1(Ak, bk, **spgl_settings)
+                x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+                cells.x.array[:] = x_temp + 0j
+                f.write_function(cells, 26)
+                reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+                errs.append(err)
+                print(f'Timestep 26 reconstruction error: {err:.3e}')
+            
+            if(not returnResults or 27 in returnResults): ## if it is empty, or needed
+                xsol, resid, grad, info = spgl1.spgl1(Ak, bk, sigma=sigma, **spgl_settings)
+                x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+                cells.x.array[:] = x_temp + 0j
+                f.write_function(cells, 27)
+                reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+                errs.append(err)
+                print(f'Timestep 27 reconstruction error: {err:.3e}')
+            
+            if(not returnResults or 28 in returnResults): ## if it is empty, or needed
+                xsol, resid, grad, info = spgl1.spgl1(Ak, bk, tau=tau, **spgl_settings)
+                x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
+                cells.x.array[:] = x_temp + 0j
+                f.write_function(cells, 28)
+                reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+                errs.append(err)
+                print(f'Timestep 28 reconstruction error: {err:.3e}')
             f.close()
           
             del Ak ## maybe this will help with clearing memory

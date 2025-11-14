@@ -488,7 +488,7 @@ if __name__ == '__main__':
     #actualProfilerRunning()
     
     #testFullExample(h=1/8, degree=1)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
@@ -501,7 +501,7 @@ if __name__ == '__main__':
     #testSolverSettings(h=1/6)
     
     runName = 'patchPatternTest'
-    testPatchPattern(h=1/4, degree=3, freqs = np.linspace(8e9, 12e9, 30))
+    testPatchPattern(h=1/7, degree=3, freqs = np.linspace(8e9, 12e9, 30))
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
