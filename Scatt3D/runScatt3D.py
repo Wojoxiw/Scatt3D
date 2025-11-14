@@ -449,30 +449,44 @@ if __name__ == '__main__':
             plt.show()
             
     def errorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
-    
+        errs3 = []
         for oh in np.linspace(2.5, 5, 7): ## degree 3
             h = 1/oh
             runName = f'degree3ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=3)
             else:
-                errs = postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28])
-              
+                errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+        errs2 = []
         for oh in np.linspace(3, 7.45, 7): ## degree 2
             h = 1/oh
             runName = f'degree2ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=2)
             else:
-                errs = postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28])
-        
+                errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+        errs1 = []
         for oh in np.linspace(4, 17, 7): ## degree 1
             h = 1/oh
             runName = f'degree1ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=1)
             else:
-                errs = postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28])
+                errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+                
+        errs1 = np.array(errs1); errs2 = np.array(errs2); errs3 = np.array(errs3)
+        if not sims: ## make the plot(s)
+            for degree in [1, 2, 3]:
+                fig = plt.figure()
+                ax1 = plt.subplot(1, 1, 1)
+                
+                ax1.plot()
+                ax1.legend()
+                ax1.grid(True)
+                plt.xlabel('# dofs')
+                plt.ylabel('Reconstruction Error')
+                plt.title(f'Degree {degree} reconstruction errors')
+                plt.savefig(folder+runName+'reconstructioncomparisons.png')
     
     
     

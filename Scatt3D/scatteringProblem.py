@@ -898,12 +898,13 @@ class Scatt3DProblem():
             if( hasattr(self, 'S_ref')): ## need at least S_ref - otherwise, do not save
                 if(not hasattr(self, 'S_dut')):
                     self.S_dut = None
-                
-                b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
-                for nf in range(self.Nf):
-                    for m in range(meshInfo.N_antennas):
-                        for n in range(meshInfo.N_antennas):
-                            b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
+                    b = None
+                else:
+                    b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
+                    for nf in range(self.Nf):
+                        for m in range(meshInfo.N_antennas):
+                            for n in range(meshInfo.N_antennas):
+                                b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
                 np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius)
                 
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
