@@ -161,8 +161,8 @@ if __name__ == '__main__':
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
         prevRuns.memTimeAppend(prob)
         
-    def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9])): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
-        runName = 'patchPatternTest'
+    def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9]), name='patchPatternTest'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+        runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patch', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
@@ -449,25 +449,27 @@ if __name__ == '__main__':
             plt.show()
             
     def errorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
-        errs3 = []; dofs3 = []
-        for oh in np.linspace(2.5, 5, 7): ## degree 3
-            runName = f'degree3ho{oh:.1f}'
-            if(sims):
-                testFullExample(h=1/oh, degree=3)
-            else:
-                errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
-                load = np.load(folder+runName+'output.npz')
-                dofs3.append(load['ndofs'])
-                
-        errs2 = []; dofs2 = []
-        for oh in np.linspace(3, 7.45, 7): ## degree 2
-            runName = f'degree2ho{oh:.1f}'
-            if(sims):
-                testFullExample(h=1/oh, degree=2)
-            else:
-                errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
-                load = np.load(folder+runName+'output.npz')
-                dofs2.append(load['ndofs'])
+        #=======================================================================
+        # errs3 = []; dofs3 = []
+        # for oh in np.linspace(2.5, 5, 7): ## degree 3
+        #     runName = f'degree3ho{oh:.1f}'
+        #     if(sims):
+        #         testFullExample(h=1/oh, degree=3)
+        #     else:
+        #         errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+        #         load = np.load(folder+runName+'output.npz')
+        #         dofs3.append(load['ndofs'])
+        #         
+        # errs2 = []; dofs2 = []
+        # for oh in np.linspace(3, 7.45, 7): ## degree 2
+        #     runName = f'degree2ho{oh:.1f}'
+        #     if(sims):
+        #         testFullExample(h=1/oh, degree=2)
+        #     else:
+        #         errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+        #         load = np.load(folder+runName+'output.npz')
+        #         dofs2.append(load['ndofs'])
+        #=======================================================================
                 
         errs1 = []; dofs1 = []
         for oh in np.linspace(4, 17, 7): ## degree 1
@@ -500,7 +502,7 @@ if __name__ == '__main__':
     
     
     
-    #errorTestPlots()
+    errorTestPlots()
     #errorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
@@ -525,9 +527,9 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTest'
-    testPatchPattern(h=1/4, degree=3, freqs = np.linspace(8e9, 12e9, 30))
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    runName = 'patchPatternTestd1' #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3', h=1/6
+    #testPatchPattern(h=1/15, degree=1, freqs = np.linspace(8e9, 12e9, 30), name=runName)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
     # runName = 'testingComplexObject' ## h=1/12

@@ -62,8 +62,13 @@ class FEMmesh():
         # Create measures for subdomains and surfaces
         self.dx = ufl.Measure('dx', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.cell_tags, metadata={'quadrature_degree': self.dxquaddeg})
         
-        #self.dx_dom = self.dx((self.meshInfo.domain_marker, self.meshInfo.mat_marker, self.meshInfo.defect_marker))
-        #self.dx_pml = self.dx(self.meshInfo.pml_marker)
+        domain_markers = (self.meshInfo.domain_marker,)
+        for mat_marker in self.meshInfo.mat_markers:
+            domain_markers = domain_markers + (mat_marker,)
+        for defect_marker in self.meshInfo.defect_markers:
+            domain_markers = domain_markers + (defect_marker,)
+        self.dx_dom = self.dx(domain_markers)
+        self.dx_pml = self.dx(self.meshInfo.pml_marker)
         
         self.ds = ufl.Measure('ds', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.facet_tags) ## changing quadrature degree on ds/dS doesn't seem to have any effect
         self.dS = ufl.Measure('dS', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.facet_tags) ## capital S for internal facets (shared between two cells?)
@@ -422,6 +427,16 @@ class Scatt3DProblem():
             
             expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.Vspace.element.interpolation_points)
             Ep.interpolate(expr)
+            
+            
+        #=======================================================================
+        # areaCalc = 1*FEMm.dx_dom ## calculate domain volume
+        # areaPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
+        # print(f'{areaPart=}')
+        # areaCalc = 1*FEMm.dx_pml ## calculate PML volume
+        # areaPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
+        # print(f'{areaPart=}')
+        #=======================================================================
         
         Eb = dolfinx.fem.Function(FEMm.Vspace) ## background/plane wave excitation
         
@@ -437,16 +452,16 @@ class Scatt3DProblem():
         F_antennas_str = '0' ## seems to give an error when evaluating an empty string
         for n in range(meshInfo.N_antennas):
             F_antennas_str += f"""+ 1j*k00/Zrel*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}] - 1j*k00/Zrel*2*a[{n}]*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}]"""
+        F = ufl.inner(1/FEMm.mur*curl_E, curl_v)*FEMm.dx_dom \
+            - ufl.inner(k00**2*FEMm.epsr*E, v)*FEMm.dx_dom \
+            + ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx_pml \
+            - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx_pml \
+            - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx_dom + eval(F_antennas_str) ## background field and antenna terms
         #=======================================================================
-        # F = ufl.inner(1/FEMm.mur*curl_E, curl_v)*FEMm.dx_dom \
-        #     - ufl.inner(k00**2*FEMm.epsr*E, v)*FEMm.dx_dom \
-        #     + ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx_pml \
-        #     - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx_pml \
-        #     - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx_dom + eval(F_antennas_str) ## background field and antenna terms
+        # F = ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx \
+        #     - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx \
+        #     - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx + eval(F_antennas_str) ## background field and antenna terms
         #=======================================================================
-        F = ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx \
-            - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx \
-            - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx + eval(F_antennas_str) ## background field and antenna terms
         bcs = [FEMm.bc_pec]
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
         max_its = 10000
@@ -897,8 +912,8 @@ class Scatt3DProblem():
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
             if( hasattr(self, 'S_ref')): ## need at least S_ref - otherwise, do not save
                 if(not hasattr(self, 'S_dut')):
-                    self.S_dut = 0
-                    b = 0
+                    self.S_dut = np.array(0)
+                    b = np.array(0)
                 else:
                     b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
                     for nf in range(self.Nf):
@@ -1068,7 +1083,7 @@ class Scatt3DProblem():
             
                 def evalFs(): ## evaluates the farfield in some given direction khat
                     khatnp = [np.sin(angles[i,0]*pi/180)*np.cos(angles[i,1]*pi/180), np.sin(angles[i,0]*pi/180)*np.sin(angles[i,1]*pi/180), np.cos(angles[i,0]*pi/180)] ## so I can use it in evalFs as regular numbers - not sure how else to do this
-                    exp_kr.interpolate(lambda x: np.exp(1j*k*(khatnp[0]*x[0] + khatnp[1]*x[1] + khatnp[2]*x[2])), FEMm.farfield_cells) ## not sure how to use ufl for this expression.
+                    exp_kr.interpolate(lambda x: np.exp(1j*k*(khatnp[0]*x[0] + khatnp[1]*x[1] + khatnp[2]*x[2])), np.array(FEMm.farfield_cells)) ## not sure how to use ufl for this expression.
                     prefactor.value = 1j*k/(4*pi)
                     F_theta = dolfinx.fem.assemble.assemble_scalar(self.F_theta)
                     F_phi = dolfinx.fem.assemble.assemble_scalar(self.F_phi)

@@ -211,7 +211,7 @@ class MeshInfo():
             PECSurfacePts = []; ## points that are on only PEC surfaces
             antennaSurfacePts = []; ## points that are on only the antenna surface
             antennas_DimTags = []
-            matDimTags = []; defectDimTags = []; defectDimTags2 = []
+            matDimTags = []; defectDimTags = [];
             ## Make the antennas
             if(self.antenna_type == 'waveguide'):
                 x_antenna = np.zeros((self.N_antennas, 3))
@@ -369,7 +369,7 @@ class MeshInfo():
                 FF_surface_dimTags = [(self.tdim, FF_surface)]
                 
             # Create fragments and dimtags
-            outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + defectDimTags + defectDimTags2 + FF_surface_dimTags + antennas_DimTags)
+            outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + defectDimTags + FF_surface_dimTags + antennas_DimTags)
             
             removeDimTags = [] ## remove these surfaces for later addition to PEC or FF surfaces
             if(self.N_antennas > 0):
@@ -447,7 +447,7 @@ class MeshInfo():
                 objectMeshField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/2)
                 gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
-                gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [x[1] for x in matDimTags+defectDimTags+defectDimTags2])
+                gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [x[1] for x in matDimTags+defectDimTags])
                  
                 domainMeshField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumber(domainMeshField, "VIn", self.h)

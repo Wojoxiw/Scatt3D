@@ -450,13 +450,19 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         antenna_radius = data['antenna_radius'] ## radius at which the antennas are placed
         Nf = len(fvec)
         Np = S_ref.shape[-1]
-        Nb = len(b)
+        #Nb = len(b)
         
-        #=======================================================================
-        # plt.plot((np.abs(S_ref.flatten()))) ## try plotting the Ss
-        # plt.plot((np.abs(S_dut.flatten())))
-        # plt.show()
-        #=======================================================================
+        plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref.flatten())), label='FEM sim') ## try plotting the Ss
+        #plt.plot(np.abs(S_dut.flatten()))
+        fekof = 'TestStuff/FEKO patch S11.dat'
+        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        plt.plot(fekoData[0]/1e9, fekoData[1], label='FEKO')
+        plt.plot()
+        plt.grid()
+        plt.ylabel(r'S$_{11}$ [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.legend()
+        plt.show()
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
