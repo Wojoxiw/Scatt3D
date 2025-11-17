@@ -96,9 +96,11 @@ class FEMmesh():
         # Set up material parameters. Not changing mur for now, need to edit this if doing so
         if(len(material_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
             material_epsrs = [material_epsrs[0] for x in self.meshInfo.mat_markers]
+        if(len(material_murs) == 1): ## if only one is specified, make sure it's value is used for all
             material_murs = [material_murs[0] for x in self.meshInfo.mat_markers]
         if(len(defect_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
             defect_epsrs = [defect_epsrs[0] for x in self.meshInfo.defect_markers]
+        if(len(defect_murs) == 1): ## if only one is specified, make sure it's value is used for all
             defect_murs = [defect_murs[0] for x in self.meshInfo.defect_markers]
         
         

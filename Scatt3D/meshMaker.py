@@ -30,7 +30,7 @@ class MeshInfo():
                  reference = True,
                  f0 = 10e9,
                  verbosity = 0,
-                 h = 1/15,
+                 h = -1,
                  domain_geom = 'sphere',#'domedCyl', 
                  object_geom = 'cubic',#'complex1'
                  defect_geom = 'cylinder',#'complex1'
@@ -62,7 +62,7 @@ class MeshInfo():
         :param fname: Mesh filename + directory. If empty, does not save it (currently does not ever save it)
         :param reference: Does not include any defects in the mesh.
         :param f0: Design frequency - things will be scaled by the corresponding wavelength
-        :param h: typical mesh size, in fractions of a wavelength
+        :param h: typical mesh size, in fractions of a wavelength. If less than 1, decide based on mesh order (assuming it's equal to FEM degree)
         :param verbosity: This is passed to gmsh, also if > 0, I print more stuff
         :param domain_geom: The geometry of the domain (and PML).
         :param object_geom: Geometry of the object ('sphere', 'cylinder', 'cubic', 'None')
@@ -96,7 +96,18 @@ class MeshInfo():
         if(fname == ''): # if not given a name, just use 'mesh'
             fname = 'mesh.msh'
         self.fname = fname                                  # Mesh filename (+location from script)
-        self.h = h * self.lambda0
+        if(h<0): ## pick from the below options, which should be fairly fine
+            if(order==1):
+                self.h = 1/4 * self.lambda0
+            elif(order==1):
+                self.h = 1/6 * self.lambda0
+            elif(order==1):
+                self.h = 1/10 * self.lambda0
+            else:
+                print(f'Unable to decide mesh h, {order=}')
+                exit()
+        else:
+            self.h = h * self.lambda0
         self.domain_geom = domain_geom            # setting to choose domain geometry - current only 'domedCyl' exists
         self.verbosity = verbosity
         self.reference = reference
@@ -325,8 +336,8 @@ class MeshInfo():
                     defectDimTags.append((self.tdim, defect2))
                 elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
                     defectDimTags = []
-                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## small cylinder centered on the origin
-                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1, 0.64, 0.17)
+                    defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## flat, wide cylinderoid centered on the origin
+                    gmsh.model.occ.dilate([(self.tdim, defect1)], 0, 0, 0, 1.36, 0.77, 0.11)
                     
                     defect2 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/8,0,0,self.defect_height/4, self.defect_radius*0.3) ## tall cylinder back in the thing
                     gmsh.model.occ.rotate([(self.tdim, defect2)], 0, 0, 0, 0, 1, 0, 30*pi/180)
@@ -400,7 +411,7 @@ class MeshInfo():
             domain_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in domainDimTags])
             pml_marker = gmsh.model.addPhysicalGroup(self.tdim, [x[1] for x in pmlDimTags])
             
-            print(f'Mesh made with {len(mat_markers)} material groups, and {len(defect_markers)} defect groups.')
+            print(f'Mesh markers created: {len(mat_markers)} material groups, and {len(defect_markers)} defect groups.')
             
             # Identify antenna surfaces and make physical groups (by checking the Center-of-Mass of each surface entity)
             pec_surface = []
@@ -443,7 +454,8 @@ class MeshInfo():
             antenna_surface_markers = [gmsh.model.addPhysicalGroup(self.fdim, [s]) for s in antenna_surface]
             farfield_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, farfield_surface)
             
-            if(True): ### one option - Try to reduce the mesh size within the object to h/2, h outside. Reality has h/2 inside, slow dropoff to h outside
+            if(True): ### Try to reduce the mesh size within the object, and particularly within antennas/feed-structures, let it grow larger outside.
+                #With current settings, the mesh is small where specified and slowly grows larger outside
                 objectMeshField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/2)
                 gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
