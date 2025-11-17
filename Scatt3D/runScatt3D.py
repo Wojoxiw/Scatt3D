@@ -481,24 +481,26 @@ if __name__ == '__main__':
                 load = np.load(folder+runName+'output.npz')
                 dofs1.append(load['ndofs'])
         
-        dofs = {'1': dofs1, '2': dofs2, '3': dofs3} ## should be [meshsize]
-        errs = {'1': np.array(errs1), '2': np.array(errs2), '3': np.array(errs3)} ## should be [meshsize, result]
-        if not sims: ## make the plot(s)
-            for degree in [1, 2, 3]:
-                fig = plt.figure()
-                ax1 = plt.subplot(1, 1, 1)
-                
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
-                
-                ax1.legend()
-                ax1.grid(True)
-                plt.xlabel('# dofs')
-                plt.ylabel('Reconstruction Error')
-                plt.title(f'Degree {degree} reconstruction errors')
-                plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
+        #=======================================================================
+        # if(not sims): ## make the plot(s)
+        #     dofs = {'1': dofs1, '2': dofs2, '3': dofs3} ## should be [meshsize]
+        #     errs = {'1': np.array(errs1), '2': np.array(errs2), '3': np.array(errs3)} ## should be [meshsize, result]
+        #     for degree in [1, 2, 3]:
+        #         fig = plt.figure()
+        #         ax1 = plt.subplot(1, 1, 1)
+        #         
+        #         ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
+        #         ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
+        #         ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
+        #         ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
+        #         
+        #         ax1.legend()
+        #         ax1.grid(True)
+        #         plt.xlabel('# dofs')
+        #         plt.ylabel('Reconstruction Error')
+        #         plt.title(f'Degree {degree} reconstruction errors')
+        #         plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
+        #=======================================================================
     
     
     
