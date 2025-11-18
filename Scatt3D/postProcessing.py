@@ -421,16 +421,17 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     
             sys.stdout.flush()
             return x0.data[:, 0]
-    
-def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyAPriori=True, returnResults=[]):
+
+def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[]):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find and save files
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
+    :param onlyNAntennas: Use indices such that it is like we only had N antennas to measure with. If 0, uses all data
     :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
-    :param returnResult: List of timesteps to compute + return the error from - if empty, this is ignored
+    :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -450,29 +451,32 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         antenna_radius = data['antenna_radius'] ## radius at which the antennas are placed
         Nf = len(fvec)
         Np = S_ref.shape[-1]
-        #Nb = len(b)
+        Nb = len(b)
         
-        plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref.flatten())), label='FEM sim') ## try plotting the Ss
-        #plt.plot(np.abs(S_dut.flatten()))
-        fekof = 'TestStuff/FEKO patch S11.dat'
-        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-        plt.plot()
-        plt.grid()
-        plt.ylabel(r'S$_{11}$ [dB]')
-        plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
-        plt.legend()
-        plt.show()
-        ## then plot the phase of S11, also
-        plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
-        plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), 'label = FEKO')
-        plt.grid()
-        plt.ylabel(r'Phase of S$_{11}$ [radians]')
-        plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
-        plt.legend()
-        plt.show()
+        #=======================================================================
+        # plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref.flatten())), label='FEM sim') ## try plotting the Ss
+        # #plt.plot(np.abs(S_dut.flatten()))
+        # fekof = 'TestStuff/FEKO patch S11.dat'
+        # fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        # plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+        # plt.plot()
+        # plt.grid()
+        # plt.ylabel(r'S$_{11}$ [dB]')
+        # plt.xlabel(r'Frequency [GHz]')
+        # plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
+        # plt.legend()
+        # plt.show()
+        # ## then plot the phase of S11, also
+        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
+        # plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
+        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
+        # plt.grid()
+        # plt.ylabel(r'Phase of S$_{11}$ [radians]')
+        # plt.xlabel(r'Frequency [GHz]')
+        # plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
+        # plt.legend()
+        # plt.show()
+        #=======================================================================
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
@@ -505,12 +509,19 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
             N_non_pml = len(idx_non_pml)
             A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
             for nf in range(Nf):
-                for m in range(N_antennas):
-                    for n in range(N_antennas):
-                        if( ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) and (nf in frequenciesToUse or len(frequenciesToUse)==0) ):
-                            i = nf*N_antennas*N_antennas + m*N_antennas + n
-                            Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
-                            A[i,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
+                if(nf in frequenciesToUse or len(frequenciesToUse)==0):
+                    for m in range(N_antennas): ## transmitting index
+                        for n in range(N_antennas): ## receiving index
+                            if( ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ):
+                                i = nf*N_antennas*N_antennas + m*N_antennas + n
+                                useIndex = True
+                                if(onlyNAntennas > 0): ## use only transmission to the N antennas that are most spread out (as if we only had N antennas to measure with) This includes the antenna itself - if N is 1, then there is only reflection
+                                    dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas
+                                    if( np.abs(n-m)%dist != 0 ):
+                                        useIndex = False
+                                if(useIndex):
+                                    Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
+                                    A[i,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
             del Apart ## maybe this will help with clearing memory
         gc.collect()
                 

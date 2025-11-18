@@ -357,7 +357,7 @@ class Scatt3DProblem():
             :param x: Some vector of positions you want to find the field on
             """
             Ep = np.zeros((3, x.shape[1]), dtype=complex)
-            if(self.excitation == 'patch'): ## for now, just quickly return.
+            if(self.excitation == 'patchtest'):
                 centre = np.array([meshInfo.feed_offsetx, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh])## centre of the radiating face
                 y = (x.T-centre).T ## local position
                 r = np.sqrt(y[0]**2 + y[1]**2)

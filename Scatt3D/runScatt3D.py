@@ -132,15 +132,15 @@ if __name__ == '__main__':
         
     def testLargeExample(h = 1/15, degree = 1, dutOnRefMesh=True): ## Testing a large-object example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        settings = {'N_antennas': 9, 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h, 'defect_height': .63, 'defect_radius': .31, 'object_radius': 1.09} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
+        settings = {'N_antennas': 9, 'material_epsrs': [3.0*(1 - 0.01j)], 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h, 'defect_height': .63, 'defect_radius': .31, 'object_radius': 1.09, 'antenna_type': 'patch'} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = True, verbosity = verbosity, **settings)
         else:
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, **settings)
         #dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, defect_epsrs=[4.0*(1 - 0.01j), 4.0*(1 - 0.01j), 2.0*(1 - 0.01j)])
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, material_epsrs=[3.0*(1 - 0.01j)], fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, defect_epsrs=[4.0*(1 - 0.01j), 4.0*(1 - 0.01j), 2.0*(1 - 0.01j)])
         prob.makeOptVectors(skipQs=True)
         prob.saveEFieldsForAnim(True)
         prob.saveEFieldsForAnim(False)
@@ -164,10 +164,10 @@ if __name__ == '__main__':
     def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9]), name='patchPatternTest'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patch', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='patch', freqs = freqs, fem_degree=degree, material_epsrs=[2.1])
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='patchtest', freqs = freqs, fem_degree=degree, material_epsrs=[2.1])
         #prob.saveEFieldsForAnim()
         #prob.calcFarField(reference=True, plotFF=True, showPlots=True)
         prevRuns.memTimeAppend(prob)
@@ -499,7 +499,7 @@ if __name__ == '__main__':
                 plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
     
-    
+    testPatchPattern(h=1/10, degree=1, freqs = np.linspace(8e9, 12e9, 30), name=runName)
     #errorTestPlots()
     #errorTestPlots(False)
     
@@ -513,9 +513,11 @@ if __name__ == '__main__':
     #actualProfilerRunning()
     
     #testFullExample(h=1/8, degree=1)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
+    postProcessing.solveFromQs(folder+runName, solutionName='just2antennas', onlyNAntennas=2)
+    postProcessing.solveFromQs(folder+runName, solutionName='just4antennas', onlyNAntennas=4)
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
     
@@ -525,12 +527,12 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTestd2small' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3', h=1/6
-    testPatchPattern(h=1/10, degree=2, freqs = np.linspace(8e9, 12e9, 30), name=runName)
+    runName = 'patchPatternTestd1' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/6
+    #testPatchPattern(h=1/6, degree=2, freqs = np.linspace(8e9, 12e9, 30), name=runName)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     runName = 'testingComplexObject' ## h=1/12
-    #testLargeExample(h=1/7.4, degree=2)
+    #testLargeExample(h=1/12, degree=2)
     #postProcessing.solveFromQs(folder+runName)
     
     #runName = 'testingShiftedDut' ## h=1/12
