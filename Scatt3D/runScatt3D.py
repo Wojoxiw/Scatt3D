@@ -525,13 +525,13 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTestd1' #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3', h=1/6
-    #testPatchPattern(h=1/15, degree=1, freqs = np.linspace(8e9, 12e9, 30), name=runName)
+    runName = 'patchPatternTestd2small' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3', h=1/6
+    testPatchPattern(h=1/10, degree=2, freqs = np.linspace(8e9, 12e9, 30), name=runName)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     runName = 'testingComplexObject' ## h=1/12
-    testLargeExample(h=1/7.4, degree=2)
-    postProcessing.solveFromQs(folder+runName)
+    #testLargeExample(h=1/7.4, degree=2)
+    #postProcessing.solveFromQs(folder+runName)
     
     #runName = 'testingShiftedDut' ## h=1/12
     #testShiftedExample(h=1/12, degree=1)
