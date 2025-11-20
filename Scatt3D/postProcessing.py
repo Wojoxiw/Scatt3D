@@ -421,6 +421,14 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     
             sys.stdout.flush()
             return x0.data[:, 0]
+        
+def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitude and/or absolute phase noise to the scattering parameters, to see how it affects the reconstruction. If not random, just offset all parameters
+    amp = 1+amp ## so it's relative amplitude
+    if(random): ## normal distribution
+        Ss = Ss*np.exp(1j*np.random.normal(0, phase, np.shape(Ss)))*np.random.normal(0, amp, np.shape(Ss))
+    else:
+        Ss = Ss*np.exp(1j*phase)*amp
+    return Ss
 
 def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[]):
     '''

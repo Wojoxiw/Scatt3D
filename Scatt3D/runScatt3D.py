@@ -104,8 +104,8 @@ if __name__ == '__main__':
     def testRunDifferentDUTAntennas(h = 1/15, degree = 1): ## Testing what happens when different antennas are used in the ref (simulation) as in the DUT case
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01])} ## settings for the meshMaker
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, antennaType='waveguide', **settings)
-        dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, antennaType='patch', **settings)
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, antenna_type='waveguide', **settings)
+        dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, antenna_type='patch', **settings)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=False)
         prob.saveEFieldsForAnim(True)
         prob.saveEFieldsForAnim(False)
@@ -218,6 +218,99 @@ if __name__ == '__main__':
             
             refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=deg, **meshOptions)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsrs=[2.0*(1-0.01j)], Nf=1, fem_degree=deg, **probOptions)
+            newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
+            simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
+            prevRuns.memTimeAppend(prob)
+            if(comm.rank == model_rank): ## only needed for main process
+                areaVals.append(newval)
+                ndofs[i] = prob.FEMmesh_ref.ndofs
+                calcT[i] = prob.calcTime
+                khatRmsErrs[i] = np.sqrt(np.sum(khats**2)/np.size(khats))
+                khatMaxErrs[i] = np.max(khats)
+                intenss = np.abs(farfields[0,:,0])**2 + np.abs(farfields[0,:,1])**2
+                FFrelativeErrors = np.abs( (intenss - mies) ) / np.abs( mies )
+                FFrmsRelErrs[i] = np.sqrt(np.sum(FFrelativeErrors**2)/np.size(FFrelativeErrors))
+                FFvrelativeErrors = np.abs( (intenss - mies) ) / np.max(np.abs(mies)) ## relative to the max. mie intensity, to make it even more relative
+                FFrmsveryRelErrs[i] = np.sqrt(np.sum(FFvrelativeErrors**2)/np.size(FFvrelativeErrors)) ## absolute error, scaled by the max. mie value
+                FFmaxRelErrs[i] = np.max(FFrelativeErrors)
+                FFmaxErrRel[i] = np.abs( np.max(intenss - mies)) / np.max(np.abs(mies))
+                NFrmsErrs[i] = np.sqrt(np.sum(np.abs(simNF-FEKONF)**2)/np.size(simNF)) / np.max(np.abs(FEKONF))
+                if(verbosity>1):
+                    print(f'Run {i+1}/{len(ks)} completed')
+                ## Plot each iteration for case of OOM or such
+                real_area = 4*pi*prob.FEMmesh_ref.meshInfo.FF_surface_radius**2
+                
+                
+                if(convergence == 'meshsize'): ## plot 3 times - also vs time and ndofs
+                    p=0
+                else:
+                    p=2
+                    
+                while p<3: ## just to do the multiple plots
+                    fig1 = plt.figure()
+                    fig1.set_size_inches(8, 6)
+                    ax1 = plt.subplot(1, 1, 1)
+                    ax1.grid(True)
+                    ax1.set_title('Convergence of Different Values')
+                    idx = np.argsort(ks[:i+1]) ## ordered increasing
+                    if(convergence == 'meshsize'):
+                        if(p==0):
+                            ax1.set_xlabel(r'Inverse mesh size ($\lambda / h$)')
+                            idx = np.argsort(-ks[:i+1])
+                            xs = ks
+                        elif(p==1):
+                            ax1.set_xlabel(r'Calculation Time [s]')
+                            xs = calcT
+                        else:
+                            ax1.set_xlabel(r'# of dofs')
+                            xs = ndofs
+                    elif(convergence == 'pmlR0'):
+                        ax1.set_xlabel(r'R0')
+                        ax1.set_xscale('log')
+                    elif(convergence == 'dxquaddeg'):
+                        ax1.set_xlabel(r'dx Quadrature Degree')
+                    
+                    ax1.plot(xs[idx], np.abs((real_area-np.array(areaVals))/real_area)[idx], marker='o', linestyle='--', label = r'$\int dS$ - rel. error')
+                    #ax1.plot(xs[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
+                    ax1.plot(xs[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - RMS error')
+                    ax1.plot(xs[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
+                    ax1.plot(xs[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS. error, normalized')
+                    #ax1.plot(xs[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
+                    ax1.plot(xs[idx], NFrmsErrs[idx], marker='o', linestyle='--', label = r'Nearfield-FEKO error norm, rel.')
+                    
+                    ax1.set_yscale('log')
+                    ax1.legend()
+                    fig1.tight_layout()
+                    plt.savefig(prob.dataFolder+prob.name+convergence+f'meshconvergence{p}deg{deg}.png')
+                    p+=1
+                    if(MPInum == 1 and i==len(ks)-1): ## only show the last one
+                        plt.show()
+                    plt.close()
+                    
+    def patchConvergenceTestPlots(convergence = 'meshsize', degree=3): ## Runs with reducing mesh size, for convergence plots. Uses the patch antenna test case, comparing to the FEKO result. If showPlots, show them - otherwise just save them
+        if(convergence == 'meshsize'):
+            ks = np.linspace(5, 14, 6)
+            
+        ndofs = np.zeros_like(ks) ## to hold problem size
+        calcT = np.zeros_like(ks) ## to hold problem size
+            
+        areaVals = [] ## vals returned from the calculations
+        FFrmsRelErrs = np.zeros(len(ks)) ## for the farfields
+        FFrmsveryRelErrs = np.zeros(len(ks))
+        FFmaxRelErrs = np.zeros(len(ks))
+        FFmaxErrRel = np.zeros(len(ks))
+        NFrmsErrs = np.zeros(len(ks))
+        khatRmsErrs = np.zeros(len(ks))
+        khatMaxErrs = np.zeros(len(ks))
+        meshOptions = dict()
+        probOptions = dict()
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        for i in range(len(ks)):
+            if(convergence == 'meshsize'):
+                meshOptions = dict(h = 1/ks[i])
+            
+            refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, domain_geom='sphere', antenna_type='patchtest', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree, **meshOptions)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
             simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
             prevRuns.memTimeAppend(prob)
