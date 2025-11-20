@@ -90,12 +90,25 @@ if __name__ == '__main__':
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         else:
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-        #dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, excitation=antennaType, dutOnRefMesh=dutOnRefMesh)
+        if(not dutOnRefMesh):
+            dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+        else:
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
         prob.saveEFieldsForAnim(True)
         #prob.saveEFieldsForAnim(False)
+        prevRuns.memTimeAppend(prob)
+    
+    def testRunDifferentDUTAntennas(h = 1/15, degree = 1): ## Testing what happens when different antennas are used in the ref (simulation) as in the DUT case
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01])} ## settings for the meshMaker
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, antennaType='waveguide', **settings)
+        dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, antennaType='patch', **settings)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=False)
+        prob.saveEFieldsForAnim(True)
+        prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         
     def testShiftedExample(h = 1/15, degree = 1, dutOnRefMesh=False): ## Where the separate dut mesh has the object shifted by some amount
@@ -167,7 +180,7 @@ if __name__ == '__main__':
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='patchtest', freqs = freqs, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
         prob.saveEFieldsForAnim()
         #prob.calcFarField(reference=True, plotFF=True, showPlots=True)
         prevRuns.memTimeAppend(prob)
@@ -450,7 +463,7 @@ if __name__ == '__main__':
             
     def errorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
         errs3 = []; dofs3 = []
-        for oh in np.linspace(2.5, 5, 7): ## degree 3
+        for oh in np.linspace(2, 4.5, 7): ## degree 3
             runName = f'degree3ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=3)
@@ -460,7 +473,7 @@ if __name__ == '__main__':
                 dofs3.append(load['ndofs'])
                  
         errs2 = []; dofs2 = []
-        for oh in np.linspace(3, 7.45, 7): ## degree 2
+        for oh in np.linspace(2.5, 7, 7): ## degree 2
             runName = f'degree2ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=2)
@@ -470,7 +483,7 @@ if __name__ == '__main__':
                 dofs2.append(load['ndofs'])
                 
         errs1 = []; dofs1 = []
-        for oh in np.linspace(4, 17, 7): ## degree 1
+        for oh in np.linspace(4, 16, 7): ## degree 1
             runName = f'degree1ho{oh:.1f}'
             if(sims):
                 testFullExample(h=1/oh, degree=1)
@@ -499,20 +512,22 @@ if __name__ == '__main__':
                 plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
     
+    #testRun(h=1/2)
     #errorTestPlots()
     #errorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    runName = 'testRunSmall' ## h=1/8
+    #runName = 'testRunSmall' ## h=1/8
     #runName = 'testRunLarger' ## h=1/18
-    testFullExample(h=1/3.4, degree=3)
-    #runName = 'testRunPatches' ## h=1/8
-    #testFullExample(h=1/3.4, degree=3, antennaType='patch')
+    #testFullExample(h=1/3.4, degree=3)
+    runName = 'testRunPatches' ## h=1/8
+    testFullExample(h=1/3.4, degree=3, antennaType='patch')
     
-    #testRun(h=1/2)
-    #profilingMemsTimes()
-    #actualProfilerRunning()
+    #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
+    #testRunDifferentDUTAntennas(h=1/3.4, degree=3)
+    
+    
     
     #testFullExample(h=1/8, degree=1)
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
@@ -533,8 +548,8 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/6, degree=3, freqs = np.linspace(8e9, 12e9, 15), name=runName)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
-    runName = 'testingComplexObject' ## h=1/12
-    #testLargeExample(h=1/12, degree=2)
+    runName = 'testingComplexObject' ## h=1/8
+    #testLargeExample(h=1/8, degree=2)
     #postProcessing.solveFromQs(folder+runName)
     
     #runName = 'testingShiftedDut' ## h=1/12

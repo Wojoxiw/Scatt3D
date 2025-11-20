@@ -194,7 +194,7 @@ class Scatt3DProblem():
                  computeRef = True, # If computing immediately, computes the reference simulation, where defects are not included
                  ErefEdut = False, # compute optimization vectors with Eref*Edut, a less-approximated version of the equation. Should provide better results, but can only be used in simulation
                  dutOnRefMesh = True, # If true, rather than compute DUT things on its own, separate mesh, then interpolate between meshes (gives error for large, higher-order meshes) - just use the same mesh. Must have DUT mesh
-                 excitation = 'waveguide', # if 'planewave', sends in a planewave from the +x-axis, otherwise 'waveguide' excitation for the waveguides as normal. 'patch' for the patch antenna test
+                 excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise uses an antenna excitation, as given in the meshInfo
                  PW_dir = np.array([0, 0, 1]), ## incident direction of the plane-wave, if used above. Default is coming in from the z-axis, to align with miepython
                  PW_pol = np.array([1, 0, 0]), ## incident polarization of the plane-wave, if used above. Default is along the x-axis
                  makeOptVects = True, ## if True, compute and saves the optimization vectors. Turn False if not needed
@@ -375,55 +375,56 @@ class Scatt3DProblem():
             :param x: Some vector of positions you want to find the field on
             """
             Ep = np.zeros((3, x.shape[1]), dtype=complex)
-            if(self.excitation == 'patchtest'):
-                centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh])## centre of the radiating face
-                y = (x.T-centre).T ## local position
-                r = np.sqrt(y[0]**2 + y[1]**2)
-                rhat = np.array([y[0], y[1], y[0]*0])/r
-                E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
-                Ep = Ep + E
-                Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
-                Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
-                Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
-                return Ep
-            elif(self.excitation == 'patch'): ## the regular patches, rotated and placed facing radially inward
-                for p in range(meshInfo.N_antennas): ## for each antenna, translate + rotate back to the original coordinates it was defined in
-                    totalRot = np.dot(meshMaker.Rmaty(-pi/2), np.dot(meshMaker.Rmatz(-pi/2), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
-                    y = np.dot(totalRot, np.transpose(x.T - meshInfo.pos_antennas[p])) ## the new (original) coordinate system
-                    centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh]) ## centre of the radiating face
-                    y = (y.T-centre).T ## local position now, at the center of the radiating face
+            if(self.excitation=='antennas'):
+                if(meshInfo.antenna_type == 'patchtest'):
+                    centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh])## centre of the radiating face
+                    y = (x.T-centre).T ## local position
                     r = np.sqrt(y[0]**2 + y[1]**2)
                     rhat = np.array([y[0], y[1], y[0]*0])/r
-                    Ep_loc = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
-                    Ep_loc[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
-                    Ep_loc[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
-                    Ep_loc[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
-                    Ep = Ep + Ep_loc
-                return Ep
-            if(self.excitation == 'waveguide'):
-                for p in range(meshInfo.N_antennas):
-                    center = meshInfo.pos_antennas[p]
-                    phi = -meshInfo.rot_antennas[p] # Note rotation by the negative of antenna rotation
-                    Rmat = np.array([[np.cos(phi), -np.sin(phi), 0],
-                                     [np.sin(phi), np.cos(phi), 0],
-                                     [0, 0, 1]]) ## rotation around z
-                    y = np.transpose(x.T - center)
-                    loc_x = np.dot(Rmat, y) ### position vector, [x, y, z], rotated to be in the coordinates the antenna was defined in
-                    if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
-                        Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshInfo.kc*loc_x[0])))#/np.sqrt(meshInfo.antenna_height*meshInfo.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
-                    else: ## horizontal (x-) pol, field varies along z
-                        Ep_loc = np.vstack((np.cos(meshInfo.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])#/np.sqrt(meshInfo.antenna_width*meshInfo.antenna_height/2)
+                    E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
+                    Ep = Ep + E
+                    Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
+                    Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
+                    Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
+                    return Ep
+                elif(meshInfo.antenna_type == 'patch'): ## the regular patches, rotated and placed facing radially inward
+                    for p in range(meshInfo.N_antennas): ## for each antenna, translate + rotate back to the original coordinates it was defined in
+                        totalRot = np.dot(meshMaker.Rmaty(-pi/2), np.dot(meshMaker.Rmatz(-pi/2), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
+                        y = np.dot(totalRot, np.transpose(x.T - meshInfo.pos_antennas[p])) ## the new (original) coordinate system
+                        centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh]) ## centre of the radiating face
+                        y = (y.T-centre).T ## local position now, at the center of the radiating face
+                        r = np.sqrt(y[0]**2 + y[1]**2)
+                        rhat = np.array([y[0], y[1], y[0]*0])/r
+                        Ep_loc = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
+                        Ep_loc[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
+                        Ep_loc[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
+                        Ep_loc[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
+                        Ep = Ep + Ep_loc
+                    return Ep
+                if(meshInfo.antenna_type == 'waveguide'):
+                    for p in range(meshInfo.N_antennas):
+                        center = meshInfo.pos_antennas[p]
+                        phi = -meshInfo.rot_antennas[p] # Note rotation by the negative of antenna rotation
+                        Rmat = np.array([[np.cos(phi), -np.sin(phi), 0],
+                                         [np.sin(phi), np.cos(phi), 0],
+                                         [0, 0, 1]]) ## rotation around z
+                        y = np.transpose(x.T - center)
+                        loc_x = np.dot(Rmat, y) ### position vector, [x, y, z], rotated to be in the coordinates the antenna was defined in
+                        if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
+                            Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshInfo.kc*loc_x[0])))#/np.sqrt(meshInfo.antenna_height*meshInfo.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
+                        else: ## horizontal (x-) pol, field varies along z
+                            Ep_loc = np.vstack((np.cos(meshInfo.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])#/np.sqrt(meshInfo.antenna_width*meshInfo.antenna_height/2)
+                            
+                        #simple, inexact confinement conditions
+                        #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
+                        ##if I confine it to just the 'empty face' of the waveguide thing. After testing, this seems to make no difference to just selecting the entire antenna via a sphere, with the above line. Presumably since the antennas are far enough apart that the sphere doesn't hit another antenna
+                        Ep_loc[:, np.abs(loc_x[0])  > meshInfo.antenna_width*.5] = 0 ## no field outside of the antenna's width
+                        Ep_loc[:, np.abs(loc_x[1])  > 1e-5] = 0 ## no field outside of the antenna's depth - origin should be on this face - it is a face so no depth... I take a small depth (maybe not necessary)
+                        #for both
+                        Ep_loc[:,np.abs(loc_x[2]) > meshInfo.antenna_height*.5] = 0 ## no field outside of the antenna's height
                         
-                    #simple, inexact confinement conditions
-                    #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
-                    ##if I confine it to just the 'empty face' of the waveguide thing. After testing, this seems to make no difference to just selecting the entire antenna via a sphere, with the above line. Presumably since the antennas are far enough apart that the sphere doesn't hit another antenna
-                    Ep_loc[:, np.abs(loc_x[0])  > meshInfo.antenna_width*.5] = 0 ## no field outside of the antenna's width
-                    Ep_loc[:, np.abs(loc_x[1])  > 1e-5] = 0 ## no field outside of the antenna's depth - origin should be on this face - it is a face so no depth... I take a small depth (maybe not necessary)
-                    #for both
-                    Ep_loc[:,np.abs(loc_x[2]) > meshInfo.antenna_height*.5] = 0 ## no field outside of the antenna's height
-                    
-                    Ep_global = np.dot(Rmat, Ep_loc) ## need to rotate back to original coordinates
-                    Ep = Ep + Ep_global
+                        Ep_global = np.dot(Rmat, Ep_loc) ## need to rotate back to original coordinates
+                        Ep = Ep + Ep_global
                 return Ep
         def planeWave(x, k):
             '''
