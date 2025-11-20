@@ -20,6 +20,7 @@ from matplotlib.collections import _MeshData
 import miepython
 import miepython.field
 import resource
+import meshMaker
 eta0 = np.sqrt(mu0/eps0)
 
 #===============================================================================
@@ -63,7 +64,7 @@ class FEMmesh():
         self.dx = ufl.Measure('dx', domain=self.meshInfo.mesh, subdomain_data=self.meshInfo.meshData.cell_tags, metadata={'quadrature_degree': self.dxquaddeg})
         
         domain_markers = (self.meshInfo.domain_marker,)
-        for mat_marker in self.meshInfo.mat_markers:
+        for mat_marker in (self.meshInfo.mat_markers+self.meshInfo.antennaMat_markers):
             domain_markers = domain_markers + (mat_marker,)
         for defect_marker in self.meshInfo.defect_markers:
             domain_markers = domain_markers + (defect_marker,)
@@ -92,7 +93,7 @@ class FEMmesh():
         else:
             self.farfield_cells = []
             
-    def InitializeMaterial(self, material_epsrs, material_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg):
+    def InitializeMaterial(self, material_epsrs, material_murs, antenna_mat_epsrs, antenna_mat_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg):
         # Set up material parameters. Not changing mur for now, need to edit this if doing so
         if(len(material_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
             material_epsrs = [material_epsrs[0] for x in self.meshInfo.mat_markers]
@@ -102,12 +103,20 @@ class FEMmesh():
             defect_epsrs = [defect_epsrs[0] for x in self.meshInfo.defect_markers]
         if(len(defect_murs) == 1): ## if only one is specified, make sure it's value is used for all
             defect_murs = [defect_murs[0] for x in self.meshInfo.defect_markers]
+        if(len(antenna_mat_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
+            antenna_mat_epsrs = [antenna_mat_epsrs[0] for x in self.meshInfo.antennaMat_markers]
+        if(len(antenna_mat_murs) == 1): ## if only one is specified, make sure it's value is used for all
+            antenna_mat_murs = [antenna_mat_murs[0] for x in self.meshInfo.antennaMat_markers]
         
         
         ## First find dofs for different 'materials'
         self.mat_dofsList = []
         for mat_marker in self.meshInfo.mat_markers:
             self.mat_dofsList.append(self.meshInfo.meshData.cell_tags.find(mat_marker))
+            
+        self.antenna_mat_dofsList = []
+        for antenna_mat_marker in self.meshInfo.antennaMat_markers:
+            self.antenna_mat_dofsList.append(self.meshInfo.meshData.cell_tags.find(antenna_mat_marker))
             
         self.defect_dofsList = []
         for defect_marker in self.meshInfo.defect_markers:
@@ -125,10 +134,12 @@ class FEMmesh():
         self.epsr.x.array[:] = np.nan
         self.epsr.x.array[self.domain_dofs] = 0
         self.epsr.x.array[self.pml_dofs] = -1
+        for k in range(len(self.antenna_mat_dofsList)):
+            self.epsr.x.array[self.antenna_mat_dofsList[k]] = 0.5+1j*k
         for k in range(len(self.mat_dofsList)):
-            self.epsr.x.array[self.mat_dofsList[k]] = 2+k
+            self.epsr.x.array[self.mat_dofsList[k]] = 2+1j*k
         for k in range(len(self.defect_dofsList)):
-            self.epsr.x.array[self.defect_dofsList[k]] = 2+len(self.mat_dofsList)+k
+            self.epsr.x.array[self.defect_dofsList[k]] = 3+1j*k
         self.epsr.x.array[self.pec_dofs] = 5
         self.epsr.x.array[self.farfield_cells] = 1
         self.dofs_map = self.epsr.x.array.copy()
@@ -139,12 +150,15 @@ class FEMmesh():
         for k in range(len(self.mat_dofsList)):
             self.epsr.x.array[self.mat_dofsList[k]] = material_epsrs[k]
             self.mur.x.array[self.mat_dofsList[k]] = material_murs[k]
+        for k in range(len(self.antenna_mat_dofsList)):
+            self.epsr.x.array[self.antenna_mat_dofsList[k]] = antenna_mat_epsrs[k]
+            self.mur.x.array[self.antenna_mat_dofsList[k]] = antenna_mat_murs[k]
         for k in range(len(self.defect_dofsList)):
             self.epsr.x.array[self.defect_dofsList[k]] = material_epsrs[-1] ## for now, just take the last material's values
             self.mur.x.array[self.defect_dofsList[k]] = material_murs[-1]
         self.epsr_array_ref = self.epsr.x.array.copy()
         
-        ## then, set dut values
+        ## then, set dut values (only difference is in the defects)
         for k in range(len(self.defect_dofsList)):
             self.epsr.x.array[self.defect_dofsList[k]] = defect_epsrs[k]
             self.mur.x.array[self.defect_dofsList[k]] = defect_murs[k]
@@ -165,6 +179,8 @@ class Scatt3DProblem():
                  material_murs=[1+0j],   # Permeability of the objects, given as a list
                  defect_epsrs=[4.0*(1 - 0.01j)],      # Permittivity of the defects, given as a list. If only one, used for all defects
                  defect_murs=[1+0j],       # Permeability of the defects, given as a list
+                 antenna_mat_epsrs=[2.1*(1 + 0j)],      # Permittivity of the antenna dielectrics, given as a list. If only one, used for all defects
+                 antenna_mat_murs=[1+0j],       # Permeability of the antenna dielectrics, given as a list
                  fem_degree=1,            # Degree of finite elements
                  model_rank=0,        # Rank of the master model - for saving, plotting, etc.
                  MPInum = 1,          # Number of MPI processes
@@ -178,7 +194,7 @@ class Scatt3DProblem():
                  computeRef = True, # If computing immediately, computes the reference simulation, where defects are not included
                  ErefEdut = False, # compute optimization vectors with Eref*Edut, a less-approximated version of the equation. Should provide better results, but can only be used in simulation
                  dutOnRefMesh = True, # If true, rather than compute DUT things on its own, separate mesh, then interpolate between meshes (gives error for large, higher-order meshes) - just use the same mesh. Must have DUT mesh
-                 excitation = 'antennas', # if 'planewave', sends in a planewave from the +x-axis, otherwise 'antennas' excitation for the waveguides as normal. 'patch' for the patch antenna test
+                 excitation = 'waveguide', # if 'planewave', sends in a planewave from the +x-axis, otherwise 'waveguide' excitation for the waveguides as normal. 'patch' for the patch antenna test
                  PW_dir = np.array([0, 0, 1]), ## incident direction of the plane-wave, if used above. Default is coming in from the z-axis, to align with miepython
                  PW_pol = np.array([1, 0, 0]), ## incident polarization of the plane-wave, if used above. Default is along the x-axis
                  makeOptVects = True, ## if True, compute and saves the optimization vectors. Turn False if not needed
@@ -224,6 +240,8 @@ class Scatt3DProblem():
         self.material_murs = material_murs
         self.defect_epsrs = defect_epsrs
         self.defect_murs = defect_murs
+        self.antenna_mat_epsrs = antenna_mat_epsrs
+        self.antenna_mat_murs = antenna_mat_murs
         
         self.antenna_pol = pol
         self.excitation = excitation
@@ -233,10 +251,10 @@ class Scatt3DProblem():
 
         # Set up mesh information
         self.FEMmesh_ref = FEMmesh(refMeshdata, fem_degree, quaddeg)
-        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
+        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
         if(DUTMeshdata != None):
             self.FEMmesh_DUT = FEMmesh(DUTMeshdata, fem_degree, quaddeg)
-            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
+            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
             
         # Calculate solutions
         if(computeImmediately):
@@ -358,40 +376,55 @@ class Scatt3DProblem():
             """
             Ep = np.zeros((3, x.shape[1]), dtype=complex)
             if(self.excitation == 'patchtest'):
-                centre = np.array([meshInfo.feed_offsetx, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh])## centre of the radiating face
+                centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh])## centre of the radiating face
                 y = (x.T-centre).T ## local position
                 r = np.sqrt(y[0]**2 + y[1]**2)
                 rhat = np.array([y[0], y[1], y[0]*0])/r
-                E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get .472727272)
+                E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
                 Ep = Ep + E
                 Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
                 Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
                 Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
                 return Ep
-            for p in range(meshInfo.N_antennas):
-                center = meshInfo.pos_antennas[p]
-                phi = -meshInfo.rot_antennas[p] # Note rotation by the negative of antenna rotation
-                Rmat = np.array([[np.cos(phi), -np.sin(phi), 0],
-                                 [np.sin(phi), np.cos(phi), 0],
-                                 [0, 0, 1]]) ## rotation around z
-                y = np.transpose(x.T - center)
-                loc_x = np.dot(Rmat, y) ### position vector, [x, y, z] presumably, rotated to be in the coordinates the antenna was defined in
-                if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
-                    Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshInfo.kc*loc_x[0])))#/np.sqrt(meshInfo.antenna_height*meshInfo.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
-                else: ## horizontal (x-) pol, field varies along z
-                    Ep_loc = np.vstack((np.cos(meshInfo.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])#/np.sqrt(meshInfo.antenna_width*meshInfo.antenna_height/2)
+            elif(self.excitation == 'patch'): ## the regular patches, rotated and placed facing radially inward
+                for p in range(meshInfo.N_antennas): ## for each antenna, translate + rotate back to the original coordinates it was defined in
+                    totalRot = np.dot(meshMaker.Rmaty(-pi/2), np.dot(meshMaker.Rmatz(-pi/2), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
+                    y = np.dot(totalRot, np.transpose(x.T - meshInfo.pos_antennas[p])) ## the new (original) coordinate system
+                    centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh]) ## centre of the radiating face
+                    y = (y.T-centre).T ## local position now, at the center of the radiating face
+                    r = np.sqrt(y[0]**2 + y[1]**2)
+                    rhat = np.array([y[0], y[1], y[0]*0])/r
+                    Ep_loc = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
+                    Ep_loc[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
+                    Ep_loc[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
+                    Ep_loc[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
+                    Ep = Ep + Ep_loc
+                return Ep
+            if(self.excitation == 'waveguide'):
+                for p in range(meshInfo.N_antennas):
+                    center = meshInfo.pos_antennas[p]
+                    phi = -meshInfo.rot_antennas[p] # Note rotation by the negative of antenna rotation
+                    Rmat = np.array([[np.cos(phi), -np.sin(phi), 0],
+                                     [np.sin(phi), np.cos(phi), 0],
+                                     [0, 0, 1]]) ## rotation around z
+                    y = np.transpose(x.T - center)
+                    loc_x = np.dot(Rmat, y) ### position vector, [x, y, z], rotated to be in the coordinates the antenna was defined in
+                    if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
+                        Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshInfo.kc*loc_x[0])))#/np.sqrt(meshInfo.antenna_height*meshInfo.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
+                    else: ## horizontal (x-) pol, field varies along z
+                        Ep_loc = np.vstack((np.cos(meshInfo.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])#/np.sqrt(meshInfo.antenna_width*meshInfo.antenna_height/2)
+                        
+                    #simple, inexact confinement conditions
+                    #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
+                    ##if I confine it to just the 'empty face' of the waveguide thing. After testing, this seems to make no difference to just selecting the entire antenna via a sphere, with the above line. Presumably since the antennas are far enough apart that the sphere doesn't hit another antenna
+                    Ep_loc[:, np.abs(loc_x[0])  > meshInfo.antenna_width*.5] = 0 ## no field outside of the antenna's width
+                    Ep_loc[:, np.abs(loc_x[1])  > 1e-5] = 0 ## no field outside of the antenna's depth - origin should be on this face - it is a face so no depth... I take a small depth (maybe not necessary)
+                    #for both
+                    Ep_loc[:,np.abs(loc_x[2]) > meshInfo.antenna_height*.5] = 0 ## no field outside of the antenna's height
                     
-                #simple, inexact confinement conditions
-                #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
-                ##if I confine it to just the 'empty face' of the waveguide thing. After testing, this seems to make no difference to just selecting the entire antenna via a sphere, with the above line
-                Ep_loc[:, np.abs(loc_x[0])  > meshInfo.antenna_width*.5] = 0 ## no field outside of the antenna's width
-                Ep_loc[:, np.abs(loc_x[1])  > 1e-5] = 0 ## no field outside of the antenna's depth - origin should be on this face - it is a face so no depth... I take a small depth (maybe not necessary)
-                #for both
-                Ep_loc[:,np.abs(loc_x[2]) > meshInfo.antenna_height*.5] = 0 ## no field outside of the antenna's height
-                
-                Ep_global = np.dot(Rmat, Ep_loc)
-                Ep = Ep + Ep_global
-            return Ep
+                    Ep_global = np.dot(Rmat, Ep_loc) ## need to rotate back to original coordinates
+                    Ep = Ep + Ep_global
+                return Ep
         def planeWave(x, k):
             '''
             Set up the excitation for a background plane-wave. Uses the problem's PW parameters. Needs the frequency, so I do it inside the freq. loop
@@ -430,7 +463,6 @@ class Scatt3DProblem():
             expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.Vspace.element.interpolation_points)
             Ep.interpolate(expr)
             
-            
         #=======================================================================
         # areaCalc = 1*FEMm.dx_dom ## calculate domain volume
         # areaPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
@@ -462,7 +494,7 @@ class Scatt3DProblem():
         #=======================================================================
         # F = ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx \
         #     - ufl.inner(k00**2*FEMm.epsr_pml*E, v)*FEMm.dx \
-        #     - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx + eval(F_antennas_str) ## background field and antenna terms
+        #     - ufl.inner(k00**2*(FEMm.epsr - 1/FEMm.mur*self.mur_bkg*self.epsr_bkg)*Eb, v)*FEMm.dx + eval(F_antennas_str) ## background field and antenna terms. This version gives the same results, indicating that epsr_pml is epsr within the domain
         #=======================================================================
         bcs = [FEMm.bc_pec]
         lhs, rhs = ufl.lhs(F), ufl.rhs(F)
@@ -693,12 +725,15 @@ class Scatt3DProblem():
         
         #=======================================================================
         # ## try plotting the array, just to see it. This... may require only 1 MPI process as is?
+        # a = dolfinx.fem.form(problem.a)
+        # A = dolfinx.fem.petsc.assemble_matrix(a, bcs=bcs)
+        # A.assemble()
         # A_dense = A.convert('dense')
         # if(self.comm.rank == 0):
         #     rows, cols = A_dense.getSize()
         #     A_np = np.zeros((rows, cols))
         #     for i in range(rows):
-        #         row_vals = A_dense.getRow(i)[1]  # getRow returns (cols, values)
+        #         row_vals = np.abs(A_dense.getRow(i)[1])  # getRow returns (cols, values)
         #         A_np[i, :len(row_vals)] = row_vals
         # plt.imshow(np.log10(np.abs(A_np)), cmap="inferno")
         # plt.colorbar()
