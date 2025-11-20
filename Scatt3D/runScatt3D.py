@@ -174,15 +174,15 @@ if __name__ == '__main__':
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
         prevRuns.memTimeAppend(prob)
         
-    def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9]), name='patchPatternTest'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+    def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9]), name='patchPatternTest', showPlots=True): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
         prob.saveEFieldsForAnim()
-        #prob.calcFarField(reference=True, plotFF=True, showPlots=True)
+        prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -289,19 +289,20 @@ if __name__ == '__main__':
                     
     def patchConvergenceTestPlots(convergence = 'meshsize', degree=3): ## Runs with reducing mesh size, for convergence plots. Uses the patch antenna test case, comparing to the FEKO result. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(5, 14, 6)
+            if(degree == 1):
+                ks = np.linspace(3, 14, 9)
+            elif(degree == 2):
+                ks = np.linspace(2.5, 8.5, 9)
+            else:
+                ks = np.linspace(2, 6.2, 9)
             
         ndofs = np.zeros_like(ks) ## to hold problem size
         calcT = np.zeros_like(ks) ## to hold problem size
             
-        areaVals = [] ## vals returned from the calculations
-        FFrmsRelErrs = np.zeros(len(ks)) ## for the farfields
-        FFrmsveryRelErrs = np.zeros(len(ks))
-        FFmaxRelErrs = np.zeros(len(ks))
-        FFmaxErrRel = np.zeros(len(ks))
-        NFrmsErrs = np.zeros(len(ks))
-        khatRmsErrs = np.zeros(len(ks))
-        khatMaxErrs = np.zeros(len(ks))
+        rmsS11PhaseDiff = np.zeros(len(ks)) ## adjusted so the first value matches with FEKO's
+        maxS11PhaseDiff = np.zeros(len(ks)) ## adjusted so the first value matches with FEKO's
+        rmsS11Diff = np.zeros(len(ks))
+        
         meshOptions = dict()
         probOptions = dict()
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -309,30 +310,30 @@ if __name__ == '__main__':
             if(convergence == 'meshsize'):
                 meshOptions = dict(h = 1/ks[i])
             
-            refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, domain_geom='sphere', antenna_type='patchtest', antenna_depth=.5, antenna_height=.05, antenna_width=.2, object_geom='', FF_surface = True, order=degree, **meshOptions)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
-            newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
-            simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
+            refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree, **meshOptions)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, Nf=20, fem_degree=degree, material_epsrs=[2.1], **probOptions) ## the first 3 materials per antenna are the antenna's dielectric volume
+            fekof = 'TestStuff/FEKO patch S11.dat'
+            fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+            
+            interpReal = np.interp(prob.fvec, fekoData[0], fekoData[1]) ## interpolate the FEKO data to whatever frequency points are calculated here
+            interpImag = np.interp(prob.fvec, fekoData[0], fekoData[2]) ## interpolate the FEKO data to whatever frequency points are calculated here
+            
+            fekoS11 = interpReal+1j*interpImag
+            fekoPhase = np.angle(fekoS11)
+            
+            S11 = prob.S_ref.flatten()
+            adjustedPhase = np.angle(S11) + (fekoPhase[0]-np.angle(S11)[0])
+            
             prevRuns.memTimeAppend(prob)
             if(comm.rank == model_rank): ## only needed for main process
-                areaVals.append(newval)
                 ndofs[i] = prob.FEMmesh_ref.ndofs
                 calcT[i] = prob.calcTime
-                khatRmsErrs[i] = np.sqrt(np.sum(khats**2)/np.size(khats))
-                khatMaxErrs[i] = np.max(khats)
-                intenss = np.abs(farfields[0,:,0])**2 + np.abs(farfields[0,:,1])**2
-                FFrelativeErrors = np.abs( (intenss - mies) ) / np.abs( mies )
-                FFrmsRelErrs[i] = np.sqrt(np.sum(FFrelativeErrors**2)/np.size(FFrelativeErrors))
-                FFvrelativeErrors = np.abs( (intenss - mies) ) / np.max(np.abs(mies)) ## relative to the max. mie intensity, to make it even more relative
-                FFrmsveryRelErrs[i] = np.sqrt(np.sum(FFvrelativeErrors**2)/np.size(FFvrelativeErrors)) ## absolute error, scaled by the max. mie value
-                FFmaxRelErrs[i] = np.max(FFrelativeErrors)
-                FFmaxErrRel[i] = np.abs( np.max(intenss - mies)) / np.max(np.abs(mies))
-                NFrmsErrs[i] = np.sqrt(np.sum(np.abs(simNF-FEKONF)**2)/np.size(simNF)) / np.max(np.abs(FEKONF))
+                rmsS11PhaseDiff[i] = np.sqrt(np.sum(np.abs(adjustedPhase-fekoPhase)**2)/np.size(S11))
+                maxS11PhaseDiff[i] = np.max(np.abs(adjustedPhase-fekoPhase))
+                rmsS11Diff[i] = np.sqrt(np.sum(np.abs(S11-fekoS11)**2)/np.size(S11))
                 if(verbosity>1):
                     print(f'Run {i+1}/{len(ks)} completed')
                 ## Plot each iteration for case of OOM or such
-                real_area = 4*pi*prob.FEMmesh_ref.meshInfo.FF_surface_radius**2
-                
                 
                 if(convergence == 'meshsize'): ## plot 3 times - also vs time and ndofs
                     p=0
@@ -344,7 +345,7 @@ if __name__ == '__main__':
                     fig1.set_size_inches(8, 6)
                     ax1 = plt.subplot(1, 1, 1)
                     ax1.grid(True)
-                    ax1.set_title('Convergence of Different Values')
+                    ax1.set_title('Convergence of sim. to FEKO (Patch sim.)')
                     idx = np.argsort(ks[:i+1]) ## ordered increasing
                     if(convergence == 'meshsize'):
                         if(p==0):
@@ -363,18 +364,14 @@ if __name__ == '__main__':
                     elif(convergence == 'dxquaddeg'):
                         ax1.set_xlabel(r'dx Quadrature Degree')
                     
-                    ax1.plot(xs[idx], np.abs((real_area-np.array(areaVals))/real_area)[idx], marker='o', linestyle='--', label = r'$\int dS$ - rel. error')
-                    #ax1.plot(xs[idx], khatMaxErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - max. abs. error')
-                    ax1.plot(xs[idx], khatRmsErrs[idx], marker='o', linestyle='--', label = r'$\int \hat{k}\cdot \vec{n} \, dS$ - RMS error')
-                    ax1.plot(xs[idx], FFrmsRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS rel. error')
-                    ax1.plot(xs[idx], FFrmsveryRelErrs[idx], marker='o', linestyle='--', label = r'Farfield cuts RMS. error, normalized')
-                    #ax1.plot(xs[idx], FFmaxErrRel[idx], marker='o', linestyle='--', label = r'Farfield max error, rel.')
-                    ax1.plot(xs[idx], NFrmsErrs[idx], marker='o', linestyle='--', label = r'Nearfield-FEKO error norm, rel.')
+                    ax1.plot(xs[idx], rmsS11Diff[idx], marker='o', linestyle='--', label = r'RMS S$_{11}$ Diff.')
+                    ax1.plot(xs[idx], rmsS11PhaseDiff[idx], marker='o', linestyle='--', label = r'RMS S$_{11}$ Phase Diff.')
+                    ax1.plot(xs[idx], maxS11PhaseDiff[idx], marker='o', linestyle='--', label = r'max. S$_{11}$ Phase Diff.')
                     
                     ax1.set_yscale('log')
                     ax1.legend()
                     fig1.tight_layout()
-                    plt.savefig(prob.dataFolder+prob.name+convergence+f'meshconvergence{p}deg{deg}.png')
+                    plt.savefig(prob.dataFolder+prob.name+convergence+f'patchconvergence{p}deg{degree}.png')
                     p+=1
                     if(MPInum == 1 and i==len(ks)-1): ## only show the last one
                         plt.show()
@@ -618,18 +615,20 @@ if __name__ == '__main__':
     #testFullExample(h=1/3.4, degree=3, antennaType='patch')
     
     runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
-    testRunDifferentDUTAntennas(h=1/3.4, degree=3)
+    #testRunDifferentDUTAntennas(h=1/3.4, degree=3)
     
     
     
     #testFullExample(h=1/8, degree=1)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='just2antennas', onlyNAntennas=2)
     #postProcessing.solveFromQs(folder+runName, solutionName='just4antennas', onlyNAntennas=4)
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
+    
+    patchConvergenceTestPlots(degree=1)
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
@@ -638,7 +637,7 @@ if __name__ == '__main__':
     #testSolverSettings(h=1/6)
     
     runName = 'patchPatternTestd3smaller' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    #testPatchPattern(h=1/6, degree=3, freqs = np.linspace(8e9, 12e9, 15), name=runName)
+    #testPatchPattern(h=1/3.66, degree=3, freqs = np.linspace(10e9, 12e9, 1), name=runName, showPlots=True)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     runName = 'testingComplexObject' ## h=1/8

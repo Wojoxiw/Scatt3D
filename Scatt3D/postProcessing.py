@@ -460,28 +460,31 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         
-        plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref.flatten())), label='FEM sim') ## try plotting the Ss
-        #plt.plot(np.abs(S_dut.flatten()))
-        fekof = 'TestStuff/FEKO patch S11.dat'
-        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-        plt.plot()
-        plt.grid()
-        plt.ylabel(r'S$_{11}$ [dB]')
-        plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
-        plt.legend()
-        plt.show()
-        ## then plot the phase of S11, also
-        plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
-        plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
-        plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
-        plt.grid()
-        plt.ylabel(r'Phase of S$_{11}$ [radians]')
-        plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
-        plt.legend()
-        plt.show()
+        #=======================================================================
+        # ### PLOT S11 STUFF
+        # plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref.flatten())), label='FEM sim') ## try plotting the Ss
+        # #plt.plot(np.abs(S_dut.flatten()))
+        # fekof = 'TestStuff/FEKO patch S11.dat'
+        # fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        # plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+        # plt.plot()
+        # plt.grid()
+        # plt.ylabel(r'S$_{11}$ [dB]')
+        # plt.xlabel(r'Frequency [GHz]')
+        # plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
+        # plt.legend()
+        # plt.show()
+        # ## then plot the phase of S11, also
+        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
+        # plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
+        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
+        # plt.grid()
+        # plt.ylabel(r'Phase of S$_{11}$ [radians]')
+        # plt.xlabel(r'Frequency [GHz]')
+        # plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
+        # plt.legend()
+        # plt.show()
+        #=======================================================================
         
         Nb = len(b)
         

@@ -1187,7 +1187,7 @@ class Scatt3DProblem():
                     mag = np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2
                     
                     if(plotFF):
-                        if True:## normalize and compare to FEKO values
+                        if True: ## normalize and compare to FEKO values
                             ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
                             ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
                             
@@ -1205,7 +1205,6 @@ class Scatt3DProblem():
                             print(np.shape(fekoData))
                             ax1.plot(fekoData[0], fekoData[2], label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
                             ax1.plot(fekoData[0], fekoData[1], label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
-                        
                     else:
                         ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated (H-plane/$\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
                         ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated (E-plane/$\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
@@ -1240,6 +1239,19 @@ class Scatt3DProblem():
                     if(showPlots):
                         plt.show()
                     plt.clf()
+                    
+                    if(plotFF and returnConvergenceVals):
+                        ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
+                        ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                        
+                        fekof = 'TestStuff/FEKO patch gain.dat'
+                        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+                        print(np.shape(fekoData))
+                        ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
+                        ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
+                        gainsNormalized = mag/np.max(mag)
+                        FEKOsNormalized = np.hstack((fekoData[1],fekoData[2]))/np.max(np.hstack((fekoData[1],fekoData[2])))
+                        return gainsNormalized, FEKOsNormalized
             
             if(compareToMie and self.Nf > 2): ## do plots by frequency for forward+backward scattering
                 ##Calculate Mie scattering
