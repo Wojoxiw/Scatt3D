@@ -522,10 +522,10 @@ if __name__ == '__main__':
     #runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.4, degree=3)
     runName = 'testRunPatches' ## h=1/8
-    testFullExample(h=1/3.4, degree=3, antennaType='patch')
+    #testFullExample(h=1/3.4, degree=3, antennaType='patch')
     
-    #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
-    #testRunDifferentDUTAntennas(h=1/3.4, degree=3)
+    runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
+    testRunDifferentDUTAntennas(h=1/3.4, degree=3)
     
     
     
