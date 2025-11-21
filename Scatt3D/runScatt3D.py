@@ -616,8 +616,8 @@ if __name__ == '__main__':
     runName = 'testRunSmall' ## h=1/4, degree 3
     #runName = 'testRunLarger' ## h=1/18
     testFullExample(h=1/4, degree=3)
-    runName = 'testRunPatches' ## h=1/8
-    #testFullExample(h=1/4, degree=3, antennaType='patch')
+    runName = 'testRunPatches' ## h=1/4, degree 3
+    testFullExample(h=1/4, degree=3, antennaType='patch')
     
     runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
     #testRunDifferentDUTAntennas(h=1/4, degree=3)
@@ -625,7 +625,7 @@ if __name__ == '__main__':
     
     
     #testFullExample(h=1/8, degree=1)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='just2antennas', onlyNAntennas=2)
