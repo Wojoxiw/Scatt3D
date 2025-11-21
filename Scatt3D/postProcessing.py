@@ -537,8 +537,10 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
                 
         print('all data loaded in')
         sys.stdout.flush()
-        idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
-        A_ap = A[:, np.nonzero(np.abs(epsr_ref[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
+        
+        #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
+        idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
+        A_ap = A[:, np.nonzero(np.real(dofs_map[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
         print('shape of b:', np.shape(b))
         print('in-object cells:', np.size(idx_ap))

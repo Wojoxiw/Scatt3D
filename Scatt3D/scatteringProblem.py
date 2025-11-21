@@ -140,7 +140,7 @@ class FEMmesh():
             self.epsr.x.array[self.mat_dofsList[k]] = 2+1j*k
         for k in range(len(self.defect_dofsList)):
             self.epsr.x.array[self.defect_dofsList[k]] = 3+1j*k
-        self.epsr.x.array[self.pec_dofs] = 5
+        self.epsr.x.array[self.pec_dofs] = 5 ## shouldn't be any, since any PEC volumes were removed
         self.epsr.x.array[self.farfield_cells] = 1
         self.dofs_map = self.epsr.x.array.copy()
         

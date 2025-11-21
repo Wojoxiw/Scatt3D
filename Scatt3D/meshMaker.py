@@ -231,8 +231,8 @@ class MeshInfo():
             gmsh.model.add('The Model') ## name for the whole thing
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.h/20)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.h*2)
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/100)
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0)
             gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
             gmsh.logger.start() ## I don't know what these logs are, or how to view them
              
@@ -581,7 +581,7 @@ class MeshInfo():
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.lambda0/40) ## this is potentially the most important surface to resolve well
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.lambda0/80) ## this is potentially the most important surface to resolve well
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 
