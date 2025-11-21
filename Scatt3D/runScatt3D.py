@@ -608,17 +608,17 @@ if __name__ == '__main__':
     
     
     #testRun(h=1/2)
-    #reconstructionErrorTestPlots()
-    #reconstructionErrorTestPlots(False)
+    reconstructionErrorTestPlots()
+    reconstructionErrorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    runName = 'testRunSmall' ## h=1/4, degree 3
+    #runName = 'testRunSmall' ## h=1/4, degree 3
     #runName = 'testRunLarger' ## h=1/18
-    testFullExample(h=1/4, degree=3)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
-    runName = 'testRunPatches' ## h=1/4, degree 3
-    testFullExample(h=1/4, degree=3, antennaType='patch')
+    #testFullExample(h=1/4, degree=3)
+    
+    #runName = 'testRunPatches' ## h=1/4, degree 3
+    #testFullExample(h=1/4, degree=3, antennaType='patch')
     
     #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
     #testRunDifferentDUTAntennas(h=1/4, degree=3)
@@ -626,7 +626,7 @@ if __name__ == '__main__':
     
     
     #testFullExample(h=1/8, degree=1)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='just2antennas', onlyNAntennas=2)
