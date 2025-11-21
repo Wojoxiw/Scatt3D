@@ -628,7 +628,7 @@ if __name__ == '__main__':
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
     
-    patchConvergenceTestPlots(degree=2)
+    patchConvergenceTestPlots(degree=1)
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
