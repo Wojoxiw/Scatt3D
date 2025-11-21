@@ -187,7 +187,12 @@ if __name__ == '__main__':
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
         if(convergence == 'meshsize'):
-            ks = np.linspace(5, 14, 6)
+            if(deg==1):
+                ks = np.linspace(5, 17, 7)
+            elif(deg==2):
+                ks = np.linspace(3, 7, 7)
+            else:
+                ks = np.linspace(2, 6, 7)
         elif(convergence == 'pmlR0'): ## result of this is that the value must be below 1e-2, from there further reduction matches the forward-scattering better, the back-scattering less
             ks = np.linspace(2, 15, 10)
             ks = 10**(-ks)
@@ -551,7 +556,7 @@ if __name__ == '__main__':
             
             plt.show()
             
-    def errorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
+    def reconstructionErrorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
         errs3 = []; dofs3 = []
         for oh in np.linspace(2, 4.5, 7): ## degree 3
             runName = f'degree3ho{oh:.1f}'
@@ -603,8 +608,8 @@ if __name__ == '__main__':
     
     
     #testRun(h=1/2)
-    #errorTestPlots()
-    #errorTestPlots(False)
+    #reconstructionErrorTestPlots()
+    #reconstructionErrorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
@@ -628,11 +633,11 @@ if __name__ == '__main__':
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs', frequenciesToUse=[2, 4, 6, 8])
     #postProcessing.solveFromQs(folder+runName, solutionName='4freqs4antennas', antennasToUse=[1, 3, 5, 7], frequenciesToUse=[2, 4, 6, 8])
     
-    patchConvergenceTestPlots(degree=1)
+    #patchConvergenceTestPlots(degree=1)
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
-    #convergenceTestPlots('meshsize', deg=1)
+    convergenceTestPlots('meshsize', deg=1)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
