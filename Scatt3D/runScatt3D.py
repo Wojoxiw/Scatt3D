@@ -617,10 +617,10 @@ if __name__ == '__main__':
     #runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.4, degree=3)
     runName = 'testRunPatches' ## h=1/8
-    #testFullExample(h=1/3.4, degree=3, antennaType='patch')
+    testFullExample(h=1/4, degree=3, antennaType='patch')
     
     runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
-    #testRunDifferentDUTAntennas(h=1/3.4, degree=3)
+    #testRunDifferentDUTAntennas(h=1/4, degree=3)
     
     
     
@@ -637,7 +637,7 @@ if __name__ == '__main__':
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
-    convergenceTestPlots('meshsize', deg=3)
+    #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     

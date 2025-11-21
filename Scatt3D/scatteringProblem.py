@@ -1145,7 +1145,7 @@ class Scatt3DProblem():
                 khatPart = dolfinx.fem.assemble.assemble_scalar(khatCalc)
                 khatParts = self.comm.gather(khatPart, root=self.model_rank)
                 if(self.comm.rank == 0): ## assemble each part as it is made
-                    khatResults[i] = sum(khatParts)
+                    khatResults[i] = np.abs(sum(khatParts))
             
             areaCalc = 1*FEMm.dS_farfield ## calculate area
             areaPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
@@ -1155,7 +1155,7 @@ class Scatt3DProblem():
                 areaResult = sum(areaParts)
                 real_area = 4*pi*FEMm.meshInfo.FF_surface_radius**2
                 if(self.verbosity>2):
-                    print(f'khat calc first angle (should be zero): {np.abs(khatResults[0]):.5e}')
+                    print(f'khat calc first angle (should be zero): {khatResults[0]:.5e}')
                     print(f'Farfield-surface area, calculated vs real (expected): {np.abs(areaResult)} vs {real_area}. Error: {np.abs(areaResult-real_area):.3e}, rel. error: {np.abs((areaResult-real_area)/real_area):.3e}')
                       
                 m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
