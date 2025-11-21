@@ -10,3 +10,6 @@
 */.settings
 */.cache
 !Pre-jobScript.info
+!FEKO patch Efield.dat
+!FEKO patch gain.dat
+!FEKO patch S11.dat
