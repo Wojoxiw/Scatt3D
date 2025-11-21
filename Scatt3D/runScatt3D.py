@@ -637,7 +637,7 @@ if __name__ == '__main__':
     
     #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
-    convergenceTestPlots('meshsize', deg=2)
+    convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
