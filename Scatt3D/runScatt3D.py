@@ -561,7 +561,11 @@ if __name__ == '__main__':
         for oh in np.linspace(2, 4.2, 7): ## degree 3
             runName = f'degree3ho{oh:.1f}'
             if(sims):
-                testFullExample(h=1/oh, degree=3)
+                if(os.path.isfile(folder+runName+'output.npz')):
+                    pass ## if it already exists, skip it
+                else:
+                    testFullExample(h=1/oh, degree=3)
+                print(f'{runName} completed...')
             else:
                 errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
                 load = np.load(folder+runName+'output.npz')
@@ -571,7 +575,11 @@ if __name__ == '__main__':
         for oh in np.linspace(2.5, 6.7, 7): ## degree 2
             runName = f'degree2ho{oh:.1f}'
             if(sims):
-                testFullExample(h=1/oh, degree=2)
+                if(os.path.isfile(folder+runName+'output.npz')):
+                    pass ## if it already exists, skip it
+                else:
+                    testFullExample(h=1/oh, degree=2)
+                print(f'{runName} completed...')
             else:
                 errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
                 load = np.load(folder+runName+'output.npz')
@@ -581,7 +589,11 @@ if __name__ == '__main__':
         for oh in np.linspace(4, 13, 7): ## degree 1
             runName = f'degree1ho{oh:.1f}'
             if(sims):
-                testFullExample(h=1/oh, degree=1)
+                if(os.path.isfile(folder+runName+'output.npz')):
+                    pass ## if it already exists, skip it
+                else:
+                    testFullExample(h=1/oh, degree=1)
+                print(f'{runName} completed...')
             else:
                 errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
                 load = np.load(folder+runName+'output.npz')
@@ -608,8 +620,8 @@ if __name__ == '__main__':
     
     
     #testRun(h=1/2)
-    #reconstructionErrorTestPlots()
-    #reconstructionErrorTestPlots(False)
+    reconstructionErrorTestPlots()
+    reconstructionErrorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
@@ -620,13 +632,13 @@ if __name__ == '__main__':
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch')
     
-    runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
-    testRunDifferentDUTAntennas(h=1/3.6, degree=3)
+    #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
+    #testRunDifferentDUTAntennas(h=1/3.6, degree=3)
     
     
     
     #testFullExample(h=1/8, degree=1)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
     #postProcessing.solveFromQs(folder+runName, solutionName='4antennas', antennasToUse=[1, 3, 5, 7])
     #postProcessing.solveFromQs(folder+runName, solutionName='just2antennas', onlyNAntennas=2)
