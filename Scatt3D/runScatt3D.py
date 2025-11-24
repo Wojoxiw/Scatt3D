@@ -620,8 +620,8 @@ if __name__ == '__main__':
     
     
     #testRun(h=1/2)
-    #reconstructionErrorTestPlots()
-    #reconstructionErrorTestPlots(False)
+    reconstructionErrorTestPlots()
+    reconstructionErrorTestPlots(False)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
