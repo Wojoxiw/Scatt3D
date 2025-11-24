@@ -585,39 +585,39 @@ if __name__ == '__main__':
         #         dofs3.append(load['ndofs'])
         #=======================================================================
                  
-        errs2 = []; dofs2 = []
-        for oh in np.linspace(2.5, 6.7, 7): ## degree 2
-            runName = f'degree2ho{oh:.1f}'
-            if(sims):
-                if(os.path.exists(folder+runName+'output.npz')):
-                    if(comm.rank == model_rank):
-                        print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
-                else:
-                    testFullExample(h=1/oh, degree=2, runName=runName)
-                if(comm.rank == model_rank):
-                        print(f'running {runName}...') ## if it already exists, skip it
-            else:
-                errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
-                load = np.load(folder+runName+'output.npz')
-                dofs2.append(load['ndofs'])
-                 
         #=======================================================================
-        # errs1 = []; dofs1 = []
-        # for oh in np.linspace(4, 13, 7): ## degree 1
-        #     runName = f'degree1ho{oh:.1f}'
+        # errs2 = []; dofs2 = []
+        # for oh in np.linspace(2.5, 6.7, 7): ## degree 2
+        #     runName = f'degree2ho{oh:.1f}'
         #     if(sims):
         #         if(os.path.exists(folder+runName+'output.npz')):
         #             if(comm.rank == model_rank):
         #                 print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
         #         else:
-        #             testFullExample(h=1/oh, degree=1, runName=runName)
+        #             testFullExample(h=1/oh, degree=2, runName=runName)
         #         if(comm.rank == model_rank):
         #                 print(f'running {runName}...') ## if it already exists, skip it
         #     else:
-        #         errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+        #         errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
         #         load = np.load(folder+runName+'output.npz')
-        #         dofs1.append(load['ndofs'])
+        #         dofs2.append(load['ndofs'])
         #=======================================================================
+                 
+        errs1 = []; dofs1 = []
+        for oh in np.linspace(4, 13, 7): ## degree 1
+            runName = f'degree1ho{oh:.1f}'
+            if(sims):
+                if(os.path.exists(folder+runName+'output.npz')):
+                    if(comm.rank == model_rank):
+                        print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
+                else:
+                    testFullExample(h=1/oh, degree=1, runName=runName)
+                if(comm.rank == model_rank):
+                        print(f'running {runName}...') ## if it already exists, skip it
+            else:
+                errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+                load = np.load(folder+runName+'output.npz')
+                dofs1.append(load['ndofs'])
         
         #=======================================================================
         # if(not sims): ## make the plot(s)
