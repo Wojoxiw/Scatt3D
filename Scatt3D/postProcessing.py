@@ -514,7 +514,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
             
             midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
             dist = np.linalg.norm(midpoints, axis=1)
-            idx_non_pml = np.nonzero(dist < antenna_radius*0.8)[0] ## alternative reconstruction cells - those within a sphere of the centre
+            idx_non_pml = np.nonzero(dist < antenna_radius*0.7)[0] ## alternative reconstruction cells - those within a sphere of the centre
             
             N_non_pml = len(idx_non_pml)
             A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
