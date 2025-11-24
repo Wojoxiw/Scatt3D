@@ -34,7 +34,6 @@ import meshMaker
 import scatteringProblem
 import memTimeEstimation
 import postProcessing
-from pathlib import Path
 
 #===============================================================================
 # ##line profiling
@@ -562,7 +561,7 @@ if __name__ == '__main__':
         for oh in np.linspace(2, 4.2, 7): ## degree 3
             runName = f'degree3ho{oh:.1f}'
             if(sims):
-                if(Path(folder+runName+'output.npz').exists()):
+                if(os.path.exists(folder+runName+'output.npz')):
                     if(comm.rank == model_rank):
                         print(f'{runName} already completed...') ## if it already exists, skip it
                 else:
