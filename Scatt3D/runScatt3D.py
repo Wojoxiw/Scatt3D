@@ -34,6 +34,7 @@ import meshMaker
 import scatteringProblem
 import memTimeEstimation
 import postProcessing
+from pathlib import Path
 
 #===============================================================================
 # ##line profiling
@@ -561,10 +562,12 @@ if __name__ == '__main__':
         for oh in np.linspace(2, 4.2, 7): ## degree 3
             runName = f'degree3ho{oh:.1f}'
             if(sims):
-                if(os.path.exists(folder+runName+'output.npz')):
-                    print(f'{runName} already completed...') ## if it already exists, skip it
+                if(Path(folder+runName+'output.npz').exists()):
+                    if(comm.rank == model_rank):
+                        print(f'{runName} already completed...') ## if it already exists, skip it
                 else:
-                    print(f'running {runName}...')
+                    if(comm.rank == model_rank):
+                        print(f'running {runName}...') ## if it already exists, skip it
                     testFullExample(h=1/oh, degree=3)
             else:
                 errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
@@ -576,10 +579,12 @@ if __name__ == '__main__':
             runName = f'degree2ho{oh:.1f}'
             if(sims):
                 if(os.path.exists(folder+runName+'output.npz')):
-                    pass ## if it already exists, skip it
+                    if(comm.rank == model_rank):
+                        print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
                 else:
                     testFullExample(h=1/oh, degree=2)
-                print(f'{runName} completed...')
+                if(comm.rank == model_rank):
+                        print(f'running {runName}...') ## if it already exists, skip it
             else:
                 errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
                 load = np.load(folder+runName+'output.npz')
@@ -590,10 +595,12 @@ if __name__ == '__main__':
             runName = f'degree1ho{oh:.1f}'
             if(sims):
                 if(os.path.exists(folder+runName+'output.npz')):
-                    pass ## if it already exists, skip it
+                    if(comm.rank == model_rank):
+                        print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
                 else:
                     testFullExample(h=1/oh, degree=1)
-                print(f'{runName} completed...')
+                if(comm.rank == model_rank):
+                        print(f'running {runName}...') ## if it already exists, skip it
             else:
                 errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
                 load = np.load(folder+runName+'output.npz')
@@ -602,21 +609,22 @@ if __name__ == '__main__':
         if(not sims): ## make the plot(s)
             dofs = {'1': dofs1, '2': dofs2, '3': dofs3} ## should be [meshsize]
             errs = {'1': np.array(errs1), '2': np.array(errs2), '3': np.array(errs3)} ## should be [meshsize, result]
-            for degree in [1, 2, 3]:
-                fig = plt.figure()
-                ax1 = plt.subplot(1, 1, 1)
-                 
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
-                ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
-                 
-                ax1.legend()
-                ax1.grid(True)
-                plt.xlabel('# dofs')
-                plt.ylabel('Reconstruction Error')
-                plt.title(f'Degree {degree} reconstruction errors')
-                plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
+            if(comm.rank == model_rank):
+                for degree in [1, 2, 3]:
+                    fig = plt.figure()
+                    ax1 = plt.subplot(1, 1, 1)
+                     
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
+                     
+                    ax1.legend()
+                    ax1.grid(True)
+                    plt.xlabel('# dofs')
+                    plt.ylabel('Reconstruction Error')
+                    plt.title(f'Degree {degree} reconstruction errors')
+                    plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
     
     #testRun(h=1/2)
