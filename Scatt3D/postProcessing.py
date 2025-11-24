@@ -486,7 +486,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         # plt.show()
         #=======================================================================
         
-        Nb = len(b)
+        Nb = len(b) ## number of rows, or 'data points' to be used
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
@@ -519,22 +519,20 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
             N_non_pml = len(idx_non_pml)
             A = np.zeros((Nb, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
             for nf in range(Nf):
-                if(nf in frequenciesToUse or len(frequenciesToUse)==0):
-                    for m in range(N_antennas): ## transmitting index
-                        for n in range(N_antennas): ## receiving index
-                            if( ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ):
-                                i = nf*N_antennas*N_antennas + m*N_antennas + n
-                                useIndex = True
-                                if(onlyNAntennas > 0): ## use only transmission to the N antennas that are most spread out (as if we only had N antennas to measure with) This includes the antenna itself - if N is 1, then there is only reflection
-                                    dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas
-                                    if( np.abs(n-m)%dist != 0 ):
-                                        useIndex = False
-                                if(useIndex):
-                                    Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
-                                    A[i,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
+                for m in range(N_antennas): ## transmitting index
+                    for n in range(N_antennas): ## receiving index
+                        i = nf*N_antennas*N_antennas + m*N_antennas + n
+                        useIndex = True
+                        if(onlyNAntennas > 0): ## use only transmission to the N antennas that are most spread out (as if we only had N antennas to measure with) This includes the antenna itself - if N is 1, then there is only reflection
+                            dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas
+                            if( np.abs(n-m)%dist != 0 ):
+                                useIndex = False
+                        if(useIndex):
+                            Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
+                            A[i,:] = Apart[idx][idx_non_pml] ## idx to order as in the mesh, non_pml to remove the pml
             del Apart ## maybe this will help with clearing memory
         gc.collect()
-                
+        
         print('all data loaded in')
         sys.stdout.flush()
         
