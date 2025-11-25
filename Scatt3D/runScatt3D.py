@@ -568,7 +568,7 @@ if __name__ == '__main__':
             
     def reconstructionErrorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
         errs3 = []; dofs3 = []
-        for oh in np.linspace(2, 4.2, 7): ## degree 3
+        for oh in np.linspace(2, 3.8, 7): ## degree 3
             runName = f'degree3ho{oh:.1f}'
             if(sims):
                 if(os.path.exists(folder+runName+'output.npz')):
@@ -585,7 +585,7 @@ if __name__ == '__main__':
                  
         #=======================================================================
         # errs2 = []; dofs2 = []
-        # for oh in np.linspace(2.5, 6.7, 7): ## degree 2
+        # for oh in np.linspace(2.5, 6.4, 7): ## degree 2
         #     runName = f'degree2ho{oh:.1f}'
         #     if(sims):
         #         if(os.path.exists(folder+runName+'output.npz')):
@@ -601,7 +601,7 @@ if __name__ == '__main__':
         #         dofs2.append(load['ndofs'])
         #         
         # errs1 = []; dofs1 = []
-        # for oh in np.linspace(4, 13, 7): ## degree 1
+        # for oh in np.linspace(4, 11, 7): ## degree 1
         #     runName = f'degree1ho{oh:.1f}'
         #     if(sims):
         #         if(os.path.exists(folder+runName+'output.npz')):
