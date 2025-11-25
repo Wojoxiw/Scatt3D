@@ -634,12 +634,12 @@ if __name__ == '__main__':
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    #runName = 'testRunSmall' ## h=1/3.5, degree 3
+    runName = 'testRunSmall' ## h=1/3.5, degree 3
     #runName = 'testRunLarger' ## h=1/18
-    #testFullExample(h=1/3.5, degree=3)
+    testFullExample(h=1/3.5, degree=3)
     
-    runName = 'testRunPatches' ## h=1/3.5, degree 3
-    testFullExample(h=1/3.5, degree=3, antennaType='patch')
+    #runName = 'testRunPatches' ## h=1/3.5, degree 3
+    #testFullExample(h=1/3.5, degree=3, antennaType='patch')
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=False) ## aka testRunDifferentDUTAntennas2
