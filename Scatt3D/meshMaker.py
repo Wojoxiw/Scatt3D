@@ -566,7 +566,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[-1])
                     else:
                         epsr = np.real(self.defect_epsrs[n])
-                    sf = max(2, np.sqrt(epsr))
+                    sf = max(1.5, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(defectMeshField, 'VolumesList', [defectDimTags[n][1]])
@@ -581,13 +581,13 @@ class MeshInfo():
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.lambda0/80) ## this is potentially the most important surface to resolve well
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/12) ## this is potentially the most important surface to resolve well
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 
                 PECSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(PECSurfaceField, "SurfacesList", PEC_surfaces)
-                gmsh.model.mesh.field.setNumber(PECSurfaceField, "VIn", self.h/3) ## this is probably an important surface to resolve well
+                gmsh.model.mesh.field.setNumber(PECSurfaceField, "VIn", self.h/2.5) ## this is probably an important surface to resolve well
                 gmsh.model.mesh.field.setNumber(PECSurfaceField, "VOut", self.h)
                 meshFields.append(PECSurfaceField)
                 

@@ -430,14 +430,15 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[]):
+def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[]):
     '''
     Try various solution methods... keeping everything on one process
-    :param problemName: The filename, used to find and save files
+    :param problemName: The filename, used to find/load-in data, and save files
+    :param SparamName: Filename for S parameters (dut). If this isn't blank, S-params will be taken from this simulation, everything else from the ref. simulation.
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
-    :param onlyNAntennas: Use indices such that it is like we only had N antennas to measure with. If 0, uses all data
+    :param onlyNAntennas: Use indices such that it is like we only had N antennas to measure with. This will round. If 0, uses all data
     :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
     :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
     '''
@@ -445,7 +446,10 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
     comm = MPI.COMM_WORLD
     commself = MPI.COMM_SELF
     if(comm.rank == 0):
-        print(f'Postprocessing of {problemName}, {solutionName} starting:')
+        if(SparamName==''):
+            print(f'Postprocessing of {problemName}, {solutionName} starting:')
+        else:
+            print(f'Postprocessing of {problemName}, {solutionName} starting (using S-parameters from {SparamName}):')
     
         ## load in all the data
         data = np.load(problemName+'output.npz')
@@ -453,6 +457,12 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         fvec = data['fvec']
         S_ref = data['S_ref']
         S_dut = data['S_dut']
+        
+        if(SparamName!=''): ## the other variables should be the same between runs
+            data2 = np.load(problemName+'output.npz')
+            S_ref = data2['S_ref']
+            S_dut = data2['S_dut']
+        
         #epsr_mat = data['epsr_mat']
         #epsr_defect = data['epsr_defect']
         N_antennas = data['N_antennas']
@@ -460,31 +470,32 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         
-        #=======================================================================
-        # ### PLOT S11 STUFF
-        # plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref.flatten())), label='FEM sim') ## try plotting the Ss
-        # #plt.plot(np.abs(S_dut.flatten()))
-        # fekof = 'TestStuff/FEKO patch S11.dat'
-        # fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        # plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-        # plt.plot()
-        # plt.grid()
-        # plt.ylabel(r'S$_{11}$ [dB]')
-        # plt.xlabel(r'Frequency [GHz]')
-        # plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
-        # plt.legend()
-        # plt.show()
-        # ## then plot the phase of S11, also
-        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
-        # plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
-        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
-        # plt.grid()
-        # plt.ylabel(r'Phase of S$_{11}$ [radians]')
-        # plt.xlabel(r'Frequency [GHz]')
-        # plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
-        # plt.legend()
-        # plt.show()
-        #=======================================================================
+        ### PLOT S11 STUFF
+        print(S_ref)
+        for m in np.arange(N_antennas):
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A#{m})') ## try plotting the Ss
+        #plt.plot(np.abs(S_dut.flatten()))
+        fekof = 'TestStuff/FEKO patch S11.dat'
+        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+        plt.plot()
+        plt.grid()
+        plt.ylabel(r'S$_{11}$ [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
+        plt.legend()
+        plt.show()
+        ## then plot the phase of S11, also
+        plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
+        plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
+        plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
+        plt.grid()
+        plt.ylabel(r'Phase of S$_{11}$ [radians]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
+        plt.legend()
+        plt.show()
+        exit()
         
         Nb = len(b) ## number of rows, or 'data points' to be used
         
@@ -528,7 +539,7 @@ def solveFromQs(problemName, solutionName='', antennasToUse=[], frequenciesToUse
                         i = nf*N_antennas*N_antennas + m*N_antennas + n
                         
                         if(onlyNAntennas > 0): ## use only transmission to the N antennas that are most spread out (as if we only had N antennas to measure with) This includes the antenna itself - if N is 1, then there is only reflection
-                            dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas
+                            dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas - rounds down
                             if( np.abs(n-m)%dist != 0 ):
                                 continue ## skip to next index
                                 

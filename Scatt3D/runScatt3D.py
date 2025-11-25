@@ -85,7 +85,7 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType} ## settings for the meshMaker
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType}#, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
         if(dutOnRefMesh):
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         else:
@@ -111,7 +111,7 @@ if __name__ == '__main__':
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         
-    def testRunDifferentDUTAntennas(h = 1/15, degree = 1): ## Testing what happens when all E-fields come from the ref case (simulation), and all scattering parameters come from the dut case, which has different antennas
+    def testRunDifferentDUTAntennas2(h = 1/15, degree = 1): ## Testing what happens when all E-fields come from the ref case (simulation), and all scattering parameters come from the dut case, which has different antennas
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01])} ## settings for the meshMaker
         refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, antenna_type='waveguide', **settings)
@@ -567,23 +567,21 @@ if __name__ == '__main__':
             plt.show()
             
     def reconstructionErrorTestPlots(sims = True): ## Runs some basic simulations, comparing the reconstructions errors with different FEM degrees and mesh sizes. If sims, compute results. If not, postprocess and plot
-        #=======================================================================
-        # errs3 = []; dofs3 = []
-        # for oh in np.linspace(2, 4.2, 7): ## degree 3
-        #     runName = f'degree3ho{oh:.1f}'
-        #     if(sims):
-        #         if(os.path.exists(folder+runName+'output.npz')):
-        #             if(comm.rank == model_rank):
-        #                 print(f'{runName} already completed...') ## if it already exists, skip it
-        #         else:
-        #             if(comm.rank == model_rank):
-        #                 print(f'running {runName}...') ## if it already exists, skip it
-        #             testFullExample(h=1/oh, degree=3, runName=runName)
-        #     else:
-        #         errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
-        #         load = np.load(folder+runName+'output.npz')
-        #         dofs3.append(load['ndofs'])
-        #=======================================================================
+        errs3 = []; dofs3 = []
+        for oh in np.linspace(2, 4.2, 7): ## degree 3
+            runName = f'degree3ho{oh:.1f}'
+            if(sims):
+                if(os.path.exists(folder+runName+'output.npz')):
+                    if(comm.rank == model_rank):
+                        print(f'{runName} already completed...') ## if it already exists, skip it
+                else:
+                    if(comm.rank == model_rank):
+                        print(f'running {runName}...') ## if it already exists, skip it
+                    testFullExample(h=1/oh, degree=3, runName=runName)
+            else:
+                errs3.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+                load = np.load(folder+runName+'output.npz')
+                dofs3.append(load['ndofs'])
                  
         #=======================================================================
         # errs2 = []; dofs2 = []
@@ -601,61 +599,64 @@ if __name__ == '__main__':
         #         errs2.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
         #         load = np.load(folder+runName+'output.npz')
         #         dofs2.append(load['ndofs'])
+        #         
+        # errs1 = []; dofs1 = []
+        # for oh in np.linspace(4, 13, 7): ## degree 1
+        #     runName = f'degree1ho{oh:.1f}'
+        #     if(sims):
+        #         if(os.path.exists(folder+runName+'output.npz')):
+        #             if(comm.rank == model_rank):
+        #                 print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
+        #         else:
+        #             testFullExample(h=1/oh, degree=1, runName=runName)
+        #         if(comm.rank == model_rank):
+        #                 print(f'running {runName}...') ## if it already exists, skip it
+        #     else:
+        #         errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
+        #         load = np.load(folder+runName+'output.npz')
+        #         dofs1.append(load['ndofs'])
         #=======================================================================
-                 
-        errs1 = []; dofs1 = []
-        for oh in np.linspace(4, 13, 7): ## degree 1
-            runName = f'degree1ho{oh:.1f}'
-            if(sims):
-                if(os.path.exists(folder+runName+'output.npz')):
-                    if(comm.rank == model_rank):
-                        print(f'{runName} already completed...') ## if it already exists, skip it ## if it already exists, skip it
-                else:
-                    testFullExample(h=1/oh, degree=1, runName=runName)
-                if(comm.rank == model_rank):
-                        print(f'running {runName}...') ## if it already exists, skip it
-            else:
-                errs1.append(postProcessing.solveFromQs(folder+runName, onlyAPriori=False, returnResults=[3,4,25,28]))
-                load = np.load(folder+runName+'output.npz')
-                dofs1.append(load['ndofs'])
         
-        #=======================================================================
-        # if(not sims): ## make the plot(s)
-        #     dofs = {'1': dofs1, '2': dofs2, '3': dofs3} ## should be [meshsize]
-        #     errs = {'1': np.array(errs1), '2': np.array(errs2), '3': np.array(errs3)} ## should be [meshsize, result]
-        #     if(comm.rank == model_rank):
-        #         for degree in [1, 2, 3]:
-        #             fig = plt.figure()
-        #             ax1 = plt.subplot(1, 1, 1)
-        #              
-        #             ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
-        #             ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
-        #             ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
-        #             ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
-        #              
-        #             ax1.legend()
-        #             ax1.grid(True)
-        #             plt.xlabel('# dofs')
-        #             plt.ylabel('Reconstruction Error')
-        #             plt.title(f'Degree {degree} reconstruction errors')
-        #             plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
-        #=======================================================================
+        if(not sims): ## make the plot(s)
+            dofs = {'1': dofs1, '2': dofs2, '3': dofs3} ## should be [meshsize]
+            errs = {'1': np.array(errs1), '2': np.array(errs2), '3': np.array(errs3)} ## should be [meshsize, result]
+            if(comm.rank == model_rank):
+                for degree in [1, 2, 3]:
+                    fig = plt.figure()
+                    ax1 = plt.subplot(1, 1, 1)
+                     
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
+                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
+                     
+                    ax1.legend()
+                    ax1.grid(True)
+                    plt.xlabel('# dofs')
+                    plt.ylabel('Reconstruction Error')
+                    plt.title(f'Degree {degree} reconstruction errors')
+                    plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
     
     #testRun(h=1/2)
     reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
+    #testFullExample(h=1/6, degree=1, antennaType='patch')
+    
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
-    #runName = 'testRunLarger' ## h=1/18
+    runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.5, degree=3)
     
-    #runName = 'testRunPatches' ## h=1/3.5, degree 3
+    runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch')
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
-    #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
+    #postProcessing.solveFromQs(folder+'testRunSmall', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=False)
+    
+    runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
     #testRunDifferentDUTAntennas(h=1/3.6, degree=3)
     
     
@@ -671,13 +672,13 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
+    #testSphereScattering(h=1/3.66, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTestd3smaller' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    runName = 'patchPatternTestd3' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
     #testPatchPattern(h=1/3.66, degree=3, freqs = np.linspace(10e9, 12e9, 1), name=runName, showPlots=True)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
