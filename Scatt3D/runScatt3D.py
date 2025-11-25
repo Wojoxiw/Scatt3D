@@ -147,7 +147,7 @@ if __name__ == '__main__':
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         settings = {'N_antennas': 9, 'material_epsrs': [3.0*(1 - 0.01j)], 'order': degree, 'object_geom': 'complex1', 'defect_geom': 'complex1', 'h': h, 'defect_height': .63, 'defect_radius': .31, 'object_radius': 1.09, 'antenna_type': 'patch'} ## settings for the meshMaker 'object_offset': np.array([.15, .1, 0])
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = True, verbosity = verbosity, **settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **settings)
         else:
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, **settings)
         #dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, N_antennas=9, order=degree)
@@ -159,7 +159,6 @@ if __name__ == '__main__':
         prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
         degree = 1
-        
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -636,10 +635,10 @@ if __name__ == '__main__':
     #runName = 'testRunDeg2Smaller' ## h=1/6
     runName = 'testRunSmall' ## h=1/3.5, degree 3
     #runName = 'testRunLarger' ## h=1/18
-    testFullExample(h=1/3.5, degree=3)
+    testFullExample(h=1/3.5, degree=3, runName=runName)
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
-    #testFullExample(h=1/3.5, degree=3, antennaType='patch')
+    #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=False) ## aka testRunDifferentDUTAntennas2
@@ -671,7 +670,7 @@ if __name__ == '__main__':
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     runName = 'testingComplexObject' ## h=1/8
-    #testLargeExample(h=1/8, degree=2)
+    #testLargeExample(h=1/6, degree=2)
     #postProcessing.solveFromQs(folder+runName)
     
     #runName = 'testingShiftedDut' ## h=1/12

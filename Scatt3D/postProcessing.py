@@ -460,6 +460,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         if(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(problemName+'output.npz')
+            b = data2['b']
             S_ref = data2['S_ref']
             S_dut = data2['S_dut']
         
