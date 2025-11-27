@@ -30,7 +30,42 @@ def Rmatz(theta): ## matrix for rotation about the z-axis
 def Rmaty(theta): ## matrix for rotation about the y-axis
     return np.array([[np.cos(theta), 0, np.sin(theta)],
                      [0, 1, 0],
-                     [-np.sin(theta), 0, np.cos(theta)]]) 
+                     [-np.sin(theta), 0, np.cos(theta)]])
+    
+def makeInterpolationSubmesh(comm, radius, order, center = [0, 0, 0], verbosity=1): ## 
+    '''
+    Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
+    Currently, this is a sphere intended to sit between the antennas
+    :param comm: MPI communicator
+    :param radius: Radius of the sub-mesh - should encompass the whole object to be reconstructed, so maybe ~0.7*antenna_radius
+    :param order: Order of the mesh
+    :param center: Center of the submesh - i.e. where the reconstruction should be centered, i.e. the object location
+    :param verbosity: If > 0, print some info
+    '''
+    t1 = timer()
+    gmsh.initialize()
+    if self.comm.rank == self.model_rank: ## make all the definitions through the master-rank process
+        gmsh.model.add('Interpolation Submesh') ## name for the this
+        ## Give some mesh settings: verbosity, max. and min. mesh lengths
+        gmsh.option.setNumber('General.Verbosity', self.verbosity)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/100)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0)
+        gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
+    
+        sphere = gmsh.model.occ.addSphere(center[0], center[1], center[2], radius)
+        
+        gmsh.model.occ.synchronize()
+        gmsh.model.mesh.generate(3)
+    gmsh.model.mesh.setOrder(order)
+    meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=comm, rank=0, gdim=3, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
+    gmsh.finalize()
+    
+    ncells = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_global ## all cells, rather than only those in this MPI process
+    if(verbosity > 0 and comm.rank == 0):
+        nloc = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local
+        print(f'Interpolation submesh generated in {timer() - t1:.2e} s - {ncells} global cells, {nloc} local cells')
+        sys.stdout.flush()
+    return meshData
 
 class MeshInfo():
     """Data structure for the mesh (all geometry) and related metadata."""

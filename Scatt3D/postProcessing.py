@@ -503,7 +503,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         Nb = len(b) ## number of rows, or 'data points' to be used
         
         ## mesh stuff on just one process?
-        with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f:
+        with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f: ## read the mesh with dolfinx
             mesh = f.read_mesh()
             Wspace = dolfinx.fem.functionspace(mesh, ('DG', 0))
             cells = dolfinx.fem.Function(Wspace)
@@ -516,7 +516,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         print('data loaded in')
         sys.stdout.flush()
         
-        with h5py.File(problemName+'output-qs.h5', 'r') as f: ## this is serial, so only needs to occur on the main process
+        with h5py.File(problemName+'output-qs.h5', 'r') as f: ## read the information on the mesh with h5py (supposedly this is/will be deprecated)
             dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
             cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idxOrig]
             epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idxOrig]
