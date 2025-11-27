@@ -1039,7 +1039,7 @@ class Scatt3DProblem():
         freq = int(len(self.fvec)/2) ## the frequency index to be used
         ants = []
         if(allAnts):
-            for i in range(len(self.refMeshData.N_antennas)):
+            for i in range(len(FEMm.meshInfo.N_antennas)):
                 ants+=[i] ## add every antenna
         else:
             ants = [0] ## just the first antenna/no antenna at all
