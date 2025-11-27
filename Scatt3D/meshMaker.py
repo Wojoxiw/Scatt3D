@@ -305,7 +305,7 @@ class MeshInfo():
                     antennaSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_antenna[n])) ## (0, 0, 0) - the antenna surface
                     for i in range(9):
                         PECSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
-                        if(i in [6,7]): ## the inner cylinder should have a smaller mesh (I think)
+                        if(i in [5,6]): ## the inner cylinder should have a smaller mesh (I think)
                             smallMeshSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
             elif(self.antenna_type == 'patchtest'): # 1 patch antenna near the centre, x-polarized (x-offset feed)
                 box = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2, self.antenna_depth, self.antenna_width, self.antenna_height) ## box for antenna surface + dielectric + GP at (0, 0, 0)
@@ -581,7 +581,7 @@ class MeshInfo():
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/12) ## this is potentially the most important surface to resolve well
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/100) ## this is potentially the most important surface to resolve well - just the inner coax feed for the patch antenna, currently
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 

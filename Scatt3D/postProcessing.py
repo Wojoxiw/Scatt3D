@@ -471,34 +471,32 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         
-        #=======================================================================
-        # ### PLOT S11 STUFF
-        # print(S_ref)
-        # for m in np.arange(N_antennas):
-        #     plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A#{m})') ## try plotting the Ss
-        # #plt.plot(np.abs(S_dut.flatten()))
-        # fekof = 'TestStuff/FEKO patch S11.dat'
-        # fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        # plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-        # plt.plot()
-        # plt.grid()
-        # plt.ylabel(r'S$_{11}$ [dB]')
-        # plt.xlabel(r'Frequency [GHz]')
-        # plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
-        # plt.legend()
-        # plt.show()
-        # ## then plot the phase of S11, also
-        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
-        # plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
-        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
-        # plt.grid()
-        # plt.ylabel(r'Phase of S$_{11}$ [radians]')
-        # plt.xlabel(r'Frequency [GHz]')
-        # plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
-        # plt.legend()
-        # plt.show()
-        # exit()
-        #=======================================================================
+        ### PLOT S11 STUFF
+        #print(S_ref)
+        for m in np.arange(N_antennas):
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A#{m})') ## try plotting the Ss
+        #plt.plot(np.abs(S_dut.flatten()))
+        fekof = 'TestStuff/FEKO patch S11.dat'
+        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+        plt.plot()
+        plt.grid()
+        plt.ylabel(r'S$_{11}$ [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
+        plt.legend()
+        plt.show()
+        ## then plot the phase of S11, also
+        plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
+        plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
+        plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
+        plt.grid()
+        plt.ylabel(r'Phase of S$_{11}$ [radians]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
+        plt.legend()
+        plt.show()
+        exit()
         
         Nb = len(b) ## number of rows, or 'data points' to be used
         
@@ -801,7 +799,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         print()
         print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
         sys.stdout.flush()
-        rcond = 10**-1.65 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
+        rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
         
@@ -1026,5 +1024,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     if( comm.rank == 0 ):
         totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
         print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
-        return errs
-    return None
+        if(not not returnResults): ## on the cluster this seems to get stuck here without this
+            return errs
+    if(not not returnResults):
+        return None

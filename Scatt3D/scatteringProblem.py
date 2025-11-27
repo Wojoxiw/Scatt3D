@@ -446,6 +446,26 @@ class Scatt3DProblem():
         # Ep = dolfinx.fem.Function(FEMm.Vspace)
         # Ep.interpolate(lambda x: Eport(x))
         #=======================================================================
+        
+        
+        for n in np.arange(meshInfo.N_antennas):
+            Ep_unnormalized = dolfinx.fem.Function(FEMm.Vspace)
+            Ep_unnormalized.interpolate(lambda x: Eport(x))
+            norm = ufl.FacetNormal(FEMm.meshInfo.mesh)
+            signfactor = ufl.sign(ufl.inner(norm, ufl.SpatialCoordinate(FEMm.meshInfo.mesh))) # Enforce outward pointing normal
+            normFactorForm = dolfinx.fem.form(ufl.dot(Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
+            #normFactorForm = dolfinx.fem.form(ufl.dot(ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
+            normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+            normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
+            if(self.comm.rank == 0): ## assemble each part as it is made
+                    normFactor = np.sqrt(sum(normFactorParts)) ## since we are normalizing the abs. squared integrated field, by modifying the field
+            else:
+                normFactor = None
+            normFactor= self.comm.bcast(normFactor, root=self.model_rank)
+            print(n, normFactor)
+        print('done')
+        exit()
+        
         if(meshInfo.N_antennas > 0): ## only have an antenna field if there are antennas
             ## try normalizing numerically
             Ep = dolfinx.fem.Function(FEMm.Vspace)
@@ -964,15 +984,16 @@ class Scatt3DProblem():
             print(f'   done.')
             sys.stdout.flush()
     
-    def saveEFieldsForAnim(self, ref=True, Nframes = 50, removePML = True, dutOnRefMesh=True):
+    def saveEFieldsForAnim(self, ref=True, Nframes = 50, removePML = True, dutOnRefMesh=True, allAnts=True):
         '''
-        Saves the E-field magnitudes for the final solution into .xdmf, for a number of different phase factors to create an animation in paraview
-        Uses the reference mesh and fields. If removePML, set the values within the PML to 0 (can also be NaN, etc.)
+        Saves the E-field magnitudes for the final solution into .xdmf, for a number of different phase factors to create an animation in paraview... since I couldn't figure out how to simply multiply by factors in paraview
+        Uses the reference mesh and fields, for the center frequency. If removePML, set the values within the PML to 0 (can also be NaN, etc.)
         
         :param ref: If True, plot for the reference case. If False, for the DUT case
         :param Nframes: Number of frames in the anim. Each frame is a different phase from 0 to 2*pi
         :param removePML: If True, sets all values in the PML to something different
-        :param dutOnrefMesh: If True and plotting the DUT (only matters if it's on its own mesh), interpolate it onto the reference mesh
+        :param dutOnRefMesh: If True and plotting the DUT (only matters if it's on its own mesh), interpolate it onto the reference mesh
+        :param allAnts: If True and multiple antennas, saves the E-fields for each exciting antenna
         '''
 
         if(ref or dutOnRefMesh or self.dutOnRefMesh):
@@ -1003,53 +1024,68 @@ class Scatt3DProblem():
         #         E_vals = Es.eval(x.T, cells)[:, 1]
         #     return E_vals
         #=======================================================================
-        
-        pols = ['x-pol', 'y-pol', 'z-pol']
         if(ref):
-            sol = self.solutions_ref[0][0] ## fields for the first frequency/antenna combo
             textextra = 'ref'
         elif(dutOnRefMesh and not self.dutOnRefMesh):
-            sol = dolfinx.fem.Function(FEMm.Vspace)
-            
-            fine_mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
-            num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
-            cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-            sol.interpolate_nonmatching(self.solutions_dut[0][0], cells, interpolation_data=interpolation_data)
-            sol.x.scatter_forward()
             textextra = 'dutOnRefMesh'
         else:
-            sol = self.solutions_dut[0][0]
             textextra = 'dut'
         xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w')
         xdmf.write_mesh(FEMm.meshInfo.mesh)
         
-        xpart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
-        ypart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
-        zpart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
-        polVec = ufl.as_vector([xpart, ypart, zpart])
-        for pol in pols:
-            #E.interpolate(functools.partial(q_abs, Es=sol, pol=pol))
-            xpart.value = 0
-            ypart.value = 0
-            zpart.value = 0
-            if(pol == 'z-pol'): ## it is not simple to save the vector itself for some reason...
-                zpart.value = 1
-            elif(pol == 'y-pol'): ## it is not simple to save the vector itself for some reason...
-                ypart.value = 1
-            elif(pol == 'x-pol'): ## it is not simple to save the vector itself for some reason...
-                xpart.value = 1
-            expr = dolfinx.fem.Expression(ufl.dot(sol, polVec), FEMm.ScalarSpace.element.interpolation_points)
-            E.interpolate(expr)
+        pols = ['x-pol', 'y-pol', 'z-pol']
+        freq = int(len(self.fvec)/2) ## the frequency index to be used
+        ants = []
+        if(allAnts):
+            for i in range(len(self.refMeshData.N_antennas)):
+                ants+=[i] ## add every antenna
+        else:
+            ants = [0] ## just the first antenna/no antenna at all
+        for ant in ants: ## for each exciting antenna index
+            if(ref):
+                sol = self.solutions_ref[freq][ant] ## fields for the middle frequency/first antenna combo
+                textextra = 'ref'
+            elif(dutOnRefMesh and not self.dutOnRefMesh):
+                sol = dolfinx.fem.Function(FEMm.Vspace)
+                
+                fine_mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
+                num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
+                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.Vspace, self.FEMmesh_DUT.Vspace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                sol.interpolate_nonmatching(self.solutions_dut[freq][ant], cells, interpolation_data=interpolation_data)
+                sol.x.scatter_forward()
+                textextra = 'dutOnRefMesh'
+            else:
+                sol = self.solutions_dut[freq][ant]
+                textextra = 'dut'
             
-            E.name = pol
-            if(removePML):
-                pml_cells = FEMm.meshInfo.meshData.cell_tags.find(FEMm.meshInfo.pml_marker)
-                pml_dofs = dolfinx.fem.locate_dofs_topological(FEMm.ScalarSpace, entity_dim=self.tdim, entities=pml_cells)
-                E.x.array[pml_dofs] = 0#np.nan ## use the ScalarSpace one
-            for i in range(Nframes):
-                E.x.array[:] = E.x.array*np.exp(1j*2*pi/Nframes)
-                xdmf.write_function(E, i)
+            
+            xpart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
+            ypart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
+            zpart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
+            polVec = ufl.as_vector([xpart, ypart, zpart])
+            for pol in pols:
+                #E.interpolate(functools.partial(q_abs, Es=sol, pol=pol))
+                xpart.value = 0
+                ypart.value = 0
+                zpart.value = 0
+                if(pol == 'z-pol'): ## it is not simple to save the vector itself for some reason...
+                    zpart.value = 1
+                elif(pol == 'y-pol'): ## it is not simple to save the vector itself for some reason...
+                    ypart.value = 1
+                elif(pol == 'x-pol'): ## it is not simple to save the vector itself for some reason...
+                    xpart.value = 1
+                expr = dolfinx.fem.Expression(ufl.dot(sol, polVec), FEMm.ScalarSpace.element.interpolation_points)
+                E.interpolate(expr)
+                
+                E.name = pol+f'{ant}'
+                if(removePML):
+                    pml_cells = FEMm.meshInfo.meshData.cell_tags.find(FEMm.meshInfo.pml_marker)
+                    pml_dofs = dolfinx.fem.locate_dofs_topological(FEMm.ScalarSpace, entity_dim=self.tdim, entities=pml_cells)
+                    E.x.array[pml_dofs] = 0#np.nan ## use the ScalarSpace dofs
+                for i in range(Nframes):
+                    E.x.array[:] = E.x.array*np.exp(1j*2*pi/Nframes)
+                    xdmf.write_function(E, i)
         xdmf.close()
         if(self.verbosity>0 and self.comm.rank == self.model_rank):
             print('   '+self.name+textextra+' E-fields animation complete.')
