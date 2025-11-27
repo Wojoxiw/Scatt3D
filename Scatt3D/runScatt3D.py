@@ -161,10 +161,8 @@ if __name__ == '__main__':
         degree = 1
         
     def EFieldsAnim(h= 1/3.5, antennaType = 'patch', degree = 3): ## test run to save all E fields
-        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType}#, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
         refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, makeOptVects=False)
         prob.saveEFieldsForAnim(True, allAnts=True)
         
