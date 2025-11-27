@@ -239,8 +239,7 @@ class MeshInfo():
             PECSurfacePts = []; ## points that are on only PEC surfaces
             antennaSurfacePts = []; ## points that are on only the antenna surface
             smallMeshSurfacePts = []; ## points on surfaces that I want to have a small mesh size (currently the patch's inner cylinder)
-            antennas_DimTags = []
-            matDimTags = []; antennaMatDimTags = []; defectDimTags = [];
+            antennas_DimTags = []; matDimTags = []; antennaMatDimTags = []; defectDimTags = []; domainDimTags = []
             ## Make the antennas
             if(self.antenna_type == 'waveguide'):
                 x_antenna = np.zeros((self.N_antennas, 3))
@@ -250,6 +249,12 @@ class MeshInfo():
                     gmsh.model.occ.rotate([(self.tdim, box)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
                     gmsh.model.occ.translate([(self.tdim, box)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
                     antennas_DimTags.append((self.tdim, box))
+                    
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_width/2-self.h/2, -self.antenna_depth-self.h/2, -self.antenna_height/2-self.h/2, self.antenna_width+self.h, self.antenna_depth+self.h, self.antenna_height+self.h) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
+                    gmsh.model.occ.translate([(self.tdim, boundingBox)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    domainDimTags.append((self.tdim, boundingBox))
+                    
                     x_antenna[n] = self.pos_antennas[n, :] ## the translation to the antenna's position
                     Rmat=Rmatz(self.rot_antennas[n])
                     x_pec[n, 0] = x_antenna[n] + np.dot(Rmat, np.array([0, -self.antenna_depth/2, -self.antenna_height/2])) ## bottom surface (in z)
@@ -279,6 +284,13 @@ class MeshInfo():
                     gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 0, 1, pi/2) ## rotate to face y-hat
                     gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n]) ## then the center
                     gmsh.model.occ.translate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.h/2, -self.antenna_width/2-self.h/2, -self.antenna_height/2-self.h/2, self.antenna_depth+self.h, self.antenna_width+self.h, self.antenna_height+self.h) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 1, 0, pi/2)
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, pi/2)
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
+                    gmsh.model.occ.translate([(self.tdim, boundingBox)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    domainDimTags.append((self.tdim, boundingBox))
                     
                     antennaMatDimTags.append((3, box)) ## these 3 should be dielectric
                     antennaMatDimTags.append((3, coax_outer))
@@ -318,6 +330,9 @@ class MeshInfo():
                 ## subtract the outer coax from the box, then the inner coax from the outer
                 box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
                 coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+
+                boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.h/2, -self.antenna_width/2-self.h/2, -self.antenna_height/2-self.h/2, self.antenna_depth+self.h, self.antenna_width+self.h, self.antenna_height+self.h) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                domainDimTags.append((self.tdim, boundingBox))
 
                 antennaSurfacePts.append([self.feed_offset, self.coax_inr/2+self.coax_outr/2, -self.antenna_height/2-self.coax_outh]) ## the surface of the bottom of the outer cylinder of the coax - the radiating port
                 
@@ -415,7 +430,6 @@ class MeshInfo():
             ## Make the domain and the PML
             if(self.domain_geom == 'domedCyl'):
                 domain_cyl = gmsh.model.occ.addCylinder(0, 0, -self.domain_height/2, 0, 0, self.domain_height, self.domain_radius)
-                domain = [(self.tdim, domain_cyl)] # dim, tags
                 pml_cyl = gmsh.model.occ.addCylinder(0, 0, -self.PML_height/2, 0, 0, self.PML_height, self.PML_radius)
                 pml = [(self.tdim, pml_cyl)] # dim, tags
                 if(self.dome_height>0): ## add a spheroid domed top and bottom with some specified extra height, that passes through the cylindrical 'corner' (to try to avoid waves being parallel to the PML)
@@ -423,7 +437,7 @@ class MeshInfo():
                     gmsh.model.occ.dilate([(self.tdim, domain_spheroid)], 0, 0, 0, 1, 1, self.domain_a)
                     domain_extraheight_cyl = gmsh.model.occ.addCylinder(0, 0, -self.domain_height/2-self.dome_height, 0, 0, self.domain_height+self.dome_height*2, self.domain_radius)
                     domed_ceilings = gmsh.model.occ.intersect([(self.tdim, domain_spheroid)], [(self.tdim, domain_extraheight_cyl)])
-                    domain = gmsh.model.occ.fuse([(self.tdim, domain_cyl)], domed_ceilings[0])[0] ## [0] to get  dimTags
+                    domainDimTags.append((self.tdim, gmsh.model.occ.fuse([(self.tdim, domain_cyl)], domed_ceilings[0])[0][1])) ## [0] to get  dimTags
                     
                     pml_spheroid = gmsh.model.occ.addSphere(0, 0, 0, self.PML_radius+self.PML_spheroid_extraRadius)
                     gmsh.model.occ.dilate([(self.tdim, pml_spheroid)], 0, 0, 0, 1, 1, self.PML_a)
@@ -431,12 +445,12 @@ class MeshInfo():
                     domed_ceilings = gmsh.model.occ.intersect([(self.tdim, pml_spheroid)], [(self.tdim, pml_extraheight_cyl)])
                     pml = gmsh.model.occ.fuse([(self.tdim, pml_cyl)], domed_ceilings[0])[0]
                 else:
-                    domain = [(self.tdim, domain)] # needs to be dim, tags
+                    domainDimTags.append((self.tdim, domain_cyl)) # needs to be dim, tags
                     pml = [(self.tdim, pml)] # needs to be dim, tags
             elif(self.domain_geom == 'sphere'):
                 domain = gmsh.model.occ.addSphere(0, 0, 0, self.domain_radius)
                 pml = gmsh.model.occ.addSphere(0, 0, 0, self.PML_radius)
-                domain = [(self.tdim, domain)] # needs to be dim, tags
+                domainDimTags.append((self.tdim, domain)) # needs to be dim, tags
                 pml = [(self.tdim, pml)] # needs to be dim, tags
             FF_surface_dimTags = []
             if(self.FF_surface):
@@ -445,30 +459,33 @@ class MeshInfo():
                 FF_surface_dimTags = [(self.tdim, FF_surface)]
                 
             # Create fragments and dimtags
-            outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domain + matDimTags + antennaMatDimTags + defectDimTags + FF_surface_dimTags + antennas_DimTags)
+            outDimTags, outDimTagsMap = gmsh.model.occ.fragment(pml, domainDimTags + matDimTags + antennaMatDimTags + defectDimTags + FF_surface_dimTags + antennas_DimTags)
             
             removeDimTags = [] ## remove these volumes - their surfaces should probably be PEC
             for i in np.arange(len(antennas_DimTags)):
                 removeDimTags = removeDimTags + outDimTagsMap[-(i+1)]
-            nmats = len(matDimTags)
-            nAntmats = len(antennaMatDimTags)
+            nmats = len(matDimTags); nAntmats = len(antennaMatDimTags); nDomain = len(domainDimTags)
             if(not self.reference):
                 ndefects = len(defectDimTags)
                 mapHere = []
                 for n in np.arange(ndefects):
-                    mapHere = mapHere+outDimTagsMap[2+nmats+nAntmats+n]
+                    mapHere = mapHere+outDimTagsMap[1+nmats+nAntmats+nDomain+n]
                 defectDimTags = [x for x in mapHere if x not in removeDimTags]
             else:
                 defectDimTags = []
             mapHere = []
             for n in np.arange(nAntmats):
-                mapHere = mapHere+outDimTagsMap[2+nmats+n]
+                mapHere = mapHere+outDimTagsMap[1+nmats+nDomain+n]
             antennaMatDimTags = [x for x in mapHere if x not in removeDimTags+defectDimTags]
             mapHere = []
             for n in np.arange(nmats):
-                mapHere = mapHere+outDimTagsMap[2+n]
+                mapHere = mapHere+outDimTagsMap[1+nDomain+n]
             matDimTags = [x for x in mapHere if x not in removeDimTags+defectDimTags+antennaMatDimTags]
-            domainDimTags = [x for x in outDimTagsMap[1] if x not in removeDimTags+matDimTags+antennaMatDimTags+defectDimTags]
+            mapHere = []
+            for n in np.arange(nDomain):
+                mapHere = mapHere+outDimTagsMap[1+n]
+            domainDimTags = [x for x in mapHere if x not in removeDimTags+matDimTags+antennaMatDimTags+defectDimTags]
+            domainDimTags = list(dict.fromkeys(domainDimTags)) ## remove any duplicate entries (they will cause an error)
             pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+matDimTags+antennaMatDimTags+removeDimTags]
             gmsh.model.occ.remove(removeDimTags)
             gmsh.model.occ.synchronize()
@@ -540,12 +557,12 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = max(2, np.sqrt(epsr)) ## just so the material is always relatively well resolved
+                    sf = max(1.7, np.sqrt(epsr)) ## just so the material is always relatively well resolved
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [matDimTags[n][1]])
                     meshFields.append(objectMeshField)
-                nAntmats = len(matDimTags)
+                nAntmats = len(antennaMatDimTags)
                 for n in np.arange(nAntmats):
                     antennaDielectricMeshField = gmsh.model.mesh.field.add("Constant")
                     if(len(self.material_epsrs) == 1):
@@ -555,7 +572,7 @@ class MeshInfo():
                     sf = max(2.5, np.sqrt(epsr)) ## antenna volume is probably more important than the objects
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VOut", self.h)
-                    gmsh.model.mesh.field.setNumbers(antennaDielectricMeshField, 'VolumesList', [matDimTags[n][1]])
+                    gmsh.model.mesh.field.setNumbers(antennaDielectricMeshField, 'VolumesList', [antennaMatDimTags[n][1]])
                     meshFields.append(antennaDielectricMeshField)
                 ndefects = len(defectDimTags)
                 for n in np.arange(ndefects):
@@ -566,7 +583,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[-1])
                     else:
                         epsr = np.real(self.defect_epsrs[n])
-                    sf = max(1.5, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
+                    sf = max(2, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(defectMeshField, 'VolumesList', [defectDimTags[n][1]])
@@ -581,7 +598,7 @@ class MeshInfo():
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/100) ## this is potentially the most important surface to resolve well - just the inner coax feed for the patch antenna, currently
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/100) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 
@@ -592,11 +609,12 @@ class MeshInfo():
                 meshFields.append(PECSurfaceField)
                 
                 
-                ## then mesh fields along boundaries, reducing the mesh-size there
+                ## then a mesh field for the domain and PML, to reduce mesh size in open space (otherwise the drop-off from tiny mesh in antennas is extremely slow)
                 
-                 
-                #domainMeshField = gmsh.model.mesh.field.add("Constant")
-                #gmsh.model.mesh.field.setNumber(domainMeshField, "VIn", self.h)
+                domainMeshField = gmsh.model.mesh.field.add("Constant")
+                gmsh.model.mesh.field.setNumbers(domainMeshField, 'VolumesList', [domainDimTag[1] for domainDimTag in domainDimTags]+[pmlDimTag[1] for pmlDimTag in pmlDimTags])
+                gmsh.model.mesh.field.setNumber(domainMeshField, "VIn", self.h)
+                meshFields.append(domainMeshField)
                  
                 minMeshField = gmsh.model.mesh.field.add("Min") ## so the smallest one gets used
                 gmsh.model.mesh.field.setNumbers(minMeshField, "FieldsList", meshFields)
