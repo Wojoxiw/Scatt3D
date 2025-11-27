@@ -448,23 +448,25 @@ class Scatt3DProblem():
         #=======================================================================
         
         
-        for n in np.arange(meshInfo.N_antennas):
-            Ep_unnormalized = dolfinx.fem.Function(FEMm.Vspace)
-            Ep_unnormalized.interpolate(lambda x: Eport(x))
-            norm = ufl.FacetNormal(FEMm.meshInfo.mesh)
-            signfactor = ufl.sign(ufl.inner(norm, ufl.SpatialCoordinate(FEMm.meshInfo.mesh))) # Enforce outward pointing normal
-            normFactorForm = dolfinx.fem.form(ufl.dot(Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
-            #normFactorForm = dolfinx.fem.form(ufl.dot(ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
-            normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
-            normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
-            if(self.comm.rank == 0): ## assemble each part as it is made
-                    normFactor = np.sqrt(sum(normFactorParts)) ## since we are normalizing the abs. squared integrated field, by modifying the field
-            else:
-                normFactor = None
-            normFactor= self.comm.bcast(normFactor, root=self.model_rank)
-            print(n, normFactor)
-        print('done')
-        exit()
+        #=======================================================================
+        # for n in np.arange(meshInfo.N_antennas):
+        #     Ep_unnormalized = dolfinx.fem.Function(FEMm.Vspace)
+        #     Ep_unnormalized.interpolate(lambda x: Eport(x))
+        #     norm = ufl.FacetNormal(FEMm.meshInfo.mesh)
+        #     signfactor = ufl.sign(ufl.inner(norm, ufl.SpatialCoordinate(FEMm.meshInfo.mesh))) # Enforce outward pointing normal
+        #     normFactorForm = dolfinx.fem.form(ufl.dot(Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
+        #     #normFactorForm = dolfinx.fem.form(ufl.dot(ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
+        #     normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+        #     normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
+        #     if(self.comm.rank == 0): ## assemble each part as it is made
+        #             normFactor = np.sqrt(sum(normFactorParts)) ## since we are normalizing the abs. squared integrated field, by modifying the field
+        #     else:
+        #         normFactor = None
+        #     normFactor= self.comm.bcast(normFactor, root=self.model_rank)
+        #     print(n, normFactor)
+        # print('done')
+        # exit()
+        #=======================================================================
         
         if(meshInfo.N_antennas > 0): ## only have an antenna field if there are antennas
             ## try normalizing numerically
