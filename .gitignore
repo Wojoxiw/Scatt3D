@@ -6,6 +6,7 @@
 *.png
 *.info
 *.dat
+*.npz
 */data3DLUNARC
 */.settings
 */.cache
@@ -13,3 +14,4 @@
 !FEKO patch Efield.dat
 !FEKO patch gain.dat
 !FEKO patch S11.dat
+!prevRuns.npz
