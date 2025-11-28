@@ -394,7 +394,8 @@ class Scatt3DProblem():
                         centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh]) ## centre of the radiating face
                         y = (y.T-centre).T ## local position now, at the center of the radiating face
                         r = np.sqrt(y[0]**2 + y[1]**2)
-                        rhat = np.array([y[0], y[1], y[0]*0])/r
+                        totalRotInverse = np.dot(meshMaker.Rmatz(meshInfo.rot_antennas[p]), np.dot(meshMaker.Rmatz(pi/2), meshMaker.Rmaty(pi/2)))
+                        rhat = np.dot(totalRotInverse, np.array([y[0], y[1], y[0]*0]))/r ## since this is the E-field polarization, need to rotate back to coordinates
                         Ep_loc = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
                         Ep_loc[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
                         Ep_loc[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
@@ -404,16 +405,15 @@ class Scatt3DProblem():
                 if(meshInfo.antenna_type == 'waveguide'):
                     for p in range(meshInfo.N_antennas):
                         center = meshInfo.pos_antennas[p]
-                        phi = -meshInfo.rot_antennas[p] # Note rotation by the negative of antenna rotation
-                        Rmat = np.array([[np.cos(phi), -np.sin(phi), 0],
+                        Rmat = lambda phi: np.array([[np.cos(phi), -np.sin(phi), 0],
                                          [np.sin(phi), np.cos(phi), 0],
                                          [0, 0, 1]]) ## rotation around z
                         y = np.transpose(x.T - center)
-                        loc_x = np.dot(Rmat, y) ### position vector, [x, y, z], rotated to be in the coordinates the antenna was defined in
+                        loc_x = np.dot(Rmat(-meshInfo.rot_antennas[p]), y) ### position vector, [x, y, z], rotated to be in the coordinates the antenna was defined in
                         if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
                             Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshInfo.kc*loc_x[0])))#/np.sqrt(meshInfo.antenna_height*meshInfo.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
                         else: ## horizontal (x-) pol, field varies along z
-                            Ep_loc = np.vstack(((np.cos(meshInfo.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2]))#/np.sqrt(meshInfo.antenna_width*meshInfo.antenna_height/2)
+                            Ep_loc = np.vstack( (np.dot(Rmat(meshInfo.rot_antennas[p]), np.array(np.cos(meshInfo.kc*loc_x[2])), 0*loc_x[2], 0*loc_x[2])) ) # rotate back
                             
                         #simple, inexact confinement conditions
                         #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
