@@ -413,7 +413,7 @@ class Scatt3DProblem():
                         if (self.antenna_pol == 'vert'): ## vertical (z-) pol, field varies along x
                             Ep_loc = np.vstack((0*loc_x[0], 0*loc_x[0], np.cos(meshInfo.kc*loc_x[0])))#/np.sqrt(meshInfo.antenna_height*meshInfo.antenna_width/2) ## should be normalized to one as in (22) of adjoint_ekas3d.pdf - this is the analytical normalization... now doing it numerically
                         else: ## horizontal (x-) pol, field varies along z
-                            Ep_loc = np.vstack( (np.dot(Rmat(meshInfo.rot_antennas[p]), np.array(np.cos(meshInfo.kc*loc_x[2]), 0*loc_x[2], 0*loc_x[2]) )) ) # rotate back
+                            Ep_loc = np.vstack( (np.dot(Rmat(meshInfo.rot_antennas[p]), np.array([np.cos(meshInfo.kc*loc_x[2]), 0*loc_x[2], 0*loc_x[2]]) )) ) # rotate back
                             
                         #simple, inexact confinement conditions
                         #Ep_loc[:,np.sqrt(loc_x[0]**2 + loc_x[1]**2) > antenna_width] = 0 ## no field outside of the antenna's width (circular)
