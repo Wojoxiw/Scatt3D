@@ -799,6 +799,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     #     f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
     #===========================================================================
         print()
+        errs = [] ## in case I want to return errors
         print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
         sys.stdout.flush()
         rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
@@ -808,12 +809,16 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])#np.linalg.pinv(A_ap, rcond = rcond) @ b
         cells.x.array[:] = x_temp + 0j
         f.write_function(cells, 3)
-        print(f'Timestep 3 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
+        err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+        errs.append(err)
+        print(f'Timestep 3 reconstruction error: {err:.3e}')
         if(not onlyAPriori):
             x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])#np.linalg.pinv(A, rcond = rcond) @ b
             cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 4)  
-            print(f'Timestep 4 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
+            f.write_function(cells, 4)
+            err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+            errs.append(err)
+            print(f'Timestep 4 reconstruction error: {err:.3e}')
         
         f.close()
         print()
@@ -833,7 +838,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         Ak_ap[A1:,A2:] = np.real(A_ap) ## A22
         bk = np.hstack((np.real(b),np.imag(b))) ## real b
         x_temp = np.zeros(N, dtype=complex)
-        errs = [] ## in case I want to return errors
         
         if(not returnResults or 23 in returnResults): ## if it is empty, or requested
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, **spgl_settings)

@@ -94,9 +94,9 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         if(not dutOnRefMesh):
             dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, pol='')
         else:
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, pol='')
         prob.saveEFieldsForAnim(True)
         #prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
@@ -163,7 +163,7 @@ if __name__ == '__main__':
     def EFieldsAnim(h= 1/3.5, antennaType = 'patch', degree = 3): ## test run to save all E fields
         settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
         refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=False, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, makeOptVects=False)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=False, verbosity = verbosity, MPInum = MPInum, name = runName, freqs=[10e9], fem_degree=degree, makeOptVects=False)
         prob.saveEFieldsForAnim(True, allAnts=True)
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
@@ -617,11 +617,11 @@ if __name__ == '__main__':
                 for degree in [1, 2, 3]:
                     fig = plt.figure()
                     ax1 = plt.subplot(1, 1, 1)
-                     
-                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 0], label='SVD_ap')
-                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 1], label='SVD')
-                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 2], label='spgl lasso_ap')
-                    ax1.plot(dofs[f'{degree}'], errs[f'degree'][:, 3], label='spgl lasso')
+                    
+                    ax1.plot(dofs[f'{degree}'], errs[f'{degree}'][:, 0], label='SVD_ap')
+                    ax1.plot(dofs[f'{degree}'], errs[f'{degree}'][:, 1], label='SVD')
+                    ax1.plot(dofs[f'{degree}'], errs[f'{degree}'][:, 2], label='spgl lasso_ap')
+                    ax1.plot(dofs[f'{degree}'], errs[f'{degree}'][:, 3], label='spgl lasso')
                      
                     ax1.legend()
                     ax1.grid(True)
@@ -643,8 +643,11 @@ if __name__ == '__main__':
     #runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     
-    runName = 'testRunPatchesEFields'
-    EFieldsAnim()
+    runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
+    testFullExample(h=1/3.5, degree=3, runName=runName)
+    
+    #runName = 'testRunPatchesEFields'
+    #EFieldsAnim(h=1/5, degree=1)
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
