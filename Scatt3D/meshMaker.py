@@ -44,7 +44,7 @@ def makeInterpolationSubmesh(comm, radius, order, center = [0, 0, 0], verbosity=
     '''
     t1 = timer()
     gmsh.initialize()
-    if self.comm.rank == self.model_rank: ## make all the definitions through the master-rank process
+    if (comm.rank == 0): ## make all the definitions through the master-rank process
         gmsh.model.add('Interpolation Submesh') ## name for the this
         ## Give some mesh settings: verbosity, max. and min. mesh lengths
         gmsh.option.setNumber('General.Verbosity', self.verbosity)
