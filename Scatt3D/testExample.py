@@ -28,33 +28,6 @@ import scatteringProblem
 import memTimeEstimation
 import postProcessing
 
-
-m = np.sqrt(2) ## complex index of refraction - if it is not PEC
-freq = 10e9
-lambdat = 3e9/freq
-k = 2*np.pi/lambdat
-x = k*0.33*lambdat
-
-x = np.ones((1, 1), dtype = np.float64)
-x[0, 0] = x
-m = np.ones((1, 1), dtype = np.complex128)
-m[0, 0] = m
-
-nn = 10000
-points = np.zeros((3, nn))
-vals = np.arange(nn)*lambdat/nn*0.1-lambdat/100
-points[0] = vals
-
-terms, E, H = scattnlay.fieldnlay(x, m, points[0], points[1], points[2])
-print(terms)
-Er = np.absolute(H)
-
-# |E|/|Eo|
-Eh = np.sqrt(Er[0, :, 0]**2 + Er[0, :, 1]**2 + Er[0, :, 2]**2)
-plt.plot(vals, Eh, label='r-comp. scattnlay', linestyle = ':', color = 'red')
-plt.show()
-exit()
-#
 #===============================================================================
 # pc = PETSc.PC().create() ## to test if hpddm is installed
 # pc.setType("hpddm")

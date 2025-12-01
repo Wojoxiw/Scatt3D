@@ -94,9 +94,9 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         if(not dutOnRefMesh):
             dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, pol='')
         else:
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, verbosity = verbosity, MPInum = MPInum, name = runName, Nf = 11, fem_degree=degree, ErefEdut=True, dutOnRefMesh=dutOnRefMesh, pol='')
         prob.saveEFieldsForAnim(True)
         #prob.saveEFieldsForAnim(False)
         prevRuns.memTimeAppend(prob)
@@ -643,14 +643,14 @@ if __name__ == '__main__':
     #runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     
-    #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
-    #testFullExample(h=1/3.5, degree=3, runName=runName)
+    runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
+    testFullExample(h=1/3.5, degree=3, runName=runName)
     
     #runName = 'testRunPatchesEFields'
     #EFieldsAnim(h=1/5, degree=1)
     
-    runName = 'testRunPatches' ## h=1/3.5, degree 3
-    testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
+    #runName = 'testRunPatches' ## h=1/3.5, degree 3
+    #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
