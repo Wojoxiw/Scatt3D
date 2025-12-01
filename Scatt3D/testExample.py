@@ -29,8 +29,6 @@ import memTimeEstimation
 import postProcessing
 
 
-import scattnlay
-
 m = np.sqrt(2) ## complex index of refraction - if it is not PEC
 freq = 10e9
 lambdat = 3e9/freq
