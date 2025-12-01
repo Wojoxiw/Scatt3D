@@ -868,7 +868,7 @@ class Scatt3DProblem():
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
             if(submeshQs): ## create and use a separate mesh for this
-                submeshInfo = meshMaker.makeInterpolationSubmesh(self.comm, radius=meshInfo.antenna_radius*0.7, order=meshInfo.order, center = meshInfo.object_offset, verbosity=1)
+                submeshInfo = meshMaker.makeInterpolationSubmesh(self.comm, radius=meshInfo.antenna_radius*0.7, meshsize=min(meshInfo.h, meshInfo.lambda0/15), order=meshInfo.order, center = meshInfo.object_offset, verbosity=1)
                 xdmf.write_mesh(submeshInfo.mesh)
             else:
                 xdmf.write_mesh(meshInfo.mesh)

@@ -32,7 +32,7 @@ def Rmaty(theta): ## matrix for rotation about the y-axis
                      [0, 1, 0],
                      [-np.sin(theta), 0, np.cos(theta)]])
     
-def makeInterpolationSubmesh(comm, radius, order, center = [0, 0, 0], verbosity=1): ## 
+def makeInterpolationSubmesh(comm, radius, meshsize, order, center = [0, 0, 0], verbosity=1): ## 
     '''
     Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
     Currently, this is a sphere intended to sit between the antennas
@@ -47,9 +47,9 @@ def makeInterpolationSubmesh(comm, radius, order, center = [0, 0, 0], verbosity=
     if (comm.rank == 0): ## make all the definitions through the master-rank process
         gmsh.model.add('Interpolation Submesh') ## name for the this
         ## Give some mesh settings: verbosity, max. and min. mesh lengths
-        gmsh.option.setNumber('General.Verbosity', self.verbosity)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/100)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0)
+        gmsh.option.setNumber('General.Verbosity', verbosity)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", meshsize*0.66)
+        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", meshsize*1.5)
         gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
     
         sphere = gmsh.model.occ.addSphere(center[0], center[1], center[2], radius)
