@@ -87,9 +87,9 @@ if __name__ == '__main__':
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType}#, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, pol='', **settings)
         else:
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, pol='', **settings)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         if(not dutOnRefMesh):
@@ -643,14 +643,14 @@ if __name__ == '__main__':
     #runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     
-    #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
-    #testFullExample(h=1/3.5, degree=3, runName=runName)
+    runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
+    testFullExample(h=1/3.5, degree=3, runName=runName)
     
     #runName = 'testRunPatchesEFields'
     #EFieldsAnim(h=1/5, degree=1)
     
-    runName = 'testRunPatches' ## h=1/3.5, degree 3
-    testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
+    #runName = 'testRunPatches' ## h=1/3.5, degree 3
+    #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
