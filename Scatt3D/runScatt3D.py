@@ -83,9 +83,9 @@ if __name__ == '__main__':
         #prob.saveEFieldsForAnim()
         prevRuns.memTimeAppend(prob)
         
-    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName): ## Testing toward a full example
+    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName, settings={}): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType}#, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
+        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType} | settings ## uses settings given before those specified here #, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
         if(dutOnRefMesh):
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **settings)
         else:
@@ -640,8 +640,10 @@ if __name__ == '__main__':
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
-    #runName = 'testRunLarger' ## h=1/18
     #testFullExample(h=1/3.5, degree=3, runName=runName)
+    
+    runName = 'testRunLargeAsPossible' ## h=1/3.5, degree 3
+    testFullExample(h=1/3.5, degree=3, runName=runName, settings = {'domain_radius': 5.5})
     
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName)
@@ -649,11 +651,11 @@ if __name__ == '__main__':
     #runName = 'testRunPatchesEFields'
     #EFieldsAnim(h=1/5, degree=1)
     
-    runName = 'testRunPatches' ## h=1/3.5, degree 3
-    testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #runName = 'testRunPatches' ## h=1/3.5, degree 3
+    #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
-    #postProcessing.solveFromQs(folder+'testRunSmall', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
+    #postProcessing.solveFromQs(folder+'testRunSmall_ypol', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
     
     #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
     #testRunDifferentDUTAntennas(h=1/3.6, degree=3)

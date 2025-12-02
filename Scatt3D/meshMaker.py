@@ -80,7 +80,7 @@ class MeshInfo():
                  f0 = 10e9,
                  verbosity = 0,
                  h = -1,
-                 domain_geom = 'sphere',#'domedCyl', 
+                 domain_geom = 'domedCyl',#'sphere', 
                  object_geom = 'cubic',#'complex1'
                  defect_geom = 'cylinder',#'complex1'
                  domain_radius = 1.92,
@@ -476,7 +476,7 @@ class MeshInfo():
                     gmsh.model.occ.dilate([(self.tdim, domain_spheroid)], 0, 0, 0, 1, 1, self.domain_a)
                     domain_extraheight_cyl = gmsh.model.occ.addCylinder(0, 0, -self.domain_height/2-self.dome_height, 0, 0, self.domain_height+self.dome_height*2, self.domain_radius)
                     domed_ceilings = gmsh.model.occ.intersect([(self.tdim, domain_spheroid)], [(self.tdim, domain_extraheight_cyl)])
-                    domainDimTags.append((self.tdim, gmsh.model.occ.fuse([(self.tdim, domain_cyl)], domed_ceilings[0])[0][1])) ## [0] to get  dimTags
+                    domainDimTags.append((self.tdim, gmsh.model.occ.fuse([(self.tdim, domain_cyl)], domed_ceilings[0])[0][0][1])) ## [0] to get  dimTags
                     
                     pml_spheroid = gmsh.model.occ.addSphere(0, 0, 0, self.PML_radius+self.PML_spheroid_extraRadius)
                     gmsh.model.occ.dilate([(self.tdim, pml_spheroid)], 0, 0, 0, 1, 1, self.PML_a)
@@ -596,7 +596,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = max(1.7, np.sqrt(epsr)) ## just so the material is always relatively well resolved
+                    sf = max(1.5, np.sqrt(epsr)) ## just so the material is always relatively well resolved
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [matDimTags[n][1]])
@@ -622,7 +622,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[-1])
                     else:
                         epsr = np.real(self.defect_epsrs[n])
-                    sf = max(2, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
+                    sf = max(1.5, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(defectMeshField, 'VolumesList', [defectDimTags[n][1]])

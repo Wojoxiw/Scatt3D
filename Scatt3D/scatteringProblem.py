@@ -169,8 +169,8 @@ class Scatt3DProblem():
     """Class to hold definitions and functions for simulating scattering or transmission of electromagnetic waves for a rotationally symmetric structure."""
     def __init__(self,
                  comm, # MPI communicator
-                 refMeshdata, # Mesh and metadata for the reference case
-                 DUTMeshdata = None, # Mesh and metadata for the DUT case - should just include defects into the object (this will change the mesh)
+                 refMeshinfo, # Mesh and metadata for the reference case
+                 DUTMeshinfo = None, # Mesh and metadata for the DUT case - should just include defects into the object (this will change the mesh)
                  verbosity = 0,   ## if > 0, I print more stuff
                  f0=10e9,             # Frequency of the problem
                  epsr_bkg=1,          # Permittivity of the background medium
@@ -203,6 +203,7 @@ class Scatt3DProblem():
                  quaddeg = 5, ## quadrature degree for dx, default to 5 to avoid slowdown with pml if it defaults to higher?
                  solver_settings = {}, ## dictionary of additional solver settings
                  max_solver_time = -1, ## If an iteration finishes after this time, the solver aborts - only used for tests, currently. Disabled if negative
+                 interpolationSubmeshSize = -1, ## if given, use this as the meshsize for the interpolation submesh
                  ):
         """Initialize the problem."""
         
@@ -233,7 +234,7 @@ class Scatt3DProblem():
         self.PML_R0 = PML_R0
         self.solver_settings = solver_settings
         self.max_solver_time = max_solver_time
-            
+        
         self.epsr_bkg = epsr_bkg
         self.mur_bkg = mur_bkg
         self.material_epsrs = material_epsrs
@@ -250,11 +251,16 @@ class Scatt3DProblem():
         self.PW_pol = PW_pol
 
         # Set up mesh information
-        self.FEMmesh_ref = FEMmesh(refMeshdata, fem_degree, quaddeg)
+        self.FEMmesh_ref = FEMmesh(refMeshinfo, fem_degree, quaddeg)
         self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
-        if(DUTMeshdata != None):
-            self.FEMmesh_DUT = FEMmesh(DUTMeshdata, fem_degree, quaddeg)
+        if(DUTMeshinfo != None):
+            self.FEMmesh_DUT = FEMmesh(DUTMeshinfo, fem_degree, quaddeg)
             self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
+        
+        if(interpolationSubmeshSize > 0):
+            self.interpSubmeshSize = interpolationSubmeshSize
+        else:
+            self.interpSubmeshSize = self.lambda0/7.5 #min(self.FEMMesh_ref.meshInfo.h, self.FEMMesh_ref.meshInfo.lambda0/10)
             
         # Calculate solutions
         if(computeImmediately):
@@ -868,7 +874,7 @@ class Scatt3DProblem():
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
             if(submeshQs): ## create and use a separate mesh for this
-                submeshInfo = meshMaker.makeInterpolationSubmesh(self.comm, radius=meshInfo.antenna_radius*0.7, meshsize=min(meshInfo.h, meshInfo.lambda0/15), order=meshInfo.order, center = meshInfo.object_offset, verbosity=1)
+                submeshInfo = meshMaker.makeInterpolationSubmesh(self.comm, radius=meshInfo.antenna_radius*0.7, meshsize=self.interpSubmeshSize, order=meshInfo.order, center = meshInfo.object_offset, verbosity=1)
                 xdmf.write_mesh(submeshInfo.mesh)
             else:
                 xdmf.write_mesh(meshInfo.mesh)

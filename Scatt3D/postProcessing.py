@@ -66,7 +66,7 @@ def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e
         print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
         return np.zeros(N_x)
     
-def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False):
+def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=True):
     '''
     Find the 'error' figure of merit in reconstructed delta eps_r
     :param delta_epsr_rec: The reconstructed delta eps_r
@@ -103,11 +103,13 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     error = np.sum(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes)
     zeroError = np.sum(np.abs(delta_epsr_actual)*cell_volumes)
     
-    
     error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
     
     if(printIt):
-        print(f'Reconstruction error: {error:.3e}')
+        if(indices=='defect'):
+            print(f'Timestep {timestep} reconstruction error: {error:.3e} (noise figure: {noiseError:.3e})')
+        else:
+            print(f'Timestep {timestep} reconstruction error: {error:.3e}')
     if(np.allclose(delta_epsr_rec, 0)):
         error = 1
     return error
@@ -445,6 +447,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     gc.collect()
     comm = MPI.COMM_WORLD
     commself = MPI.COMM_SELF
+    global timestep ## for saving data/printing about different reconstruction methods
+    timestep = -1
     if(comm.rank == 0):
         if(SparamName==''):
             print(f'Postprocessing of {problemName}, {solutionName} starting:')
@@ -536,6 +540,10 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                 if(not (nf in frequenciesToUse or len(frequenciesToUse)==0)):
                     continue ## skip to next index
                 for m in range(N_antennas): ## transmitting index
+                    if(False): ## disabled for now... reconstruction seems to improve with more data
+                        refl = np.abs(S_ref[nf, m, m]) ## should be close enough between ref and dut cases
+                        if(refl>0.8): ## check for a low reflection coefficient - if it is too high, perhaps the antenna doesn't support this frequency and the data should be skipped
+                            continue
                     for n in range(N_antennas): ## receiving index
                         if( not ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ):
                             continue ## skip to next index
@@ -545,11 +553,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                             dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas - rounds down
                             if( np.abs(n-m)%dist != 0 ):
                                 continue ## skip to next index
-                                
-                        if(True): ## check for a low reflection coefficient - if it is too high, this frequency is likely not good
-                            refl = np.abs(S_ref[nf, m, m]) ## should be close enough between ref and dut cases
-                            #print(refl) 
-                            
+                                  
                         idxNC.append(i) ## if the checks are passed, use this index
                         
             b = b[idxNC]
@@ -568,7 +572,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             del Apart ## maybe this will help with clearing memory
         gc.collect()
         
-        print('all data loaded in')
+        print(f'all data loaded in, {len(idxNC)}/{Nb} indices used')
         sys.stdout.flush()
         
         #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
@@ -806,19 +810,22 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
         
-        x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])#np.linalg.pinv(A_ap, rcond = rcond) @ b
-        cells.x.array[:] = x_temp + 0j
-        f.write_function(cells, 3)
-        err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        errs.append(err)
-        print(f'Timestep 3 reconstruction error: {err:.3e}')
-        if(not onlyAPriori):
-            x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])#np.linalg.pinv(A, rcond = rcond) @ b
+        timestep = 3
+        if(not returnResults or timestep in returnResults): ## if it is empty, or requested
+            x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])#np.linalg.pinv(A_ap, rcond = rcond) @ b
             cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 4)
-            err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+            f.write_function(cells, timestep)
+            err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
-            print(f'Timestep 4 reconstruction error: {err:.3e}')
+        
+        if(not onlyAPriori):
+            timestep = 4
+            if(not returnResults or timestep in returnResults): ## if it is empty, or requested
+                x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])#np.linalg.pinv(A, rcond = rcond) @ b
+                cells.x.array[:] = x_temp + 0j
+                f.write_function(cells, 4)
+                err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+                errs.append(err)
         
         f.close()
         print()
@@ -839,34 +846,34 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         bk = np.hstack((np.real(b),np.imag(b))) ## real b
         x_temp = np.zeros(N, dtype=complex)
         
-        if(not returnResults or 23 in returnResults): ## if it is empty, or requested
+        timestep = 23
+        if(not returnResults or timestep in returnResults): ## if it is empty, or requested
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, **spgl_settings)
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 23)
+            f.write_function(cells, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
-            print(f'Timestep 23 reconstruction error: {err:.3e}')
         
-        if(not returnResults or 24 in returnResults): ## if it is empty, or needed
+        timestep = 24
+        if(not returnResults or timestep in returnResults): ## if it is empty, or needed
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, **spgl_settings)
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 24)
+            f.write_function(cells, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
-            print(f'Timestep 24 reconstruction error: {err:.3e}')
         
         tau = 6e4 ## guess for a good tau
         iter_lim = 633
-        if(not returnResults or 25 in returnResults): ## if it is empty, or needed
+        timestep = 25
+        if(not returnResults or timestep in returnResults): ## if it is empty, or needed
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, 25)
+            f.write_function(cells, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
-            print(f'Timestep 25 reconstruction error: {err:.3e}')
          
         f.close()
         if(not onlyAPriori):
@@ -881,33 +888,34 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             Ak[A1:,:A2] = 1*np.imag(A) ## A21
             Ak[A1:,A2:] = np.real(A) ## A22
             x_temp = np.zeros(N, dtype=complex)
-             
-            if(not returnResults or 26 in returnResults): ## if it is empty, or needed
+            
+            timestep = 26
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 xsol, resid, grad, info = spgl1.spgl1(Ak, bk, **spgl_settings)
                 x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 26)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
-                print(f'Timestep 26 reconstruction error: {err:.3e}')
             
-            if(not returnResults or 27 in returnResults): ## if it is empty, or needed
+            timestep = 27
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 xsol, resid, grad, info = spgl1.spgl1(Ak, bk, sigma=sigma, **spgl_settings)
                 x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 27)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
-                print(f'Timestep 27 reconstruction error: {err:.3e}')
             
-            if(not returnResults or 28 in returnResults): ## if it is empty, or needed
+            timestep = 28
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 xsol, resid, grad, info = spgl1.spgl1(Ak, bk, tau=tau, **spgl_settings)
                 x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 28)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
-                print(f'Timestep 28 reconstruction error: {err:.3e}')
+                
             f.close()
           
             del Ak ## maybe this will help with clearing memory
@@ -930,92 +938,91 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     
             f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
             ## a-priori
-            
-            if(not returnResults or 5 in returnResults): ## if it is empty, or needed
+            timestep = 5
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp = np.zeros(N, dtype=complex)
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap], solver = 'GLPK') ## GLPK where it can be used - seems faster and possibly better than CLARABEL. GLPK_MI seems faster, but possibly worse
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 5)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
-                print(f'Timestep 5 reconstruction error: {err:.3e}')
             
-            if(not returnResults or 6 in returnResults): ## if it is empty, or needed
+            timestep = 6
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 1, cell_volumes=cell_volumes[idx_ap])
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 6)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
-                print(f'Timestep 6 reconstruction error: {err:.3e}')
             
-            if(not returnResults or 7 in returnResults): ## if it is empty, or needed
+            timestep = 7
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, cell_volumes=cell_volumes[idx_ap])
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 7)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
-                print(f'Timestep 7 reconstruction error: {err:.3e}')
             
-            if(not returnResults or 8 in returnResults): ## if it is empty, or needed
+            timestep = 8
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, cell_volumes=cell_volumes[idx_ap])
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 8)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
-                print(f'Timestep 8 reconstruction error: {err:.3e}')
             
-            if(not returnResults or 9 in returnResults): ## if it is empty, or needed
+            timestep = 9
+            if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 4, cell_volumes=cell_volumes[idx_ap])
                 cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 9)
+                f.write_function(cells, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
-                print(f'Timestep 9 reconstruction error: {err:.3e}')
             
             f.close()
             
             if(not onlyAPriori): ## then non a-priori:
                 f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
                 
-                if(not returnResults or 10 in returnResults): ## if it is empty, or needed
+                timestep = 10
+                if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml], solver = 'GLPK')
                     cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, 10)
+                    f.write_function(cells, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
-                    print(f'Timestep 10 reconstruction error: {err:.3e}')
                 
-                if(not returnResults or 11 in returnResults): ## if it is empty, or needed
+                timestep = 11
+                if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 1, cell_volumes=cell_volumes[idx_non_pml])
                     cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, 11)
+                    f.write_function(cells, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
-                    print(f'Timestep 11 reconstruction error: {err:.3e}')
                 
-                if(not returnResults or 12 in returnResults): ## if it is empty, or needed
+                timestep = 12
+                if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 2, cell_volumes=cell_volumes[idx_non_pml])
                     cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, 12)
+                    f.write_function(cells, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
-                    print(f'Timestep 12 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
                 
-                if(not returnResults or 13 in returnResults): ## if it is empty, or needed
+                timestep = 13
+                if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 3, cell_volumes=cell_volumes[idx_non_pml])
                     cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, 13)
+                    f.write_function(cells, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
-                    print(f'Timestep 13 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
                 
-                if(not returnResults or 14 in returnResults): ## if it is empty, or needed
+                timestep = 14
+                if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 4, cell_volumes=cell_volumes[idx_non_pml])
                     cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, 14)
+                    f.write_function(cells, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
-                    print(f'Timestep 14 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
                 
                 f.close()
             
@@ -1034,3 +1041,4 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             return errs
     if(not not returnResults):
         return None
+    return
