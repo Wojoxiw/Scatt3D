@@ -883,23 +883,27 @@ class Scatt3DProblem():
         if(submeshQs): ## do this all by interpolating to the submesh
             Wspace = dolfinx.fem.functionspace(submeshInfo.mesh, ("DG", 0))
             q_submesh = dolfinx.fem.Function(Wspace)
-            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.Wspace))*ufl.dx)).array
+            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(Wspace))*ufl.dx)).array
             
             mesh_cell_map = submeshInfo.mesh.topology.index_map(submeshInfo.mesh.topology.dim)
             num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
             interpolation_data = dolfinx.fem.create_interpolation_data(Wspace, FEMm.Wspace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             
-            q_submesh.interpolate_nonmatching(FEMm.dofs_map, cells, interpolation_data=interpolation_data)
+            FEMm.epsr.x.array[:] = FEMm.dofs_map
+            q_submesh.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
             q_submesh.x.scatter_forward()
             xdmf.write_function(q_submesh, -4) ## dofs map
             q_submesh.x.array[:] = cell_volumes
             xdmf.write_function(q_submesh, -3) ## cell volumes
-            q_submesh.interpolate_nonmatching(FEMm.epsr_array_ref, cells, interpolation_data=interpolation_data)
+            
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
+            q_submesh.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
             q_submesh.x.scatter_forward()
             xdmf.write_function(q_submesh, -2) ## epsr_ref
             if(DUTMesh or self.dutOnRefMesh):
-                q_submesh.interpolate_nonmatching(FEMm.epsr_array_dut, cells, interpolation_data=interpolation_data)
+                FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
+                q_submesh.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
                 q_submesh.x.scatter_forward()
                 xdmf.write_function(q_submesh, -1) ## epsr_dut
             elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)

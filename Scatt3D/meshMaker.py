@@ -55,7 +55,11 @@ def makeInterpolationSubmesh(comm, radius, meshsize, order, center = [0, 0, 0], 
         sphere = gmsh.model.occ.addSphere(center[0], center[1], center[2], radius)
         
         gmsh.model.occ.synchronize()
+        the_marker = gmsh.model.addPhysicalGroup(3, [sphere])
         gmsh.model.mesh.generate(3)
+    else:
+            the_marker = None
+    the_marker = comm.bcast(the_marker, root=0)
     gmsh.model.mesh.setOrder(order)
     meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=comm, rank=0, gdim=3, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
     gmsh.finalize()
