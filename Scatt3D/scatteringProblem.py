@@ -798,6 +798,9 @@ class Scatt3DProblem():
                         a[n].value = 1.0
                         top8 = timer() ## solve starting time
                         E_h = problem.solve()
+                        if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results.
+                            print('NaN result found - probably due to exceeding memory limitations. Exiting...')
+                            exit()
                         for m in range(meshInfo.N_antennas):
                             factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
                             factors = self.comm.gather(factor, root=self.model_rank)

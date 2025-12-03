@@ -642,8 +642,8 @@ if __name__ == '__main__':
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     
-    runName = 'testRunLargeAsPossible' ## h=1/3.5, degree 3
-    testFullExample(h=1/3.5, degree=3, runName=runName, settings = {'domain_radius': 5.5})
+    runName = 'testRunLargeAsPossible2' ## h=1/3.5, degree 3
+    testFullExample(h=1/3.5, degree=3, runName=runName, settings = {'domain_radius': 10})
     
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName)
