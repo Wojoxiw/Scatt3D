@@ -135,16 +135,20 @@ class runTimesMems():
         :param doPrint: If True, prints the estimates
         '''
         if (self.comm.rank == 0):
-            if(Nant == 0):
-                Nant = 1 ## the simulation should always run through problem.solve at least once
-            self.calcStats() ## prep the data, calculate the curve-fitting
-            esttime = self.fitLine([size, MPInum], self.timeFit[0], self.timeFit[1], self.timeFit[2], self.timeFit[3])*Nf ## assume *Nf dependence
-            estmem = self.fitLine([size, MPInum], self.memFit[0], self.memFit[1], self.memFit[2], self.memFit[3])
-            if(doPrint):
-                print(f'Estimated memory requirement for size {size:.3e}: {estmem:.3f} GB')
-                print(f'Estimated computation time for size {size:.3e}, Nf = {Nf}: {esttime/3600:.3f} hours')
-                
-            return estmem, esttime
+            if(hasattr(self, 'prevRuns')):
+                if(Nant == 0):
+                    Nant = 1 ## the simulation should always run through problem.solve at least once
+                self.calcStats() ## prep the data, calculate the curve-fitting
+                esttime = self.fitLine([size, MPInum], self.timeFit[0], self.timeFit[1], self.timeFit[2], self.timeFit[3])*Nf ## assume *Nf dependence
+                estmem = self.fitLine([size, MPInum], self.memFit[0], self.memFit[1], self.memFit[2], self.memFit[3])
+                if(doPrint):
+                    print(f'Estimated memory requirement for size {size:.3e}: {estmem:.3f} GB')
+                    print(f'Estimated computation time for size {size:.3e}, Nf = {Nf}: {esttime/3600:.3f} hours')
+                    
+                return estmem, esttime
+            else:
+                print('No estimations amde -- no previous runs')
+                return 0, 0
             
     def makePlots(self, MPInum = -1):
         if(self.comm.rank == 0):

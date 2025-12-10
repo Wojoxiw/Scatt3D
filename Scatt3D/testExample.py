@@ -44,21 +44,23 @@ MPInum = comm.size
 print(f"{MPI.COMM_WORLD.rank=} {MPI.COMM_WORLD.size=}, {MPI.COMM_SELF.rank=} {MPI.COMM_SELF.size=}, {MPI.Get_processor_name()=}")
 sys.stdout.flush()
   
-# scalapacktest
-m, n, nrhs = 200, 20000, 1 ## rows, columns, rhs columns
-nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum
-
-if(comm.rank == 0):
-    A_np = np.array(np.random.randn(m,n) + 1j*np.random.randn(m,n), order = 'F')
-    x_np = np.array(np.random.randn(n, 1) + 1j*np.random.randn(n, 1), order = 'F')
-    b_np = np.dot(A_np, x_np)
-    
-    b_np = np.array(b_np, order = 'F')
-    
-    postProcessing.scalapackLeastSquares(comm, MPInum, A_np, b_np, checkVsNp=True)
-else:
-    postProcessing.scalapackLeastSquares(comm, MPInum)
-# scalapacktest
+#===============================================================================
+# # scalapacktest
+# m, n, nrhs = 200, 20000, 1 ## rows, columns, rhs columns
+# nprow, npcol = 1, MPInum ## MPI grid - number of process row*col must be <= MPInum
+# 
+# if(comm.rank == 0):
+#     A_np = np.array(np.random.randn(m,n) + 1j*np.random.randn(m,n), order = 'F')
+#     x_np = np.array(np.random.randn(n, 1) + 1j*np.random.randn(n, 1), order = 'F')
+#     b_np = np.dot(A_np, x_np)
+#     
+#     b_np = np.array(b_np, order = 'F')
+#     
+#     postProcessing.scalapackLeastSquares(comm, MPInum, A_np, b_np, checkVsNp=True)
+# else:
+#     postProcessing.scalapackLeastSquares(comm, MPInum)
+# # scalapacktest
+#===============================================================================
 
 
 mesh = dolfinx.mesh.create_unit_square(MPI.COMM_WORLD, 10, 10)

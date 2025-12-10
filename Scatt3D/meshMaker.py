@@ -37,7 +37,7 @@ def makeInterpolationSubmesh(comm, radius, meshsize, order, center = [0, 0, 0], 
     Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
     Currently, this is a sphere intended to sit between the antennas
     :param comm: MPI communicator
-    :param radius: Radius of the sub-mesh - should encompass the whole object to be reconstructed, so maybe ~0.7*antenna_radius
+    :param radius: Radius of the sub-mesh - should encompass the whole object to be reconstructed, and ideally only a little more than that (so maybe ~0.7*antenna_radius)
     :param order: Order of the mesh
     :param center: Center of the submesh - i.e. where the reconstruction should be centered, i.e. the object location
     :param verbosity: If > 0, print some info
@@ -94,13 +94,14 @@ class MeshInfo():
                  N_antennas = 10,
                  antenna_radius = 0,
                  antenna_z_offset = 0,
+                 antenna_bounding_box_offset = 0,
                  object_radius = 1.06,
                  object_height = 1.25,
                  object_offset = np.array([0, 0, 0]),
                  material_epsrs = [4],
                  defect_epsrs = [],
-                 defect_radius = 0.175,
-                 defect_height = 0.3,
+                 defect_radius = 0,
+                 defect_height = 0,
                  defect_angles = [0, 0, 0],
                  defect_offset = np.array([0, 0, 0]),
                  viewGMSH = True,
@@ -129,13 +130,14 @@ class MeshInfo():
         :param N_antennas:
         :param antenna_radius: Radius at which antennas are placed
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
-        :param object_radius: If object is a sphere (or cylinder), the radius
+        :param antenna_bounding_box_offset: How far the bb extends from the antenna. If 0, takes h/2
+        :param object_radius: If object is a sphere (or cylinder), the radius. Even if not, ideally this should be approximately the size of the object
         :param object_height: If object is a cylinder, the height
         :param object_offset: The object is shifted this far (in wavelengths)
         :param material_epsrs: Relatively permittivities for the object - used to scale mesh size by local wavelength. If only one is given, use that one for all objects
         :param defect_epsrs: As above, but for defects (should just use the same as material - this is only used for mesh-size scaling). If not given, use the last 'object_epsr' for all.
-        :param defect_radius: If defect is a sphere (or cylinder), the radius
-        :param defect_height: If defect is a cylinder, the height
+        :param defect_radius: If defect is a sphere (or cylinder), the radius. If not given, uses half the object radius
+        :param defect_height: If defect is a cylinder, the height. If not given, uses half the object radius
         :param defect_angles: [x, y, z] angles to rotate about these axes
         :param defect_offset: The defect is shifted this far from the centre of the object (in wavelengths)
         :param viewGMSH: If True, plots the mesh after creation then exits
@@ -218,12 +220,18 @@ class MeshInfo():
             self.patch_width = 13e-3
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = 2e-3
+            
+        if(antenna_bounding_box_offset == 0):
+            self.bb = h/2
+        else:
+            self.bb = antenna_bounding_box_offset*self.lambda0
         
         self.phi_antennas = np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## placement angles
         self.pos_antennas = np.array([[self.antenna_radius*np.cos(phi), self.antenna_radius*np.sin(phi), self.antenna_z_offset] for phi in self.phi_antennas]) ## placement positions
         self.rot_antennas = self.phi_antennas + np.pi/2 ## rotation so that they face the center
         self.kc = pi/self.antenna_width ## cutoff wavenumber
         ## Object + defect(s) parameters
+        self.reconstruction_submesh_radius = object_radius * self.lambda0 * 1.25 ## should ideally contain slightly more than the object
         if(object_geom == 'sphere'):
             self.object_radius = object_radius * self.lambda0
         elif(object_geom == 'cylinder'):
@@ -240,6 +248,12 @@ class MeshInfo():
             exit()
         self.object_geom = object_geom
         self.object_offset = object_offset * self.lambda0
+        
+        
+        if(defect_height == 0):
+            defect_height = object_radius/2
+        if(defect_radius == 0):
+            defect_radius = object_radius/2
         
         self.defect_angles = defect_angles ## [x, y, z] rotations
         self.defect_offset = defect_offset * self.lambda0
@@ -289,7 +303,7 @@ class MeshInfo():
                     gmsh.model.occ.translate([(self.tdim, box)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
                     antennas_DimTags.append((self.tdim, box))
                     
-                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_width/2-self.h/2, -self.antenna_depth-self.h/2, -self.antenna_height/2-self.h/2, self.antenna_width+self.h, self.antenna_depth+self.h, self.antenna_height+self.h) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_width/2-self.bb/2, -self.antenna_depth-self.bb/2, -self.antenna_height/2-self.bb/2, self.antenna_width+self.bb, self.antenna_depth+self.bb, self.antenna_height+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
                     gmsh.model.occ.translate([(self.tdim, boundingBox)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
                     domainDimTags.append((self.tdim, boundingBox))
@@ -324,7 +338,7 @@ class MeshInfo():
                     gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n]) ## then the center
                     gmsh.model.occ.translate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
                     
-                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.h/2, -self.antenna_width/2-self.h/2, -self.antenna_height/2-self.h/2, self.antenna_depth+self.h, self.antenna_width+self.h, self.antenna_height+self.h) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 1, 0, pi/2)
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, pi/2)
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
@@ -370,7 +384,7 @@ class MeshInfo():
                 box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
                 coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
 
-                boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.h/2, -self.antenna_width/2-self.h/2, -self.antenna_height/2-self.h/2, self.antenna_depth+self.h, self.antenna_width+self.h, self.antenna_height+self.h) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                 domainDimTags.append((self.tdim, boundingBox))
 
                 antennaSurfacePts.append([self.feed_offset, self.coax_inr/2+self.coax_outr/2, -self.antenna_height/2-self.coax_outh]) ## the surface of the bottom of the outer cylinder of the coax - the radiating port

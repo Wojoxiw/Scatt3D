@@ -116,7 +116,7 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
 
 def numpySVDfindOptimal(A, b, epsr_ref, epsr_dut, cell_volumes): ## optimize for rcond
     u, s, vt = np.linalg.svd(A.conjugate(), full_matrices=False) ## singular values in descending order
-    def calcAccuracy(svd_t, verbose=False, returnSol=False): ### uses the computed svd decomp. and an SVD threshold to find a figure of merit (for optimizing that threshold)
+    def calcAccuracy(svd_t, verbose=False, returnSol=False, printIt=True): ### uses the computed svd decomp. and an SVD threshold to find a figure of merit (for optimizing that threshold)
         tol = np.asarray(10**-(svd_t)) ### use this to help the optimizer... otherwise, could maybe try simulated annealing
         cutoff = tol[..., np.newaxis] * np.amax(s, axis=-1, keepdims=True)
         large = s > cutoff
@@ -124,7 +124,7 @@ def numpySVDfindOptimal(A, b, epsr_ref, epsr_dut, cell_volumes): ## optimize for
         sinv[~large] = 0
         A_inv = np.matmul( np.transpose(vt), np.multiply( sinv[..., np.newaxis], np.transpose(u) ) )
         x_try = np.dot(A_inv, b)[0, :] ## set the reconstructed indices
-        err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes)
+        err = reconstructionError(x_try, epsr_ref, epsr_dut, cell_volumes, printIt=printIt)
         if verbose: ## so I don't spam the console
             print(f'Error calculated as {err:.3e}, svd_t = 10**-{svd_t}')
         if(returnSol):
