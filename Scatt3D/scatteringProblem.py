@@ -266,7 +266,7 @@ class Scatt3DProblem():
         if(interpolationSubmeshSize > 0):
             self.interpSubmeshSize = interpolationSubmeshSize
         else:
-            self.interpSubmeshSize = self.lambda0/7.5 #min(self.FEMMesh_ref.meshInfo.h, self.FEMMesh_ref.meshInfo.lambda0/10)
+            self.interpSubmeshSize = self.lambda0/10 #min(self.FEMMesh_ref.meshInfo.h, self.FEMMesh_ref.meshInfo.lambda0/10)
             
         if(only_save_interp): ## make the submesh and Wspace/fun now
             self.submeshInfo = meshMaker.makeInterpolationSubmesh(self.comm, radius=refMeshInfo.reconstruction_submesh_radius, meshsize=self.interpSubmeshSize, order=refMeshInfo.order, center = refMeshInfo.object_offset, verbosity=1)
@@ -1079,7 +1079,7 @@ class Scatt3DProblem():
         E = dolfinx.fem.Function(FEMm.ScalarSpace)
         
         if(self.verbosity>0 and self.comm.rank == self.model_rank):
-            print(f'Starting E-field animation, {ant=}, {freq=} .....', end='')
+            print(f'Starting E-field animation, {ant=}, freq={freq/1e9}GHz .....', end='')
             sys.stdout.flush()
         
         if(ref):
@@ -1091,11 +1091,14 @@ class Scatt3DProblem():
             
         if(hasattr(self, textextra+'_started')): ## if this already exists, 'append' mode (mesh should be written already)
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='a')
-        else: ## If just starting the animation, create/overwrite the file
+        else: ## If just starting the animation, create/overwrite the file, and add a dofsmap
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w') 
             xdmf.write_mesh(FEMm.meshInfo.mesh)
             setattr(self, textextra+'_started', True)
-            
+            FEMm.epsr.x.array[:] = FEMm.dofs_map
+            FEMm.epsr.name = 'dofs-map'
+            xdmf.write_function(FEMm.epsr, 0)
+        
         pols = ['x-pol', 'y-pol', 'z-pol']
         
         if(dutOnRefMesh and not self.dutOnRefMesh): ## in this case the dut problem has its own mesh, so the solution must be interpolated onto the reference mesh

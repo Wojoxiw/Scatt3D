@@ -94,7 +94,7 @@ class MeshInfo():
                  N_antennas = 10,
                  antenna_radius = 0,
                  antenna_z_offset = 0,
-                 antenna_bounding_box_offset = 0,
+                 antenna_bounding_box_offset = 0.1,
                  object_radius = 1.06,
                  object_height = 1.25,
                  object_offset = np.array([0, 0, 0]),
