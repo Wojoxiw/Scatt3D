@@ -94,7 +94,7 @@ class MeshInfo():
                  N_antennas = 10,
                  antenna_radius = 0,
                  antenna_z_offset = 0,
-                 antenna_bounding_box_offset = 0.1,
+                 antenna_bounding_box_offset = 0,
                  object_radius = 1.06,
                  object_height = 1.25,
                  object_offset = np.array([0, 0, 0]),
@@ -221,8 +221,8 @@ class MeshInfo():
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = 2e-3
             
-        if(antenna_bounding_box_offset == 0):
-            self.bb = h/2
+        if(antenna_bounding_box_offset == 0): ## if unset
+            self.bb = min(h/2, self.lambda0/10)
         else:
             self.bb = antenna_bounding_box_offset*self.lambda0
         

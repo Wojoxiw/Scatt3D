@@ -266,7 +266,7 @@ class Scatt3DProblem():
         if(interpolationSubmeshSize > 0):
             self.interpSubmeshSize = interpolationSubmeshSize
         else:
-            self.interpSubmeshSize = self.lambda0/10 #min(self.FEMMesh_ref.meshInfo.h, self.FEMMesh_ref.meshInfo.lambda0/10)
+            self.interpSubmeshSize = self.lambda0/12 #min(self.FEMMesh_ref.meshInfo.h, self.FEMMesh_ref.meshInfo.lambda0/10)
             
         if(only_save_interp): ## make the submesh and Wspace/fun now
             self.submeshInfo = meshMaker.makeInterpolationSubmesh(self.comm, radius=refMeshInfo.reconstruction_submesh_radius, meshsize=self.interpSubmeshSize, order=refMeshInfo.order, center = refMeshInfo.object_offset, verbosity=1)
@@ -793,7 +793,7 @@ class Scatt3DProblem():
         #=======================================================================
         
             
-        def ComputeFields(makeAnim):
+        def ComputeFields(ref=True):
             '''
             Computes the fields. There are two cases: one with antennas, and one without (PW excitation)
             Returns solutions, a list of Es for each frequency and exciting antenna, and S (0 if no antennas), a list of S-parameters for each frequency, exciting antenna, and receiving antenna
@@ -810,54 +810,53 @@ class Scatt3DProblem():
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 sols = []
-                if(meshInfo.N_antennas == 0): ## if no antennas:
+                antCount = max(meshInfo.N_antennas, 1) # if no antennas, still run it
+                for n in range(antCount):
+                    for m in range(antCount):
+                        a[m].value = 0.0
+                    a[n].value = 1.0
+                    top8 = timer() ## solve starting time
                     E_h = problem.solve()
-                    sols.append(E_h.copy())
-                else:
-                    for n in range(meshInfo.N_antennas):
-                        for m in range(meshInfo.N_antennas):
-                            a[m].value = 0.0
-                        a[n].value = 1.0
-                        top8 = timer() ## solve starting time
-                        E_h = problem.solve()
-                        if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results.
-                            print('NaN result found - probably due to exceeding memory limitations. Exiting...')
-                            exit()
-                        for m in range(meshInfo.N_antennas):
-                            factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
-                            factors = self.comm.gather(factor, root=self.model_rank)
-                            if self.comm.rank == self.model_rank:
-                                factor = sum(factors)
-                            else:
-                                factor = None
-                            factor = self.comm.bcast(factor, root=self.model_rank)
-                            b = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(E_h, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m] + Zrel/(1j*k0)*ufl.inner(ufl.curl(E_h), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))/factor
-                            bs = self.comm.gather(b, root=self.model_rank)
-                            if self.comm.rank == self.model_rank:
-                                b = sum(bs)
-                            else:
-                                b = None
-                            b = self.comm.bcast(b, root=self.model_rank)
-                            S[nf,m,n] = b
-                        ## to save on memory in large runs, only save needed info (E-fields on interpolation mesh - any animations or such should be done here)
-                        if(nf in self.E_anim_freqs and makeAnim!=0): ## just save for the central frequency
-                            makeAnim(E_h, n, self.fvec[nf])
-                        if(self.only_save_interp): ## Only save the data necessary for reconstruction 
-                            mesh_cell_map = self.submeshInfo.mesh.topology.index_map(self.submeshInfo.mesh.topology.dim)
-                            num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-                            cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                            interpolation_data = dolfinx.fem.create_interpolation_data(self.submesh_Vspace, FEMm.Vspace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                            self.submesh_Vfun.interpolate_nonmatching(E_h, cells, interpolation_data=interpolation_data)
-                            sols.append(self.submesh_Vfun.copy())
+                    if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results.
+                        print('NaN result found - probably due to exceeding memory limitations. Exiting...')
+                        exit()
+                    for m in range(meshInfo.N_antennas):
+                        factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
+                        factors = self.comm.gather(factor, root=self.model_rank)
+                        if self.comm.rank == self.model_rank:
+                            factor = sum(factors)
                         else:
-                            sols.append(E_h.copy()) ## Append the full E_h copy
-                        if(nf==0 and n==0): ## after the first solve, give some info
-                            mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
-                            mems = self.comm.gather(mem_usage, root=self.model_rank)
-                            if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
-                                firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-                                print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*meshInfo.N_antennas-1):.2f} hours')
-                            sys.stdout.flush()
+                            factor = None
+                        factor = self.comm.bcast(factor, root=self.model_rank)
+                        b = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(E_h, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m] + Zrel/(1j*k0)*ufl.inner(ufl.curl(E_h), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))/factor
+                        bs = self.comm.gather(b, root=self.model_rank)
+                        if self.comm.rank == self.model_rank:
+                            b = sum(bs)
+                        else:
+                            b = None
+                        b = self.comm.bcast(b, root=self.model_rank)
+                        S[nf,m,n] = b
+                    ## to save on memory in large runs, only save needed info (E-fields on interpolation mesh - any animations or such should be done here)
+                    if(nf in self.E_anim_freqs and self.E_ref_anim and ref): ## just save for the central frequency
+                        self.saveEFieldsForAnim(E_h, n, self.fvec[nf], ref=True)
+                    elif(nf in self.E_anim_freqs and self.E_dut_anim and not ref): ## just save for the central frequency
+                        self.saveEFieldsForAnim(E_h, n, self.fvec[nf], ref=False)
+                    if(self.only_save_interp): ## Only save the data necessary for reconstruction 
+                        mesh_cell_map = self.submeshInfo.mesh.topology.index_map(self.submeshInfo.mesh.topology.dim)
+                        num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+                        cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                        interpolation_data = dolfinx.fem.create_interpolation_data(self.submesh_Vspace, FEMm.Vspace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                        self.submesh_Vfun.interpolate_nonmatching(E_h, cells, interpolation_data=interpolation_data)
+                        sols.append(self.submesh_Vfun.copy())
+                    else:
+                        sols.append(E_h.copy()) ## Append the full E_h copy
+                    if(nf==0 and n==0): ## after the first solve, give some info
+                        mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+                        mems = self.comm.gather(mem_usage, root=self.model_rank)
+                        if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
+                            firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*antCount-1):.2f} hours')
+                        sys.stdout.flush()
                 solutions.append(sols)
             return S, solutions
         
@@ -866,21 +865,13 @@ class Scatt3DProblem():
                 print(f'Rank {self.comm.rank}: Computing REF solutions (ndofs={FEMm.ndofs})')
             sys.stdout.flush()
             FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
-            if(self.E_ref_anim):
-                makeAnim = functools.partial(self.saveEFieldsForAnim, ref = True)
-            else:
-                makeAnim = 0 ## 0 if not plotting
-            self.S_ref, self.solutions_ref = ComputeFields(makeAnim)    
+            self.S_ref, self.solutions_ref = ComputeFields()    
         else:
             if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                 print(f'Rank {self.comm.rank}: Computing DUT solutions (ndofs={FEMm.ndofs})')
             sys.stdout.flush()
             FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
-            if(self.E_dut_anim):
-                makeAnim = functools.partial(self.saveEFieldsForAnim, ref = False)
-            else:
-                makeAnim = 0 ## 0 if not plotting
-            self.S_dut, self.solutions_dut = ComputeFields(makeAnim)
+            self.S_dut, self.solutions_dut = ComputeFields(ref=False)
             
         if (self.comm.rank == self.model_rank): ## maybe this should just be for one comm?
             solver = problem.solver
@@ -1079,7 +1070,7 @@ class Scatt3DProblem():
         E = dolfinx.fem.Function(FEMm.ScalarSpace)
         
         if(self.verbosity>0 and self.comm.rank == self.model_rank):
-            print(f'Starting E-field animation, {ant=}, freq={freq/1e9}GHz .....', end='')
+            print(f'Starting E-field animation, {ant=}, freq={freq/1e9}GHz...', end='')
             sys.stdout.flush()
         
         if(ref):
@@ -1092,7 +1083,7 @@ class Scatt3DProblem():
         if(hasattr(self, textextra+'_started')): ## if this already exists, 'append' mode (mesh should be written already)
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='a')
         else: ## If just starting the animation, create/overwrite the file, and add a dofsmap
-            xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w') 
+            xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w')
             xdmf.write_mesh(FEMm.meshInfo.mesh)
             setattr(self, textextra+'_started', True)
             FEMm.epsr.x.array[:] = FEMm.dofs_map

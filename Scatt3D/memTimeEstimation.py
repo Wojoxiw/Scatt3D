@@ -147,7 +147,7 @@ class runTimesMems():
                     
                 return estmem, esttime
             else:
-                print('No estimations amde -- no previous runs')
+                print('No estimations made -- fewer than 3 previous runs')
                 return 0, 0
             
     def makePlots(self, MPInum = -1):

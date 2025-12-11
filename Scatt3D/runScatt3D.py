@@ -76,16 +76,16 @@ if __name__ == '__main__':
             
     def testRun(h = 1/2, degree=1): ## A quick test run to check it works. Default settings make this run in a second
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
-        prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, computeBoth=True, Nf=1, fem_degree=degree, E_ref_anim=False)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, computeBoth=True, Nf=1, fem_degree=degree, E_ref_anim=True)
         prevRuns.memTimeAppend(prob)
         
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here #, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
-        prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11} | prob_settings
+        mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+        prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
         if(dutOnRefMesh):
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **mesh_settings)
         else:
@@ -94,9 +94,9 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         if(not dutOnRefMesh):
             dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **mesh_settings)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, computeBoth=True, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
         else:
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=True, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
         prevRuns.memTimeAppend(prob)
     
     def testRunDifferentDUTAntennas(h = 1/15, degree = 1): ## Testing what happens when different antennas are used in the ref (simulation) as in the DUT case (unsuccessful reconstruction)
@@ -149,11 +149,6 @@ if __name__ == '__main__':
         prob.makeOptVectors(skipQs=True)
         prevRuns.memTimeAppend(prob)
         degree = 1
-        
-    def EFieldsAnim(h= 1/3.5, antennaType = 'patch', degree = 3): ## test run to save all E fields
-        settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'antenna_type': antennaType, 'object_geom': '', 'defect_geom': ''} ## settings for the meshMaker
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **settings)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, computeBoth=False, verbosity = verbosity, MPInum = MPInum, name = runName, freqs=[10e9], fem_degree=degree, makeOptVects=False, E_ref_anim=True, E_dut_anim=True, E_anim_allAnts=True)
         
     def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -618,7 +613,7 @@ if __name__ == '__main__':
                     plt.title(f'Degree {degree} reconstruction errors')
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
-    #testRun(h=1/2)
+    #testRun(h=1/8)
     #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
@@ -630,19 +625,22 @@ if __name__ == '__main__':
     #runName = 'testRunSmall' ## h=1/5, degree 1
     #testFullExample(h=1/5, degree=1, runName=runName, mesh_settings={'N_antennas': 1}, prob_settings={'Nf': 1})
     
-    #testFullExample(h=1/3.5, degree=3, runName='testRunD3', mesh_settings={'N_antennas': 9}, prob_settings={'Nf': 11})
+    runName = 'testRunD3'
+    #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9}, prob_settings={'Nf': 11})
     
-    testFullExample(h=1/3.5, degree=3, runName='testRunLargeAsPossible2', settings = {'domain_radius': 9})
+    #runName = 'testRunLargeAsPossible2'
+    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
     
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     
-    #runName = 'testRunPatchesEFields'
-    #EFieldsAnim(h=1/5, degree=1)
+    runName = 'testRunPatchesEFields' ## test run to save all E-fields
+    #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings={'N_antennas': 5, 'object_geom': '', 'defect_geom': '', 'antenna_type': 'patch'}, prob_settings={'freqs': [10e9], 'makeOptVects':False, 'E_ref_anim':True, 'E_dut_anim':True, 'E_anim_allAnts':True, 'computeBoth': False})
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall_ypol', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
     
