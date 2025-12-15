@@ -120,7 +120,7 @@ class ScattSphereProblem():
         curl_element = basix.ufl.element('N1curl', self.mesh.basix_cell(), self.fem_degree)
         self.Vspace = dolfinx.fem.functionspace(self.mesh, curl_element)
         self.ScalarSpace = dolfinx.fem.functionspace(self.mesh, ('CG', self.fem_degree))
-        self.Wspace = dolfinx.fem.functionspace(self.mesh, ("DG", 0))
+        self.WSpace = dolfinx.fem.functionspace(self.mesh, ("DG", 0))
 
         # Create measures for subdomains and surfaces
         self.dx = ufl.Measure('dx', domain=self.mesh, subdomain_data=self.subdomains, metadata={'quadrature_degree': 5})
@@ -141,17 +141,17 @@ class ScattSphereProblem():
         self.farfield_cells = np.array(cells)
         
     def InitializeMaterial(self):
-        self.epsr = dolfinx.fem.Function(self.Wspace)
-        self.mur = dolfinx.fem.Function(self.Wspace)
+        self.epsr = dolfinx.fem.Function(self.WSpace)
+        self.mur = dolfinx.fem.Function(self.WSpace)
         self.epsr.x.array[:] = self.epsr_bkg
         self.mur.x.array[:] = self.mur_bkg
 
         sphere_cells = self.subdomains.find(self.sphere_marker)
-        self.sphere_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=sphere_cells)
+        self.sphere_dofs = dolfinx.fem.locate_dofs_topological(self.WSpace, entity_dim=self.tdim, entities=sphere_cells)
         pml_cells = self.subdomains.find(self.pml_marker)
-        self.pml_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=pml_cells)
+        self.pml_dofs = dolfinx.fem.locate_dofs_topological(self.WSpace, entity_dim=self.tdim, entities=pml_cells)
         domain_cells = self.subdomains.find(self.domain_marker)
-        self.domain_dofs = dolfinx.fem.locate_dofs_topological(self.Wspace, entity_dim=self.tdim, entities=domain_cells)
+        self.domain_dofs = dolfinx.fem.locate_dofs_topological(self.WSpace, entity_dim=self.tdim, entities=domain_cells)
 
         self.epsr.x.array[self.sphere_dofs] = self.material_epsr
         self.mur.x.array[self.sphere_dofs] = self.material_mur

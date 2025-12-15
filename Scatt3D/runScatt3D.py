@@ -626,10 +626,10 @@ if __name__ == '__main__':
     #testFullExample(h=1/5, degree=1, runName=runName, mesh_settings={'N_antennas': 1}, prob_settings={'Nf': 1})
     
     runName = 'testRunD3'
-    #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9}, prob_settings={'Nf': 11})
+    testFullExample(h=1/3, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'antenna_type': 'patch'}, prob_settings={'Nf': 11})
     
     #runName = 'testRunLargeAsPossible2'
-    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
+    #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
     
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3

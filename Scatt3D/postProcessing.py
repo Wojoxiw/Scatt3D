@@ -513,7 +513,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             cells = dolfinx.fem.Function(Wspace)
             
             idxOrig = mesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
-            dofs = Wspace.dofmap.index_map ## has info about dofs on each process
+            dofs = WSpace.dofmap.index_map ## has info about dofs on each process
             
         
         ## load in the problem data
