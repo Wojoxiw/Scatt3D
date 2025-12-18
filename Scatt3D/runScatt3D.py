@@ -1,9 +1,8 @@
 # encoding: utf-8
-### Modification of scatt2d to handle 3d geometry
-# Stripped down and rewritten for DD2358 course
+### Modification of scatt2d to handle 3d geometry. This is the MAIN FILE
 #
 # Adapted from 2D code started by Daniel Sjoberg, (https://github.com/dsjoberg-git/rotsymsca, https://github.com/dsjoberg-git/ekas3d) approx. 2024-12-13 
-# Alexandros Pallaris, after that
+# Alexandros Pallaris, after that... and also before that, to some extent
 import os
 import numpy as np
 import dolfinx, ufl, basix
@@ -623,12 +622,14 @@ if __name__ == '__main__':
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
     #runName = 'testRunSmall' ## h=1/5, degree 1
-    #testFullExample(h=1/5, degree=1, runName=runName, mesh_settings={'N_antennas': 1}, prob_settings={'Nf': 1})
+    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': True}, prob_settings={'Nf': 11})
     
-    runName = 'testRunD3'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'Nf': 11})
+    #===========================================================================
+    # runName = 'testRunD3'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    #                 prob_settings={'Nf': 11})
+    #===========================================================================
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
