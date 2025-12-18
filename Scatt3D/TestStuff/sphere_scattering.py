@@ -118,7 +118,7 @@ class ScattSphereProblem():
     def InitializeFEM(self):
         # Set up some FEM function spaces and boundary condition stuff.
         curl_element = basix.ufl.element('N1curl', self.mesh.basix_cell(), self.fem_degree)
-        self.Vspace = dolfinx.fem.functionspace(self.mesh, curl_element)
+        self.VSpace = dolfinx.fem.functionspace(self.mesh, curl_element)
         self.ScalarSpace = dolfinx.fem.functionspace(self.mesh, ('CG', self.fem_degree))
         self.WSpace = dolfinx.fem.functionspace(self.mesh, ("DG", 0))
 
@@ -202,9 +202,9 @@ class ScattSphereProblem():
         self.epsr_pml, self.murinv_pml = pml_epsr_murinv(pml_coords)
 
     def ComputeSolution(self):
-        Eb = dolfinx.fem.Function(self.Vspace)
-        E = ufl.TrialFunction(self.Vspace)
-        v = ufl.TestFunction(self.Vspace)
+        Eb = dolfinx.fem.Function(self.VSpace)
+        E = ufl.TrialFunction(self.VSpace)
+        v = ufl.TestFunction(self.VSpace)
         curl_E = ufl.curl(E)
         curl_v = ufl.curl(v)
         nvec = ufl.FacetNormal(self.mesh)

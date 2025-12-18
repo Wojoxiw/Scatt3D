@@ -509,8 +509,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f: ## read the mesh with dolfinx
             mesh = f.read_mesh()
-            Wspace = dolfinx.fem.functionspace(mesh, ('DG', 0))
-            cells = dolfinx.fem.Function(Wspace)
+            WSpace = dolfinx.fem.functionspace(mesh, ('DG', 0))
+            cells = dolfinx.fem.Function(WSpace)
             
             idxOrig = mesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
             dofs = WSpace.dofmap.index_map ## has info about dofs on each process

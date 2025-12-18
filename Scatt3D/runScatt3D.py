@@ -84,12 +84,12 @@ if __name__ == '__main__':
         
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+        mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **mesh_settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, verbosity = verbosity, h=h, **mesh_settings)
         else:
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, **mesh_settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, h=h, **mesh_settings)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         if(not dutOnRefMesh):
@@ -156,7 +156,7 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree, only_save_interp=False)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
         if(showPlots):
             prob.calcNearField(direction='side')
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
@@ -168,7 +168,7 @@ if __name__ == '__main__':
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, material_epsrs=[2.1], only_save_interp=False) ## the first 3 materials per antenna are the antenna's dielectric volume
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
         prob.saveEFieldsForAnim()
         prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         prevRuns.memTimeAppend(prob)
@@ -304,7 +304,7 @@ if __name__ == '__main__':
                 meshOptions = dict(h = 1/ks[i])
             
             refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree, **meshOptions)
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, Nf=20, fem_degree=degree, material_epsrs=[2.1], only_save_interp=False, **probOptions) ## the first 3 materials per antenna are the antenna's dielectric volume
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, Nf=20, fem_degree=degree, material_epsrs=[2.1], **probOptions) ## the first 3 materials per antenna are the antenna's dielectric volume
             fekof = 'TestStuff/FEKO patch S11.dat'
             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
             
@@ -479,7 +479,7 @@ if __name__ == '__main__':
             try:
                 t = threading.Thread(target=getMem)
                 t.start()
-                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsrs=[2.0*(1 - 0.01j)], Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime, only_save_interp=False)
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=0.5, name=runName, MPInum=MPInum, makeOptVects=False, excitation='planewave', material_epsrs=[2.0*(1 - 0.01j)], Nf=1, fem_degree=deg, solver_settings=settings[i], max_solver_time=maxTime)
                 memGather = comm.gather(process_mem, root=model_rank)
                 if(comm.rank == model_rank):
                     memTotal = sum(memGather) ## keep the total usage. Only the master rank should be used, so this should be fine
@@ -626,7 +626,9 @@ if __name__ == '__main__':
     #testFullExample(h=1/5, degree=1, runName=runName, mesh_settings={'N_antennas': 1}, prob_settings={'Nf': 1})
     
     runName = 'testRunD3'
-    testFullExample(h=1/3, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'antenna_type': 'patch'}, prob_settings={'Nf': 11})
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+                    prob_settings={'Nf': 11})
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
@@ -635,7 +637,7 @@ if __name__ == '__main__':
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     
-    runName = 'testRunPatchesEFields' ## test run to save all E-fields
+    #runName = 'testRunPatchesEFields' ## test run to save all E-fields
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings={'N_antennas': 5, 'object_geom': '', 'defect_geom': '', 'antenna_type': 'patch'}, prob_settings={'freqs': [10e9], 'makeOptVects':False, 'E_ref_anim':True, 'E_dut_anim':True, 'E_anim_allAnts':True, 'computeBoth': False})
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
@@ -660,7 +662,7 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/3.66, degree=1, showPlots=True)
+    #testSphereScattering(h=1/3.66, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
