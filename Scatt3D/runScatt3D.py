@@ -622,7 +622,7 @@ if __name__ == '__main__':
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
     #runName = 'testRunSmall' ## h=1/5, degree 1
-    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': True}, prob_settings={'Nf': 11})
+    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
     #===========================================================================
     # runName = 'testRunD3'
