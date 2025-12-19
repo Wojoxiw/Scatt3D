@@ -408,12 +408,15 @@ class Scatt3DProblem():
         :param freq: Frequency index
         :param excitation: Excitation index
         '''
-        if(ref):
+        if(ref): ## first, pick the right mesh and name it ref or dut
             nameAdd = 'Ref'
             FEMm = self.FEMmesh_ref
         else:
             nameAdd = 'Dut'
-            FEMm = self.FEMmesh_DUT
+            if(self.dutOnRefMesh):
+                FEMm = self.FEMmesh_ref
+            else:
+                FEMm = self.FEMmesh_DUT
         fname = self.dataFolder+self.name+nameAdd+'.Solutions'
         
         in_mesh = adios4dolfinx.read_mesh(fname, self.comm)

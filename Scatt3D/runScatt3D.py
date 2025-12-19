@@ -53,7 +53,7 @@ if __name__ == '__main__':
     # MPI settings
     comm = MPI.COMM_WORLD
     model_rank = 0 ## rank for printing and definitions, etc.
-    verbosity = 2 ## 3 will print everything. 2, most things. 1, just the main process stuff.
+    verbosity = 3 ## 3 will print everything. 2, most things. 1, just the main process stuff.
     MPInum = comm.size
     t1 = timer()
     
