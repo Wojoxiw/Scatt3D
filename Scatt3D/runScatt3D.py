@@ -628,17 +628,17 @@ if __name__ == '__main__':
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
-    runName = 'testRunD3'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'Nf': 11})
-    
     #===========================================================================
-    # runName = 'testRunPMLisPEC'
+    # runName = 'testRunD3'
     # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'domain_height': 1.1, 'dome_height': 0.6, 'viewGMSH': False},
+    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
     #                 prob_settings={'Nf': 11})
     #===========================================================================
+    
+    runName = 'testRunPMLisPEC'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'domain_height': 1.1, 'dome_height': 0.6, 'viewGMSH': False},
+                    prob_settings={'Nf': 11})
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
