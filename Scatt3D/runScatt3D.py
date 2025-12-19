@@ -73,7 +73,7 @@ if __name__ == '__main__':
         print(f'runScatt3D starting with {MPInum} MPI process(es) (main process on {MPI.Get_processor_name()=}):')
     sys.stdout.flush()
             
-    def testRun(h = 1/2, degree=1): ## A quick test run to check it works. Default settings make this run in a second
+    def testRun(h = 1/2, degree=1): ## A quick test run to check it works. Default settings make this run in seconds
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
@@ -612,7 +612,7 @@ if __name__ == '__main__':
                     plt.title(f'Degree {degree} reconstruction errors')
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
-    #testRun(h=1/8)
+    #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
@@ -621,7 +621,7 @@ if __name__ == '__main__':
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
-    #runName = 'testRunSmall' ## h=1/5, degree 1
+    runName = 'testRunSmall' ## h=1/3.5, degree 3
     testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
     #===========================================================================

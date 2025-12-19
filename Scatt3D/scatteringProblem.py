@@ -292,7 +292,8 @@ class Scatt3DProblem():
         Sets up and runs the simulation. All the setup is set to reflect the current mesh, reference or dut. Solutions are saved.
         :param computeRef: If True, computes on the reference mesh
         '''
-        print(f'Starting computations for {self.name}...')
+        if (self.comm.rank == self.model_rank and self.verbosity>0):
+            print(f'Starting computations for {self.name}...')
         # Initialize function spaces, boundary conditions, and PML - for the reference mesh
         if(computeRef or self.dutOnRefMesh):
             meshInfo = self.FEMmesh_ref.meshInfo
@@ -388,9 +389,14 @@ class Scatt3DProblem():
             nameAdd = 'Ref'
         else:
             nameAdd = 'Dut'
-        fname = self.dataFolder+self.name+nameAdd+'Solutions.xdmf'
+        fname = self.dataFolder+self.name+nameAdd+'Solutions'
         
-        adios4dolfinx.write_mesh(fname, mesh)
+        if(hasattr(self, fname)): ## if this already exists, mesh should be written already
+            pass
+        else: ## If just starting, create/overwrite the mesh
+            adios4dolfinx.write_mesh(fname, mesh)
+            setattr(self, fname, True)
+        
         adios4dolfinx.write_function(fname, sol, time=0, name=f'{nameAdd}_excitation{excitation}_freq{freq}')
         
     def readSol(self, fun, ref, freq, excitation):
@@ -408,7 +414,7 @@ class Scatt3DProblem():
         else:
             nameAdd = 'Dut'
             FEMm = self.FEMmesh_DUT
-        fname = self.dataFolder+self.name+nameAdd+'Solutions.xdmf'
+        fname = self.dataFolder+self.name+nameAdd+'Solutions'
         
         in_mesh = adios4dolfinx.read_mesh(fname, self.comm)
         curl_element = basix.ufl.element('N1curl', in_mesh.basix_cell(), FEMm.fem_degree)
@@ -881,10 +887,10 @@ class Scatt3DProblem():
                     elif(nf in self.E_anim_freqs and self.E_dut_anim and not ref): ## just save for the central frequency
                         self.saveEFieldsForAnim(E_h, n, self.fvec[nf], ref=False)
                     self.saveSol(E_h, ref, FEMm.meshInfo.mesh, nf, n)
-                    if(nf==0 and n==0): ## after the first solve, give some info
+                    if(nf==0 and n==0 or self.verbosity > 2): ## after the first solve, give some info
                         mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
                         mems = self.comm.gather(mem_usage, root=self.model_rank)
-                        if( ((self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2))):
+                        if( self.verbosity >= 1 and self.comm.rank == self.model_rank ):
                             firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
                             print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*antCount-1):.2f} hours')
                         sys.stdout.flush()
@@ -903,23 +909,22 @@ class Scatt3DProblem():
             FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
             self.S_dut = ComputeFields(ref=False)
             
-        if (self.comm.rank == self.model_rank): ## maybe this should just be for one comm?
-            solver = problem.solver
-            os.makedirs(os.path.dirname(self.dataFolder), exist_ok=True) ## make sure the data folder exists - this is the first place I get an error for it
-            fname=self.dataFolder+self.name+"solver_output.info"
-            viewer = PETSc.Viewer().createASCII(fname)
-            solver.view(viewer)
-            self.solver_its = solver.its
-            self.solver_norm = solver.norm
-            if( (self.verbosity > 0 and self.comm.rank == self.model_rank)): ## print solver info for the final solve - presumably this is representative of all solves
-                print(f'Converged for reason: {solver.reason}, after {solver.its} iterations. Norm: {solver.norm}') ## if reason is negative, it diverged (see https://petsc.org/release/manualpages/KSP/KSPConvergedReason/)
-                if(self.solver_its == max_its):
-                    print('\033[93m' + 'Warning: solver failed to converge.' + '\033[0m')
-                if(self.verbosity > 3):
-                    solver_output = open(fname, "r") ## this prints to console
-                    for line in solver_output.readlines():
-                        print(line)
-                sys.stdout.flush()
+        solver = problem.solver
+        os.makedirs(os.path.dirname(self.dataFolder), exist_ok=True) ## make sure the data folder exists - this is the first place I get an error for it
+        fname=self.dataFolder+self.name+"solver_output.info"
+        viewer = PETSc.Viewer().createASCII(fname)
+        solver.view(viewer)
+        self.solver_its = solver.its
+        self.solver_norm = solver.norm
+        if( (self.verbosity > 0 and self.comm.rank == self.model_rank)): ## print solver info for the final solve - presumably this is representative of all solves
+            print(f'Converged for reason: {solver.reason}, after {solver.its} iterations. Norm: {solver.norm}') ## if reason is negative, it diverged (see https://petsc.org/release/manualpages/KSP/KSPConvergedReason/)
+            if(self.solver_its == max_its):
+                print('\033[93m' + 'Warning: solver failed to converge.' + '\033[0m')
+            if(self.verbosity > 3):
+                solver_output = open(fname, "r") ## this prints to console
+                for line in solver_output.readlines():
+                    print(line)
+            sys.stdout.flush()
            
     #@profile
     def makeOptVectors(self, DUTMesh=False, skipQs=False, submeshQs=False):
@@ -1107,9 +1112,9 @@ class Scatt3DProblem():
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+textextra+'outputPhaseAnimation.xdmf', file_mode='w')
             xdmf.write_mesh(FEMm.meshInfo.mesh)
             setattr(self, textextra+'_started', True)
-            FEMm.Ws.x.array[:] = FEMm.dofs_map
-            FEMm.Ws.name = 'dofs-map'
-            xdmf.write_function(FEMm.Ws, 0)
+            Ws.x.array[:] = FEMm.dofs_map
+            Ws.name = 'dofs-map'
+            xdmf.write_function(Ws, 0)
         
         pols = ['x-pol', 'y-pol', 'z-pol']
         
