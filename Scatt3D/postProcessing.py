@@ -1030,7 +1030,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             print()
         else:
             print('skipping cvxpy...')
-        sys.stdout.flush()
+    sys.stdout.flush()
         
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
     mems = comm.gather(mem_usage, root=0)

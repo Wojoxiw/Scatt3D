@@ -104,10 +104,11 @@ class MeshInfo():
                  defect_height = 0,
                  defect_angles = [0, 0, 0],
                  defect_offset = np.array([0, 0, 0]),
+                 PMLSurfacePEC = False,
                  viewGMSH = True,
                  FF_surface = False,
                  order = 1,
-                ):
+                 ):
         '''
         Makes it - given various inputs
         :param comm: the MPI communicator
@@ -140,6 +141,7 @@ class MeshInfo():
         :param defect_height: If defect is a cylinder, the height. If not given, uses half the object radius
         :param defect_angles: [x, y, z] angles to rotate about these axes
         :param defect_offset: The defect is shifted this far from the centre of the object (in wavelengths)
+        :param PMLSurfacePEC: If True, make the PML surface into PEC, for testing purposes...
         :param viewGMSH: If True, plots the mesh after creation then exits
         :param FF_surface: If True, creates a spherical shell with a radius slightly lower than the domain's, to calculate the farfield on (domain_geom should also be spherical)
         :param order: Order of the mesh elements - have to switch from xdmf to vtx or vtk when going above 2? They don't work straightforwardly
@@ -248,6 +250,8 @@ class MeshInfo():
             exit()
         self.object_geom = object_geom
         self.object_offset = object_offset * self.lambda0
+        
+        self.PMLSurfacePEC = PMLSurfacePEC
         
         
         if(defect_height == 0):
@@ -508,11 +512,19 @@ class MeshInfo():
                 else:
                     domainDimTags.append((self.tdim, domain_cyl)) # needs to be dim, tags
                     pml = [(self.tdim, pml)] # needs to be dim, tags
+                if(self.PMLSurfacePEC):
+                    PECSurfacePts.append([self.domain_radius, 0, 0]) ## side of the sphere/cylinder
+                    PECSurfacePts.append([0, 0, self.domain_height/2+self.dome_height]) ## top face
+                    PECSurfacePts.append([0, 0, -self.domain_height/2-self.dome_height]) ## bottom face
+                    
             elif(self.domain_geom == 'sphere'):
                 domain = gmsh.model.occ.addSphere(0, 0, 0, self.domain_radius)
                 pml = gmsh.model.occ.addSphere(0, 0, 0, self.PML_radius)
                 domainDimTags.append((self.tdim, domain)) # needs to be dim, tags
                 pml = [(self.tdim, pml)] # needs to be dim, tags
+                if(self.PMLSurfacePEC):
+                    PECSurfacePts.append([self.domain_radius, 0, 0]) ## side of the sphere/cylinder
+                    
             FF_surface_dimTags = []
             if(self.FF_surface):
                 FF_c = np.array([0, 0, 0]) ## centred on the origin.
