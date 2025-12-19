@@ -619,21 +619,19 @@ if __name__ == '__main__':
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
-    runName = 'testRunTiny' ## h=1/2
-    testFullExample(h=1/2, degree=1, runName=runName, mesh_settings={'N_antennas': 2, 'viewGMSH': False}, prob_settings={'Nf': 2})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #runName = 'testRunTiny' ## h=1/2
+    #testFullExample(h=1/2, degree=1, runName=runName, mesh_settings={'N_antennas': 2, 'viewGMSH': False}, prob_settings={'Nf': 2})
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #runName = 'testRunDeg2' ## h=1/9.5
     #runName = 'testRunDeg2Smaller' ## h=1/6
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
-    #===========================================================================
-    # runName = 'testRunD3'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11})
-    #===========================================================================PMLSurfacePEC
+    runName = 'testRunD3'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+                    prob_settings={'Nf': 11})
     
     #===========================================================================
     # runName = 'testRunPMLisPEC'
@@ -645,7 +643,7 @@ if __name__ == '__main__':
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
     
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName)
     

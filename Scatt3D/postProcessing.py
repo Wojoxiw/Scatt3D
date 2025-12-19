@@ -22,9 +22,20 @@ import resource
 import psutil, threading, os, time
 from timeit import default_timer as timer
 import scipy
+import builtins
+
+def print(*args, **kwargs):
+    return builtins.print(*args, flush=True, **kwargs)
 
 
-if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently no longer exists - mamba installation doesnt seem to have the newer spgl1
+#===============================================================================
+# def mpi_print(text): ## add the output thing here so it always happens
+#     print(text)
+#     sys.stdout.flush()
+# __builtins__.print = mpi_print ## replace print with this
+#===============================================================================
+
+if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently no longer exists - mamba installation doesnt seem to have the newer spgl1 that should fix this
     np.lib.isreal = np.isreal
 
 
@@ -348,7 +359,7 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             b0.data[:m] = b_np
             t1 = timer()
             print(f'numpy values set, starting timer: (rank {comm.rank})')
-            sys.stdout.flush()
+
         ## make the computational context's arrays, then redistribute the feeder's arrays over to them
         A = context.array(m, n, mb, nb, dtype=np.complex128)
         scalapack.pgemr2d["Z"]( # Z for complex double
@@ -380,7 +391,7 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
             print("Work queried as:", int(work[0]), f' for rank {context.rank.value}, info:' , info.value, ', lwork:', lwork.value, f'{context.rank.value=}', f'{comm.rank=}')
         if info.value != 0:
             raise RuntimeError(f"Error in pzgels with info = {info.value}")
-        sys.stdout.flush()
+        
         lwork = int(work[0]) ## size of workspace
         
         work = np.zeros(lwork, dtype=np.complex128, order='F')
@@ -421,7 +432,6 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     print(f'Numpy solution error, skipping: {error}')
                     x_nplstsq = np.zeros(np.shape(x0.data))
                     
-            sys.stdout.flush()
             return x0.data[:, 0]
         
 def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitude and/or absolute phase noise to the scattering parameters, to see how it affects the reconstruction. If not random, just offset all parameters
@@ -518,7 +528,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         ## load in the problem data
         print('data loaded in')
-        sys.stdout.flush()
         
         with h5py.File(problemName+'output-qs.h5', 'r') as f: ## read the information on the mesh with h5py (supposedly this is/will be deprecated)
             dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
@@ -573,7 +582,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         gc.collect()
         
         print(f'all data loaded in, {len(idxNC)}/{Nb} indices used')
-        sys.stdout.flush()
         
         #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
         idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
@@ -581,7 +589,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
         print('shape of b:', np.shape(b))
         print('in-object cells:', np.size(idx_ap))
-        sys.stdout.flush()
         
         ## prepare the solution/output file
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
@@ -724,7 +731,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if( comm.rank == 0 ):
             totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
             print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
-        sys.stdout.flush()
             
         #return ## exit
             
@@ -805,7 +811,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         print()
         errs = [] ## in case I want to return errors
         print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
-        sys.stdout.flush()
         rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
@@ -830,7 +835,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         f.close()
         print()
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
-        sys.stdout.flush()
         sigma = 1e-2 ## guess for a good sigma
         iter_lim = 5633
         spgl_settings = {'iter_lim': iter_lim, 'n_prev_vals': 10, 'iscomplex': True, 'verbosity': 0}
@@ -923,7 +927,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
          
         print('done spgl solution')
         print()
-        sys.stdout.flush()
         
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
     mems = comm.gather(mem_usage, root=0)
@@ -933,7 +936,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         if(False):
             print('solving with cvxpy...')
-            sys.stdout.flush()
             t_cvx = timer()
     
             f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a') ## 'a' is append mode? to add more functions, hopefully
@@ -1029,9 +1031,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             print(f'done cvxpy solution, in {timer()-t_cvx:.2f} s')
             print()
         else:
-            print('skipping cvxpy...')
-    sys.stdout.flush()
-        
+            print('skipping cvxpy... (hopefully not strange MPI hang at comm.gather)')
+            
     mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
     mems = comm.gather(mem_usage, root=0)
     if( comm.rank == 0 ):
