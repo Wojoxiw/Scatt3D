@@ -389,7 +389,7 @@ class Scatt3DProblem():
             nameAdd = 'Ref'
         else:
             nameAdd = 'Dut'
-        fname = self.dataFolder+self.name+nameAdd+'Solutions'
+        fname = self.dataFolder+self.name+nameAdd+'.Solutions'
         
         if(hasattr(self, fname)): ## if this already exists, mesh should be written already
             pass
@@ -414,7 +414,7 @@ class Scatt3DProblem():
         else:
             nameAdd = 'Dut'
             FEMm = self.FEMmesh_DUT
-        fname = self.dataFolder+self.name+nameAdd+'Solutions'
+        fname = self.dataFolder+self.name+nameAdd+'.Solutions'
         
         in_mesh = adios4dolfinx.read_mesh(fname, self.comm)
         curl_element = basix.ufl.element('N1curl', in_mesh.basix_cell(), FEMm.fem_degree)

@@ -7,6 +7,10 @@
 *.info
 *.dat
 *.npz
+*.0
+*.idx
+*.json
+*.Solutions
 */data3DLUNARC
 */.settings
 */.cache
