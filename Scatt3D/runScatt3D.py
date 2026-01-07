@@ -53,7 +53,7 @@ if __name__ == '__main__':
     # MPI settings
     comm = MPI.COMM_WORLD
     model_rank = 0 ## rank for printing and definitions, etc.
-    verbosity = 3 ## 3 will print everything. 2, most things. 1, just the main process stuff.
+    verbosity = 2 ## 3 will print everything. 2, most things. 1, just the main process stuff.
     MPInum = comm.size
     t1 = timer()
     
@@ -635,13 +635,16 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    runName = 'testRunPMLisPEC'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'domain_height': 1.1, 'dome_height': 0.6, 'viewGMSH': False},
-                    prob_settings={'Nf': 11})
     
-    #runName = 'testRunLargeAsPossible2'
-    #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
+    #===========================================================================
+    # runName = 'testRunPMLisPEC'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'domain_height': 1.1, 'dome_height': 0.6, 'viewGMSH': False},
+    #                 prob_settings={'Nf': 11})
+    #===========================================================================
+    
+    runName = 'testRunLargeAsPossible2'
+    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9})
     
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3

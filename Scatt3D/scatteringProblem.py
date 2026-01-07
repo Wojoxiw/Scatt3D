@@ -24,6 +24,7 @@ import meshMaker
 import h5py
 import adios4dolfinx
 eta0 = np.sqrt(mu0/eps0)
+interpolationPadding=1e-6 ## for interpolating between meshes, Newton iterations? Not entirely sure how this corresponds to, i.e. physical distance error tolerance, but I got errors so I'm using a much larger number
 
 #===============================================================================
 # ##line profiling
@@ -429,7 +430,7 @@ class Scatt3DProblem():
         mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
         num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
         cells = np.arange(num_cells_on_proc, dtype=np.int32)
-        interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.VSpace, Vspace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+        interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.VSpace, Vspace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
         fun.interpolate_nonmatching(Vfun, cells, interpolation_data=interpolation_dataR2D)
         fun.x.scatter_forward()
             
@@ -897,7 +898,7 @@ class Scatt3DProblem():
                             firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
                             print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*antCount-1):.2f} hours')
                         elif(self.verbosity > 2):
-                            print(f'Rank {self.comm.rank}: Solution {nf*antCount + n + 1} computed in {timer() - top8:.2e} s ({mem_usage:.2e} GB memory in this process)')
+                            print(f'Rank {self.comm.rank}: Solution {nf*antCount + n + 1}/{antCount*nf} computed in {timer() - top8:.2e} s ({mem_usage:.2e} GB memory in this process)')
                         sys.stdout.flush()
             return S
         
@@ -971,7 +972,7 @@ class Scatt3DProblem():
             mesh_cell_map = self.submeshInfo.mesh.topology.index_map(self.submeshInfo.mesh.topology.dim)
             num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_dataF2S = dolfinx.fem.create_interpolation_data(self.submesh_Wspace, FEMm.WSpace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            interpolation_dataF2S = dolfinx.fem.create_interpolation_data(self.submesh_Wspace, FEMm.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             
             FEMm.epsr.x.array[:] = FEMm.dofs_map
             self.submesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_dataF2S)
@@ -990,7 +991,7 @@ class Scatt3DProblem():
                 self.submesh_Wfun.x.scatter_forward()
                 xdmf.write_function(self.submesh_Wfun, -1) ## epsr_dut
             elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-                interpolation_dataD2S = dolfinx.fem.create_interpolation_data(self.submesh_Wspace, self.FEMmesh_DUT.WSpace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                interpolation_dataD2S = dolfinx.fem.create_interpolation_data(self.submesh_Wspace, self.FEMmesh_DUT.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
                 self.submesh_Wfun.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_dataD2S)
                 self.submesh_Wfun.x.scatter_forward()
                 xdmf.write_function(self.submesh_Wfun, -1) ## epsr_dut
@@ -1016,7 +1017,7 @@ class Scatt3DProblem():
                 mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
                 num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
                 cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.WSpace, self.FEMmesh_DUT.WSpace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.WSpace, self.FEMmesh_DUT.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
                 epsr_dut.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_dataR2D)
                 epsr_dut.x.scatter_forward()
                 FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
@@ -1043,7 +1044,7 @@ class Scatt3DProblem():
                                     mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
                                     num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
                                     cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                                    interpolation_dataD2R = dolfinx.fem.create_interpolation_data(FEMm.VSpace, self.FEMmesh_DUT.VSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                                    interpolation_dataD2R = dolfinx.fem.create_interpolation_data(FEMm.VSpace, self.FEMmesh_DUT.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
                                 self.readSol(sol_dut, ref=False, freq=nf, excitation=n)
                                 En.interpolate_nonmatching(sol_dut, cells, interpolation_data=interpolation_dataD2R)
                                 En.x.scatter_forward()
@@ -1129,7 +1130,7 @@ class Scatt3DProblem():
             fine_mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
             num_cells_on_proc = fine_mesh_cell_map.size_local + fine_mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.VSpace, self.FEMmesh_DUT.VSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.VSpace, self.FEMmesh_DUT.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             solution.interpolate_nonmatching(sol, cells, interpolation_data=interpolation_data)
             solution.x.scatter_forward()
             sol = solution
