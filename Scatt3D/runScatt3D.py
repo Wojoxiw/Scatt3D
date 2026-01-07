@@ -636,10 +636,18 @@ if __name__ == '__main__':
     #===========================================================================
     
     
-    runName = 'testRunD3LowerBandwidth'
+    #===========================================================================
+    # runName = 'testRunD3LowerBandwidth'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    #                 prob_settings={'freqs': np.linspace(9.1e9, 10.8e9, 11)}) ## roughly where the S11 of the patch is below 0.8
+    #===========================================================================
+    
+    
+    runName = 'testRunD3EvenLowerBandwidth'
     testFullExample(h=1/3, degree=3, runName=runName,
                     mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'freqs': np.linspace(9.1e9, 10.8e9, 11)}) ## roughly where the S11 of the patch is below 0.8
+                    prob_settings={'freqs': np.linspace(9.4e9, 10.32e9, 11)}) ## roughly where the S11 of the patch is below 0.6
     
     
     #===========================================================================
