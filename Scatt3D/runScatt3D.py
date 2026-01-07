@@ -644,7 +644,7 @@ if __name__ == '__main__':
     #===========================================================================
     
     runName = 'testRunLargeAsPossible2'
-    testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
+    testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
     
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #runName = 'testRunSmall_ypol' ## h=1/3.5, degree 3
