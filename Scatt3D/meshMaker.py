@@ -154,9 +154,9 @@ class MeshInfo():
             fname = 'mesh.msh'
         self.fname = fname                                  # Mesh filename (+location from script)
         if(h<0): ## pick from the below options, which should be fairly fine (mesh will be more refined near ports, PEC, and dielectric structures). Can likely go slightly larger than these.
-            if(order==1): ## these numbers are semi-arbitrary, for now
+            if(order==3): ## these numbers are semi-arbitrary, for now
                 self.h = 1/3.4 * self.lambda0
-            elif(order==1):
+            elif(order==2):
                 self.h = 1/5.6 * self.lambda0
             elif(order==1):
                 self.h = 1/10.2 * self.lambda0
@@ -172,7 +172,7 @@ class MeshInfo():
         self.tdim = 3 ## Tetrahedra dimensionality - 3D
         self.fdim = self.tdim - 1 ## Facet dimensionality - 2D
         self.FF_surface = FF_surface
-        self.order = min(order, 2) ## capped at 2, since xdmf can't save above order 2. Also, doesn't seem to make a huge difference
+        self.order = min(order, 1) ## capped at 1, since the interpolation between meshes can sometimes get an error with order 2, and since xdmf can't save above order 2. Also, doesn't seem to make a huge difference
         
         
         if(PML_thickness == 0): ## if not specified, calculate it

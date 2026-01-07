@@ -24,7 +24,7 @@ import meshMaker
 import h5py
 import adios4dolfinx
 eta0 = np.sqrt(mu0/eps0)
-interpolationPadding=1e-6 ## for interpolating between meshes, Newton iterations? Not entirely sure how this corresponds to, i.e. physical distance error tolerance, but I got errors so I'm using a much larger number
+interpolationPadding=1e-10 ## for interpolating between meshes, Newton iterations? Not entirely sure how this corresponds to, i.e. physical distance error tolerance, but I got errors so I'm using a much larger number. This does not help.
 
 #===============================================================================
 # ##line profiling
