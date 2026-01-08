@@ -166,7 +166,7 @@ class FEMmesh():
             self.epsr.x.array[self.defect_dofsList[k]] = defect_epsrs[k]
             self.mur.x.array[self.defect_dofsList[k]] = defect_murs[k]
         self.epsr_array_dut = self.epsr.x.array.copy()
-    
+
 
 class Scatt3DProblem():
     """Class to hold definitions and functions for simulating scattering or transmission of electromagnetic waves for a rotationally symmetric structure."""
@@ -182,7 +182,7 @@ class Scatt3DProblem():
                  material_murs=[1+0j],   # Permeability of the objects, given as a list
                  defect_epsrs=[4.0*(1 - 0.01j)],      # Permittivity of the defects, given as a list. If only one, used for all defects
                  defect_murs=[1+0j],       # Permeability of the defects, given as a list
-                 antenna_mat_epsrs=[2.1*(1 + 0j)],      # Permittivity of the antenna dielectrics, given as a list. If only one, used for all defects
+                 antenna_mat_epsrs=[2.1*(1 + 0j)],      # Permittivity of the antenna dielectrics, given as a list. If only one, used for all
                  antenna_mat_murs=[1+0j],       # Permeability of the antenna dielectrics, given as a list
                  fem_degree=1,            # Degree of finite elements
                  model_rank=0,        # Rank of the master model - for saving, plotting, etc.

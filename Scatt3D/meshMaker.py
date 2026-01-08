@@ -476,7 +476,7 @@ class MeshInfo():
                     ## also a second cylinder
                     defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/1.5, self.defect_radius/1.5)
                     defectDimTags.append((self.tdim, defect2))
-                elif(self.defect_geom == 'simple1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
+                elif(self.defect_geom == 'simple1'): ## a cylinder that doesn't go all the way through
                     defect = gmsh.model.occ.addCylinder(self.object_length*0.33,-self.object_length*0.07,-self.object_length*S1height*(1/2-0.1),0,0,self.object_length*S1height*(0.9), self.defect_radius)
                     defectDimTags.append((self.tdim, defect))
                 elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry

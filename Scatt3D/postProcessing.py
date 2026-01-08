@@ -536,11 +536,13 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idxOrig]
             N = len(cell_volumes)
             
-            #idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
+            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
             
-            midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
-            dist = np.linalg.norm(midpoints, axis=1)
-            idx_non_pml = np.nonzero(dist < antenna_radius*0.7)[0] ## alternative reconstruction cells - those within a sphere of the centre
+            #===================================================================
+            # midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
+            # dist = np.linalg.norm(midpoints, axis=1)
+            # idx_non_pml = np.nonzero(dist < antenna_radius*0.7)[0] ## alternative reconstruction cells - those within a sphere of the centre
+            #===================================================================
             
             ## choose which row/non-cell indices to use for the reconstruction - i.e. which frequencies/antennas
             idxNC = []
@@ -726,13 +728,17 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # ##
         #=======================================================================
         
-        mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
-        mems = comm.gather(mem_usage, root=0)
-        if( comm.rank == 0 ):
-            totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-            print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
-            
         #return ## exit
+        
+        
+    mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
+    mems = comm.gather(mem_usage, root=0)
+    if( comm.rank == 0 ):
+        totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
+        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
+            
+        
+    
             
         ## test other solver settings
         ##

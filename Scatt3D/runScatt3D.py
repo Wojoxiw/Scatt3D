@@ -613,7 +613,7 @@ if __name__ == '__main__':
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
     
     #testRun(h=1/2)
-    #folder = 'data3DLUNARC/'
+    folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -628,26 +628,24 @@ if __name__ == '__main__':
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
-    #===========================================================================
-    # runName = 'testRunD3'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11})
-    #===========================================================================
+    runName = 'testRunD3'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+                    prob_settings={'Nf': 11})
     
     
     #===========================================================================
     # runName = 'testRunD3LowerBandwidth'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'freqs': np.linspace(9.1e9, 10.8e9, 11)}) ## roughly where the S11 of the patch is below 0.8
+    # #testFullExample(h=1/3, degree=3, runName=runName,
+    # #                mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    # #                prob_settings={'freqs': np.linspace(9.1e9, 10.8e9, 11)}) ## roughly where the S11 of the patch is below 0.8
+    # 
+    # 
+    # runName = 'testRunD3EvenLowerBandwidth'
+    # #testFullExample(h=1/3, degree=3, runName=runName,
+    # #                mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    # #                prob_settings={'freqs': np.linspace(9.4e9, 10.32e9, 11)}) ## roughly where the S11 of the patch is below 0.6
     #===========================================================================
-    
-    
-    runName = 'testRunD3EvenLowerBandwidth'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'freqs': np.linspace(9.4e9, 10.32e9, 11)}) ## roughly where the S11 of the patch is below 0.6
     
     
     #===========================================================================
