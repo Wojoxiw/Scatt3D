@@ -262,11 +262,6 @@ class Scatt3DProblem():
         if(DUTMeshInfo != None):
             self.FEMmesh_DUT = FEMmesh(DUTMeshInfo, fem_degree, quaddeg)
             self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
-        
-        if(interpolationSubmeshSize > 0):
-            self.interpSubmeshSize = interpolationSubmeshSize
-        else:
-            self.interpSubmeshSize = self.lambda0/12 #min(self.FEMMesh_ref.meshInfo.h, self.FEMMesh_ref.meshInfo.lambda0/10)
             
         self.E_ref_anim = E_ref_anim
         self.E_dut_anim = E_dut_anim

@@ -28,6 +28,49 @@ import scatteringProblem
 import memTimeEstimation
 import postProcessing
 
+
+
+
+
+
+
+from scattnlay import scattnlay, fieldnlay
+
+# Sphere and wave parameters
+wavelength = 1.0
+x = 2*np.pi * 0.33 / wavelength   # size parameter for radius=0.5
+m = 2.0 + 0.0j                    # refractive index
+
+# Grid in x-z plane
+Nx = 20000
+x_vals = np.linspace(-20, 20, Nx)
+
+
+
+# Call fieldnlay: returns (terms, E, H)
+terms, E, H = fieldnlay(np.zeros(1)+x, np.zeros(1)+m, x_vals, np.zeros_like(x_vals), np.zeros_like(x_vals), mp=True)
+print(np.shape(E))
+# E has shape (Npoints, 3) with complex field vector at each point
+Ex = E[:,0]
+Ey = E[:,1]
+Ez = E[:,2]
+
+# Field intensity
+E2 = np.sum(np.abs(E)**2, axis=1)
+
+
+# Plot
+plt.figure(figsize=(6,6))
+plt.plot(x_vals, E[:,0])
+plt.plot(x_vals, E[:,1])
+plt.plot(x_vals, E[:,2])
+plt.xlabel('x')
+plt.ylabel('E2')
+plt.title('Electric field intensity |E|^2 around sphere')
+plt.axis('equal')
+plt.show()
+
+
 #===============================================================================
 # pc = PETSc.PC().create() ## to test if hpddm is installed
 # pc.setType("hpddm")
