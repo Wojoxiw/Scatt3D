@@ -442,7 +442,7 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[]):
+def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshOptions={'doIt': False}):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
@@ -453,6 +453,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     :param onlyNAntennas: Use indices such that it is like we only had N antennas to measure with. This will round. If 0, uses all data
     :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
     :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
+    :param reconstructionMeshOptions: If 'doIt' is True, rather than performing the reconstruction on the reference mesh, creates a new 'reconstruction mesh' around the object's location. This mesh still contains the object's geometry, though not the defect's. (This is so that the reconstruction can be done on a mesh of arbitrary mesh size/etc properties)
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -529,7 +530,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         ## load in the problem data
         print('data loaded in')
         
-        with h5py.File(problemName+'output-qs.h5', 'r') as f: ## read the information on the mesh with h5py (supposedly this is/will be deprecated)
+        with h5py.File(problemName+'output-qs.h5', 'r') as f: ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
             dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
             cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idxOrig]
             epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idxOrig]
@@ -584,6 +585,9 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         gc.collect()
         
         print(f'all data loaded in, {len(idxNC)}/{Nb} indices used')
+        
+        if(reconstructionMeshOptions['doIt']): ## use this reconstruction mesh instead
+            pass
         
         #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
         idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh

@@ -1,6 +1,6 @@
 #!/bin/bash
 # ### SBATCH # --qos=test  ## to run a quick, high-priority test (should be very quick). This is currently commented out (I hope)
-#SBATCH -t 18:55:00 ## job is killed after this time - overestimate
+#SBATCH -t 8:55:00 ## job is killed after this time - overestimate
 #SBATCH -A lu2025-2-124 ##from projinfo command
 
 #SBATCH -N 1 ##number of nodes that will be allocated - must use --ntasks-per-node or --cpus-per-task to use more than 1 core per node
