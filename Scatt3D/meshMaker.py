@@ -32,12 +32,11 @@ def Rmaty(theta): ## matrix for rotation about the y-axis
                      [0, 1, 0],
                      [-np.sin(theta), 0, np.cos(theta)]])
     
-def makeInterpolationSubmesh(comm, radius, meshsize, order, center = [0, 0, 0], verbosity=1): ## 
+def makeInterpolationSubmesh(comm, meshsize, order, center = [0, 0, 0], verbosity=1): ## 
     '''
     Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
-    Currently, this is a sphere intended to sit between the antennas
+    Currently, this is just for a-priori: it makes a mesh of just the object
     :param comm: MPI communicator
-    :param radius: Radius of the sub-mesh - should encompass the whole object to be reconstructed, and ideally only a little more than that (so maybe ~0.7*antenna_radius)
     :param order: Order of the mesh
     :param center: Center of the submesh - i.e. where the reconstruction should be centered, i.e. the object location
     :param verbosity: If > 0, print some info
@@ -132,7 +131,7 @@ class MeshInfo():
         :param antenna_radius: Radius at which antennas are placed
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
         :param antenna_bounding_box_offset: How far the bb extends from the antenna. If 0, takes h/2
-        :param object_radius: If object is a sphere (or cylinder), the radius. Even if not, ideally this should be approximately the size of the object
+        :param object_scale: If object is a sphere (or cylinder), the radius. Even if not, ideally this should be approximately the size of the object
         :param object_height: If object is a cylinder, the height
         :param object_offset: The object is shifted this far (in wavelengths)
         :param material_epsrs: Relatively permittivities for the object - used to scale mesh size by local wavelength. If only one is given, use that one for all objects
@@ -235,12 +234,12 @@ class MeshInfo():
         ## Object + defect(s) parameters
         self.reconstruction_submesh_radius = min(object_radius*self.lambda0*1.2, (object_radius+0.15)*self.lambda0) ## should ideally contain slightly more than the object
         if(object_geom == 'sphere'):
-            self.object_radius = object_radius * self.lambda0
+            self.object_scale = object_radius * self.lambda0
         elif(object_geom == 'cylinder'):
-            self.object_radius = object_radius * self.lambda0
+            self.object_scale = object_radius * self.lambda0
             self.object_height = object_height * self.lambda0
         elif(object_geom == 'cubic' or object_geom == 'simple1'):
-            self.object_length = object_radius * self.lambda0
+            self.object_scale = object_radius * self.lambda0
         elif(object_geom == 'complex1'):
             self.object_scale = object_radius * self.lambda0
         elif(object_geom == '' or object_geom is None):
@@ -425,17 +424,17 @@ class MeshInfo():
             
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
-                obj = gmsh.model.occ.addSphere(0,0,0, self.object_radius) ## add it to the origin
+                obj = gmsh.model.occ.addSphere(0,0,0, self.object_scale) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'cylinder'):
-                obj = gmsh.model.occ.addCylinder(0,0,-self.object_height/2,0,0,self.object_height, self.object_radius) ## add it to the origin
+                obj = gmsh.model.occ.addCylinder(0,0,-self.object_height/2,0,0,self.object_height, self.object_scale) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'cubic'):
-                obj = gmsh.model.occ.addBox(-self.object_length/2,-self.object_length/2,-self.object_length/2,self.object_length,self.object_length,self.object_length) ## add it to the origin
+                obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2,-self.object_scale/2,self.object_scale,self.object_scale,self.object_scale) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'simple1'): ## a rectangular prism with a cylindrical defect
                 S1height = 0.23
-                obj = gmsh.model.occ.addBox(-self.object_length/2,-self.object_length/2*0.44,-self.object_length/2*S1height,self.object_length,self.object_length*0.44,self.object_length*S1height) ## add it to the origin
+                obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2*0.44,-self.object_scale/2*S1height,self.object_scale,self.object_scale*0.44,self.object_scale*S1height) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry. It is also large. Defect should have same name
                 part1 = gmsh.model.occ.addSphere(0,0,0, self.object_scale*1.2) ## long ellipsoid in the centre
@@ -477,7 +476,7 @@ class MeshInfo():
                     defect2 = gmsh.model.occ.addCylinder(self.defect_radius*2.4,-self.defect_radius*2.4,-self.defect_height/4,0,0,self.defect_height/1.5, self.defect_radius/1.5)
                     defectDimTags.append((self.tdim, defect2))
                 elif(self.defect_geom == 'simple1'): ## a cylinder that doesn't go all the way through
-                    defect = gmsh.model.occ.addCylinder(self.object_length*0.33,-self.object_length*0.07,-self.object_length*S1height*(1/2-0.1),0,0,self.object_length*S1height*(0.9), self.defect_radius)
+                    defect = gmsh.model.occ.addCylinder(self.object_scale*0.33,-self.object_scale*0.07,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius)
                     defectDimTags.append((self.tdim, defect))
                 elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
                     defectDimTags = []

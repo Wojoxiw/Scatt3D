@@ -1027,7 +1027,7 @@ class Scatt3DProblem():
                         for m in range(meshInfo.N_antennas):
                             for n in range(meshInfo.N_antennas):
                                 b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom)
+                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
                 
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
             print(f'   done.')
@@ -1227,12 +1227,12 @@ class Scatt3DProblem():
                 m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
                 mies = np.zeros_like(angles[:, 1])
                 lambdat = c0/freq
-                x = 2*pi*FEMm.meshInfo.object_radius/lambdat
+                x = 2*pi*FEMm.meshInfo.object_scale/lambdat
                 for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
                     if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
-                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi since it seems backwards => forwards
+                        mies[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_scale**2 ## +pi since it seems backwards => forwards
                     else: ## if not, we are changing theta angles and in the parallel plane
-                        mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi/2 since it seems backwards => forwards
+                        mies[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_scale**2 ## +pi/2 since it seems backwards => forwards
                         
                 vals = areaResult, khatResults, farfields, mies # [FF surface area, khat integral], scattering along planes, mie intensities in the scattering directions
                 return vals
@@ -1281,12 +1281,12 @@ class Scatt3DProblem():
                     if(compareToMie): ##Calculate Mie scattering
                         m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
                         mie = np.zeros_like(angles[:, 1])
-                        x = 2*pi*FEMm.meshInfo.object_radius/lambdat
+                        x = 2*pi*FEMm.meshInfo.object_scale/lambdat
                         for i in range(nvals*2): ## get a miepython error if I use a vector of x, so:
                             if(angles[i, 1] == 90): ## if theta=90, then this is H-plane/perpendicular
-                                mie[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi since it seems backwards => forwards
+                                mie[i] = miepython.i_per(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_scale**2 ## +pi since it seems backwards => forwards
                             else: ## if not, we are changing theta angles and in the parallel plane
-                                mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_radius**2 ## +pi/2 since it seems backwards => forwards
+                                mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_scale**2 ## +pi/2 since it seems backwards => forwards
                         
                         ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
                         ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = 1.2, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
@@ -1326,7 +1326,7 @@ class Scatt3DProblem():
                 mieBackward = np.zeros_like(self.fvec)
                 for i in range(len(self.fvec)): ## get a miepython error if I use a vector of x, so:
                     lambdat = c0/self.fvec[i]
-                    x = 2*pi*FEMm.meshInfo.object_radius/lambdat
+                    x = 2*pi*FEMm.meshInfo.object_scale/lambdat
                     mieForward[i] = miepython.i_par(m, x, np.cos(pi), norm='qsca') 
                     mieBackward[i] = miepython.i_par(m, x, np.cos(0), norm='qsca')
                 
@@ -1445,7 +1445,7 @@ class Scatt3DProblem():
             freq = self.fvec[0]
             lambdat = c0/freq
             k = 2*pi/lambdat
-            x = k*FEMm.meshInfo.object_radius
+            x = k*FEMm.meshInfo.object_scale
             coefs = miepython.core.coefficients(m, x, internal=True)
             def planeWaveSph(x):
                 '''
@@ -1463,20 +1463,20 @@ class Scatt3DProblem():
             for q in range(len(rs)):
                 r = rs[q]
                 nr = -1*negrs[q] ## still positive, just in other direction due to angle
-                if(np.abs(r)<FEMm.meshInfo.object_radius): ## miepython seems to include the incident field inside the sphere
+                if(np.abs(r)<FEMm.meshInfo.object_scale): ## miepython seems to include the incident field inside the sphere
                     t = 1
                 else:
                     t = 0
-                if(np.abs(nr)<FEMm.meshInfo.object_radius): ## miepython seems to include the incident field inside the sphere
+                if(np.abs(nr)<FEMm.meshInfo.object_scale): ## miepython seems to include the incident field inside the sphere
                     t2 = 1
                 else:
                     t2 = 0
                 if(direction == 'forward'):
-                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_radius, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
-                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_radius, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
+                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
                 elif(direction == 'side'):
-                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_radius, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
-                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_radius, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
+                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
                 
             enears = np.vstack((enearsbw, enears))
             ## plot components
@@ -1511,12 +1511,12 @@ class Scatt3DProblem():
             ax2.set_title('E-field magnitudes')
             ax3.set_title('Real/imag. parts of incident pol.')
             
-            ax1.axvline(FEMm.meshInfo.object_radius, label = 'radius', color = 'black')
-            ax1.axvline(-1*FEMm.meshInfo.object_radius, color = 'black')
-            ax2.axvline(FEMm.meshInfo.object_radius, label = 'radius', color = 'black')
-            ax2.axvline(-1*FEMm.meshInfo.object_radius, color = 'black')
-            ax3.axvline(FEMm.meshInfo.object_radius, label = 'radius', color = 'black')
-            ax3.axvline(-1*FEMm.meshInfo.object_radius, color = 'black')
+            ax1.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
+            ax1.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
+            ax2.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
+            ax2.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
+            ax3.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
+            ax3.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
             ax1.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
             ax1.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
             ax2.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')

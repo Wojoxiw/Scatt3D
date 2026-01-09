@@ -579,6 +579,16 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                         i = nf*N_antennas*N_antennas + m*N_antennas + n
                         if(i in idxNC):
                             Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
+                            
+                            if(reconstructionMeshOptions['doIt']): ## create a reconstruction mesh instead
+                                ## make the reconstruction mesh
+                                
+                                ## create interpolation from the saved mesh to this one
+                                
+                                ## A matrix from interpolation
+                                pass
+                            
+                            
                             A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
                             indexCount +=1
             del Apart ## maybe this will help with clearing memory
@@ -586,8 +596,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         print(f'all data loaded in, {len(idxNC)}/{Nb} indices used')
         
-        if(reconstructionMeshOptions['doIt']): ## use this reconstruction mesh instead
-            pass
         
         #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
         idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
@@ -598,6 +606,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         ## prepare the solution/output file
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
+        
+        if(reconstructionMeshOptions['doIt']): ## instead use the interpolation mesh, and interpolate the original epsrs
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w')  
         f.write_mesh(mesh)
         cells.x.array[:] = epsr_ref + 0j
