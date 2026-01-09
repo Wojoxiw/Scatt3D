@@ -608,6 +608,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
         
         if(reconstructionMeshOptions['doIt']): ## instead use the interpolation mesh, and interpolate the original epsrs
+            pass
+        
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w')  
         f.write_mesh(mesh)
         cells.x.array[:] = epsr_ref + 0j
