@@ -32,43 +32,48 @@ def Rmaty(theta): ## matrix for rotation about the y-axis
                      [0, 1, 0],
                      [-np.sin(theta), 0, np.cos(theta)]])
     
-def makeInterpolationSubmesh(comm, meshsize, order, center = [0, 0, 0], verbosity=1): ## 
-    '''
-    Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
-    Currently, this is just for a-priori: it makes a mesh of just the object
-    :param comm: MPI communicator
-    :param order: Order of the mesh
-    :param center: Center of the submesh - i.e. where the reconstruction should be centered, i.e. the object location
-    :param verbosity: If > 0, print some info
-    '''
-    t1 = timer()
-    gmsh.initialize()
-    if (comm.rank == 0): ## make all the definitions through the master-rank process
-        gmsh.model.add('Interpolation Submesh') ## name for the this
-        ## Give some mesh settings: verbosity, max. and min. mesh lengths
-        gmsh.option.setNumber('General.Verbosity', verbosity)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMin", meshsize*0.66)
-        gmsh.option.setNumber("Mesh.CharacteristicLengthMax", meshsize*1.5)
-        gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
-    
-        sphere = gmsh.model.occ.addSphere(center[0], center[1], center[2], radius)
-        
-        gmsh.model.occ.synchronize()
-        the_marker = gmsh.model.addPhysicalGroup(3, [sphere])
-        gmsh.model.mesh.generate(3)
-    else:
-            the_marker = None
-    the_marker = comm.bcast(the_marker, root=0)
-    gmsh.model.mesh.setOrder(order)
-    meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=comm, rank=0, gdim=3, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
-    gmsh.finalize()
-    
-    ncells = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_global ## all cells, rather than only those in this MPI process
-    if(verbosity > 0 and comm.rank == 0):
-        nloc = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local
-        print(f'Interpolation submesh generated in {timer() - t1:.2e} s - {ncells} global cells, {nloc} local cells')
-        sys.stdout.flush()
-    return meshData
+#===============================================================================
+# def makeInterpolationSubmesh(comm, meshsize, order, scale, type, center = [0, 0, 0], verbosity=1): ## 
+#     '''
+#     Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
+#     Currently, this is just for a-priori: it makes a mesh of just the object
+#     :param comm: MPI communicator
+#     :param meshsize: Meshsize to use (h)
+#     :param order: Order of the mesh
+#     :param center: Center of the submesh - i.e. where the reconstruction should be centered, i.e. the object location
+#     :param scale: Scale of the object
+#     :param type: Type of object (only some are implemented)
+#     :param verbosity: If > 0, print some info
+#     '''
+#     t1 = timer()
+#     gmsh.initialize()
+#     if (comm.rank == 0): ## make all the definitions through the master-rank process
+#         gmsh.model.add('Interpolation Submesh') ## name for the this
+#         ## Give some mesh settings: verbosity, max. and min. mesh lengths
+#         gmsh.option.setNumber('General.Verbosity', verbosity)
+#         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", meshsize*0.66)
+#         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", meshsize*1.5)
+#         gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
+#     
+#         sphere = gmsh.model.occ.addSphere(center[0], center[1], center[2], radius)
+#         
+#         gmsh.model.occ.synchronize()
+#         the_marker = gmsh.model.addPhysicalGroup(3, [sphere])
+#         gmsh.model.mesh.generate(3)
+#     else:
+#             the_marker = None
+#     the_marker = comm.bcast(the_marker, root=0)
+#     gmsh.model.mesh.setOrder(order)
+#     meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=comm, rank=0, gdim=3, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
+#     gmsh.finalize()
+#     
+#     ncells = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_global ## all cells, rather than only those in this MPI process
+#     if(verbosity > 0 and comm.rank == 0):
+#         nloc = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local
+#         print(f'Interpolation submesh generated in {timer() - t1:.2e} s - {ncells} global cells, {nloc} local cells')
+#         sys.stdout.flush()
+#     return meshData
+#===============================================================================
 
 class MeshInfo():
     """Data structure for the mesh (all geometry) and related metadata."""
@@ -757,6 +762,53 @@ class MeshInfo():
             if(viewGMSH):
                 print(f'{mat_markers=}, {antennaMat_markers=}, {defect_markers=}, {domain_marker=}, {pml_marker=}, {pec_surface_marker=}, {farfield_surface_marker=}, {antenna_surface_markers=}')
                 print(f'{matDimTags=}, {antennaMatDimTags=}, {domainDimTags=}, {pmlDimTags=}, {PEC_surfaces=}, {farfield_surface=}, {antenna_surfaces=}')
+                
+                entities = gmsh.model.getEntitiesForPhysicalGroup(3, mat_markers)
+                elem_types = []
+                elem_tags = []
+                elem_node_tags = []
+                
+                for e in entities:
+                    types, tags, nodes = gmsh.model.mesh.getElements(3, e)
+                    elem_types.extend(types)
+                    elem_tags.extend(tags)
+                    elem_node_tags.extend(nodes)
+                
+                used_nodes = set()
+                for nodes in elem_node_tags:
+                    used_nodes.update(nodes)
+                used_nodes = list(used_nodes)
+
+                
+                node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
+                node_map = dict(zip(node_tags, range(len(node_tags))))
+                
+                coords = []
+                for t in used_nodes:
+                    i = node_map[t]
+                    coords.extend(node_coords[3*i:3*i+3])
+
+                
+                gmsh.model.add("submesh")
+
+                gmsh.model.mesh.addNodes(
+                    3,
+                    1,
+                    used_nodes,
+                    coords
+                )
+                
+                for etype, etags, enodes in zip(elem_types, elem_tags, elem_node_tags):
+                    gmsh.model.mesh.addElements(
+                        3,
+                        1,
+                        [etype],
+                        [etags],
+                        [enodes]
+                    )
+
+                
+                
                 gmsh.fltk.run() ## gives a PETSc error when run in a spack installation
                 exit()
             
