@@ -452,7 +452,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
     :param onlyNAntennas: Use indices such that it is like we only had N antennas to measure with. This will round. If 0, uses all data
-    :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
+    :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells.
     :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
     :param reconstructionMeshInfo: If not None, should be a MeshInfo of the reconstruction mesh. Then, saved data will be interpolated onto this mesh for the reconstruction.
     '''
@@ -522,7 +522,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f: ## read the mesh with dolfinx
             mesh = f.read_mesh()
             WSpace = dolfinx.fem.functionspace(mesh, ('DG', 0))
-            cells = dolfinx.fem.Function(WSpace)
+            cellData = dolfinx.fem.Function(WSpace)
             
             idxOrig = mesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
             dofs = WSpace.dofmap.index_map ## has info about dofs on each process
@@ -536,11 +536,31 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idxOrig]
             epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idxOrig]
             epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idxOrig]
-            N = len(cell_volumes)
             
             if(not reconstructionMeshInfo is None): ## instead use the reconstruction mesh, and interpolate the original epsrs
                 rec_WSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, ("DG", 0))
+                rec_cellData = dolfinx.fem.Function(rec_WSpace)  ## need to interpolate onto the ref mesh
+                mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
+                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cellData, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                
+                cellData.x.array[:] = dofs_map
+                rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
+                dofs_map = rec_cellData.x.array[:]
+                
+                cellData.x.array[:] = epsr_ref
+                rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
+                epsr_ref = rec_cellData.x.array[:]
+                
+                cellData.x.array[:] = epsr_dut
+                rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
+                epsr_dut = rec_cellData.x.array[:]
+                
                 cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
+                cellData = rec_cellData
+            
+            N = len(cell_volumes)
             
             idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
             
@@ -552,9 +572,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             
             ## choose which row/non-cell indices to use for the reconstruction - i.e. which frequencies/antennas
             idxNC = []
-            
             for nf in range(Nf): ## frequency
-                if(not (nf in frequenciesToUse or len(frequenciesToUse)==0)):
+                if(not (nf in frequenciesToUse or len(frequenciesToUse)==0)): ## if frequency excluded
                     continue ## skip to next index
                 for m in range(N_antennas): ## transmitting index
                     if(False): ## disabled for now... reconstruction seems to improve with more data
@@ -562,7 +581,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                         if(refl>0.8): ## check for a low reflection coefficient - if it is too high, perhaps the antenna doesn't support this frequency and the data should be skipped
                             continue
                     for n in range(N_antennas): ## receiving index
-                        if( not ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ):
+                        if( not ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ): ## if antenna excluded
                             continue ## skip to next index
                         i = nf*N_antennas*N_antennas + m*N_antennas + n
                         
@@ -587,24 +606,16 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                                 Apart = dolfinx.fem.Function(WSpace)
                                 Apart.x.array[:] = np.array(f['Function']['real_f'][str(i)]).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()[idxOrig]
                                 ## create interpolation from the saved mesh to this one
-                                rec_cells = dolfinx.fem.Function(rec_WSpace)  ## need to interpolate onto the ref mesh
-                                mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
-                                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-                                cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                                interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                                rec_cells.interpolate_nonmatching(Apart, cells, interpolation_data=interpolation_data)
-                                
-                                A[indexCount,:] = rec_cells.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                cellData.interpolate_nonmatching(Apart, cells, interpolation_data=interpolation_data)
+                                A[indexCount,:] = cellData.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
                             else:
                                 Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
                                 A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
-                                
                             indexCount +=1
-                            
             del Apart ## maybe this will help with clearing memory
         gc.collect()
         
-        print(f'all data loaded in, {len(idxNC)}/{Nb} indices used')
+        print(f'all data loaded in, {len(idxNC)}/{Nb} rows used')
         
         
         #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
@@ -617,14 +628,17 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         ## prepare the solution/output file
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
         
-        f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w')  
-        f.write_mesh(mesh)
-        cells.x.array[:] = epsr_ref + 0j
-        f.write_function(cells, -2)
-        cells.x.array[:] = epsr_dut + 0j
-        f.write_function(cells, -1)
-        cells.x.array[:] = epsr_dut-epsr_ref + 0j
-        f.write_function(cells, 0)
+        f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w') 
+        if(not reconstructionMeshInfo is None): ## instead use the reconstruction mesh 
+            f.write_mesh(reconstructionMeshInfo.mesh)
+        else:
+            f.write_mesh(mesh)
+        cellData.x.array[:] = epsr_ref + 0j
+        f.write_function(cellData, -2)
+        cellData.x.array[:] = epsr_dut + 0j
+        f.write_function(cellData, -1)
+        cellData.x.array[:] = epsr_dut-epsr_ref + 0j
+        f.write_function(cellData, 0)
         f.close()
         
         x_temp = np.zeros(N, dtype=complex) ## to hold reconstructed epsr values
@@ -660,8 +674,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # print(f'SPGL optimal {optSigma=}')
         # xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=optSigma, **spgl_settings)
         # x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -24)
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -24)
         # print(f'Timestep -24 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         # 
         # def calcAccuracy(tau, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
@@ -676,8 +690,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # print(f'SPGL optimal {optTau=}')
         # xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=optTau, **spgl_settings)
         # x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -25)
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -25)
         # print(f'Timestep -25 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         # f.close()
         #=======================================================================
@@ -700,8 +714,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # optSigma = optsol.x
         # print(f'SPGL optimal {optSigma=}')
         # x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, sigma=optSigma, cell_volumes=cell_volumes)
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -7)
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -7)
         # print(f'Timestep -7 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         # 
         # def calcAccuracy(tau, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
@@ -714,8 +728,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # optTau = optsol.x
         # print(f'SPGL optimal {optTau=}')
         # x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, tau=optTau, cell_volumes=cell_volumes)
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -8)
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -8)
         # print(f'Timestep -8 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         # 
         # def calcAccuracy(mu, epsr_ref, epsr_dut, cell_volumes): ### find a figure of merit (for optimizing a value)
@@ -728,8 +742,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # optMu = optsol.x
         # print(f'SPGL optimal {optMu=}')
         # x_temp[idx_ap] = cvxpySolve(A_ap, b, 4, mu=optMu, cell_volumes=cell_volumes)
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -9)
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -9)
         # print(f'Timestep -9 reconstruction error: {reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
         # 
         # f.close()
@@ -741,11 +755,11 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         # ##
         # f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         # x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -5) 
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -5) 
         # x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
-        # cells.x.array[:] = x_temp + 0j
-        # f.write_function(cells, -6)
+        # cellData.x.array[:] = x_temp + 0j
+        # f.write_function(cellData, -6)
         # f.close()
         # ##
         # ##
@@ -827,13 +841,13 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     #     ## write back the result
     #     f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
     #     ## a-priori
-    #     cells.x.array[:] = x_ap + 0j
-    #     f.write_function(cells, 1)
+    #     cellData.x.array[:] = x_ap + 0j
+    #     f.write_function(cellData, 1)
     #     print(f'Timestep 1 reconstruction error: {reconstructionError(x_ap[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]):.3e}')
     #     ## non a-priori
     #     if(not onlyAPriori):
-    #         cells.x.array[:] = x_temp + 0j
-    #         f.write_function(cells, 2)    
+    #         cellData.x.array[:] = x_temp + 0j
+    #         f.write_function(cellData, 2)    
     #         print(f'Timestep 2 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
     #     f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
     #===========================================================================
@@ -847,8 +861,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         timestep = 3
         if(not returnResults or timestep in returnResults): ## if it is empty, or requested
             x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b #numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, timestep)
+            cellData.x.array[:] = x_temp + 0j
+            f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
         
@@ -856,8 +870,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             timestep = 4
             if(not returnResults or timestep in returnResults): ## if it is empty, or requested
                 x_temp[idx_non_pml] = np.linalg.pinv(A, rcond = rcond) @ b #numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, 4)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, 4)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
         
@@ -883,8 +897,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(not returnResults or timestep in returnResults): ## if it is empty, or requested
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, **spgl_settings)
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, timestep)
+            cellData.x.array[:] = x_temp + 0j
+            f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
         
@@ -892,8 +906,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(not returnResults or timestep in returnResults): ## if it is empty, or needed
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, sigma=sigma, **spgl_settings)
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, timestep)
+            cellData.x.array[:] = x_temp + 0j
+            f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
         
@@ -903,8 +917,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(not returnResults or timestep in returnResults): ## if it is empty, or needed
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
-            cells.x.array[:] = x_temp + 0j
-            f.write_function(cells, timestep)
+            cellData.x.array[:] = x_temp + 0j
+            f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
          
@@ -926,8 +940,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 xsol, resid, grad, info = spgl1.spgl1(Ak, bk, **spgl_settings)
                 x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
             
@@ -935,8 +949,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 xsol, resid, grad, info = spgl1.spgl1(Ak, bk, sigma=sigma, **spgl_settings)
                 x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
             
@@ -944,8 +958,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 xsol, resid, grad, info = spgl1.spgl1(Ak, bk, tau=tau, **spgl_settings)
                 x_temp[idx_non_pml] = xsol[:A2] + 1j*xsol[A2:]
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
                 
@@ -973,40 +987,40 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp = np.zeros(N, dtype=complex)
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 0, cell_volumes=cell_volumes[idx_ap], solver = 'GLPK') ## GLPK where it can be used - seems faster and possibly better than CLARABEL. GLPK_MI seems faster, but possibly worse
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
             
             timestep = 6
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 1, cell_volumes=cell_volumes[idx_ap])
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
             
             timestep = 7
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 2, cell_volumes=cell_volumes[idx_ap])
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
             
             timestep = 8
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 3, cell_volumes=cell_volumes[idx_ap])
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
             
             timestep = 9
             if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                 x_temp[idx_ap] = cvxpySolve(A_ap, b, 4, cell_volumes=cell_volumes[idx_ap])
-                cells.x.array[:] = x_temp + 0j
-                f.write_function(cells, timestep)
+                cellData.x.array[:] = x_temp + 0j
+                f.write_function(cellData, timestep)
                 err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
                 errs.append(err)
             
@@ -1018,40 +1032,40 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                 timestep = 10
                 if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 0, cell_volumes=cell_volumes[idx_non_pml], solver = 'GLPK')
-                    cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, timestep)
+                    cellData.x.array[:] = x_temp + 0j
+                    f.write_function(cellData, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
                 
                 timestep = 11
                 if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 1, cell_volumes=cell_volumes[idx_non_pml])
-                    cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, timestep)
+                    cellData.x.array[:] = x_temp + 0j
+                    f.write_function(cellData, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
                 
                 timestep = 12
                 if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 2, cell_volumes=cell_volumes[idx_non_pml])
-                    cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, timestep)
+                    cellData.x.array[:] = x_temp + 0j
+                    f.write_function(cellData, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
                 
                 timestep = 13
                 if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 3, cell_volumes=cell_volumes[idx_non_pml])
-                    cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, timestep)
+                    cellData.x.array[:] = x_temp + 0j
+                    f.write_function(cellData, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
                 
                 timestep = 14
                 if(not returnResults or timestep in returnResults): ## if it is empty, or needed
                     x_temp[idx_non_pml] = cvxpySolve(A, b, 4, cell_volumes=cell_volumes[idx_non_pml])
-                    cells.x.array[:] = x_temp + 0j
-                    f.write_function(cells, timestep)
+                    cellData.x.array[:] = x_temp + 0j
+                    f.write_function(cellData, timestep)
                     err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                     errs.append(err)
                 

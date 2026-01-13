@@ -320,8 +320,9 @@ class MeshInfo():
                     domainDimTags.append((self.tdim, boundingBox))
                     
                     antennaMatDimTags.append((3, box)) ## these 3 should be dielectric
-                    antennaMatDimTags.append((3, coax_outer))
                     antennaMatDimTags.append((3, patch))
+                    antennaMatDimTags.append((3, coax_outer))
+                    
                     antennas_DimTags.append((self.tdim, coax_inner)) ## remove these 2 volumes
                     antennas_DimTags.append((self.tdim, coax_under))
                     

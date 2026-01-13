@@ -89,7 +89,7 @@ if __name__ == '__main__':
         mesh_settings = {'h': h, 'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh',justInterpolationSubmesh = True, reference = False, verbosity = verbosity, **mesh_settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, verbosity = verbosity, **mesh_settings)
         else:
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **mesh_settings)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
@@ -616,18 +616,24 @@ if __name__ == '__main__':
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
                     
     def reconstructionMeshSizeTesting(sim = True): ## Runs the basic simulation, performing the reconstruction with different mesh sizes to see what seems best. sim=True to run the simulation, False for the reconstructions
-        mesh_settings={'h': 1/3.5, 'N_antennas': 9, 'viewGMSH': True, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5}
+        Nants = 9
+        mesh_settings={'h': 1/3.5, 'N_antennas': Nants, 'viewGMSH': False, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5}
         if(sim):
+            epsrs = []
+            for n in range(Nants): ## each patch has 3 dielectric zones
+                epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+                epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
+                epsrs.append(2.1*(1 - 0j)) ## coax
             testFullExample(degree=3, dutOnRefMesh=True, antennaType='patch', runName='reconstructionMeshSizeTesting', 
                             mesh_settings=mesh_settings,
-                            prob_settings={'antenna_mat_epsrs': [2.1*(1 + 0j), 4.4*(1 - .11/4.4j)]}) ## 2.1 in the coax, 4.4 in the patch substrate
+                            prob_settings={'antenna_mat_epsrs': epsrs}) ## 4.4 in the patch substrate, 2.1 in the coax
             if(comm.rank == model_rank):
                 print('Simulation part complete.')
         else: ## reconstruct, then make the plot(s)
             errs = []
             oh = np.linspace(2, 10, 0.25)
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
-                rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+                rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
                 errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSizeoh{oh}', onlyAPriori=False, returnResults=[3,4,25,28], reconstructionMeshInfo=recMesh))
             
