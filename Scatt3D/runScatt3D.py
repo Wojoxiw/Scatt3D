@@ -660,8 +660,8 @@ if __name__ == '__main__':
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
-    reconstructionMeshSizeTesting()
-    reconstructionMeshSizeTesting(False)
+    #reconstructionMeshSizeTesting()
+    #reconstructionMeshSizeTesting(False)
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
@@ -675,12 +675,10 @@ if __name__ == '__main__':
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
     
-    #===========================================================================
-    # runName = 'testRunComplex2Obj'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11})
-    #===========================================================================
+    runName = 'testRunComplex2Obj'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'viewGMSH': False},
+                    prob_settings={'Nf': 11})
     
     
     #===========================================================================
@@ -723,7 +721,7 @@ if __name__ == '__main__':
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall_ypol', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
     
