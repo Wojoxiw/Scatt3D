@@ -204,7 +204,7 @@ class MeshInfo():
         elif(object_geom == 'cylinder'):
             self.object_scale = object_radius * self.lambda0
             self.object_height = object_height * self.lambda0
-        elif(object_geom == 'cubic' or object_geom == 'simple1'):
+        elif(object_geom == 'cubic' or object_geom == 'simple1' or object_geom == 'complex2'):
             self.object_scale = object_radius * self.lambda0
         elif(object_geom == 'complex1'):
             self.object_scale = object_radius * self.lambda0
@@ -407,6 +407,10 @@ class MeshInfo():
             elif(self.object_geom == 'simple1'): ## a rectangular prism with a cylindrical defect
                 S1height = 0.23
                 obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2*0.44,-self.object_scale/2*S1height,self.object_scale,self.object_scale*0.44,self.object_scale*S1height) ## add it to the origin
+                matDimTags.append((self.tdim, obj))
+            elif(self.object_geom == 'complex2'): ## a rectangular prism - but more squarish
+                S1height = 0.23
+                obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2*0.76,-self.object_scale/2*S1height,self.object_scale,self.object_scale*0.76,self.object_scale*S1height) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry. It is also large. Defect should have same name
                 part1 = gmsh.model.occ.addSphere(0,0,0, self.object_scale*1.2) ## long ellipsoid in the centre
