@@ -31,49 +31,6 @@ def Rmaty(theta): ## matrix for rotation about the y-axis
     return np.array([[np.cos(theta), 0, np.sin(theta)],
                      [0, 1, 0],
                      [-np.sin(theta), 0, np.cos(theta)]])
-    
-#===============================================================================
-# def makeInterpolationSubmesh(comm, meshsize, order, scale, type, center = [0, 0, 0], verbosity=1): ## 
-#     '''
-#     Makes a small sub-mesh for interpolation data, to avoid saving many copies of empty cells.
-#     Currently, this is just for a-priori: it makes a mesh of just the object
-#     :param comm: MPI communicator
-#     :param meshsize: Meshsize to use (h)
-#     :param order: Order of the mesh
-#     :param center: Center of the submesh - i.e. where the reconstruction should be centered, i.e. the object location
-#     :param scale: Scale of the object
-#     :param type: Type of object (only some are implemented)
-#     :param verbosity: If > 0, print some info
-#     '''
-#     t1 = timer()
-#     gmsh.initialize()
-#     if (comm.rank == 0): ## make all the definitions through the master-rank process
-#         gmsh.model.add('Interpolation Submesh') ## name for the this
-#         ## Give some mesh settings: verbosity, max. and min. mesh lengths
-#         gmsh.option.setNumber('General.Verbosity', verbosity)
-#         gmsh.option.setNumber("Mesh.CharacteristicLengthMin", meshsize*0.66)
-#         gmsh.option.setNumber("Mesh.CharacteristicLengthMax", meshsize*1.5)
-#         gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
-#     
-#         sphere = gmsh.model.occ.addSphere(center[0], center[1], center[2], radius)
-#         
-#         gmsh.model.occ.synchronize()
-#         the_marker = gmsh.model.addPhysicalGroup(3, [sphere])
-#         gmsh.model.mesh.generate(3)
-#     else:
-#             the_marker = None
-#     the_marker = comm.bcast(the_marker, root=0)
-#     gmsh.model.mesh.setOrder(order)
-#     meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=comm, rank=0, gdim=3, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
-#     gmsh.finalize()
-#     
-#     ncells = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_global ## all cells, rather than only those in this MPI process
-#     if(verbosity > 0 and comm.rank == 0):
-#         nloc = meshData.mesh.topology.index_map(meshData.mesh.topology.dim).size_local
-#         print(f'Interpolation submesh generated in {timer() - t1:.2e} s - {ncells} global cells, {nloc} local cells')
-#         sys.stdout.flush()
-#     return meshData
-#===============================================================================
 
 class MeshInfo():
     """Data structure for the mesh (all geometry) and related metadata."""
@@ -112,6 +69,8 @@ class MeshInfo():
                  viewGMSH = True,
                  FF_surface = False,
                  order = 1,
+                 justInterpolationSubmesh=False,
+                 interpolationSubmeshSize = -1,
                  ):
         '''
         Makes it - given various inputs
@@ -149,6 +108,8 @@ class MeshInfo():
         :param viewGMSH: If True, plots the mesh after creation then exits
         :param FF_surface: If True, creates a spherical shell with a radius slightly lower than the domain's, to calculate the farfield on (domain_geom should also be spherical)
         :param order: Order of the mesh elements - have to switch from xdmf to vtx or vtk when going above 2? They don't work straightforwardly
+        :param justInterpolationSubmesh: If True, only returns the interpolation submesh consisting of the material only
+        :param interpolationSubmeshSize: If < 0, uses regular mesh size (h). Otherwise, uses specified value.
         '''
         
         self.comm = comm                               # MPI communicator
@@ -280,6 +241,11 @@ class MeshInfo():
         
         self.material_epsrs = material_epsrs
         self.defect_epsrs = defect_epsrs
+        
+        self.interpolationSubmeshSize = interpolationSubmeshSize * self.lambda0
+        self.justInterpolationSubmesh = justInterpolationSubmesh
+        if(justInterpolationSubmesh):
+            self.reference=True ## just to ensure this is the case
             
         ## Finally, actually make the mesh
         self.createMesh(viewGMSH)
@@ -685,7 +651,6 @@ class MeshInfo():
                 gmsh.model.mesh.field.setNumber(PECSurfaceField, "VOut", self.h)
                 meshFields.append(PECSurfaceField)
                 
-                
                 ## then a mesh field for the domain and PML, to reduce mesh size in open space (otherwise the drop-off from tiny mesh in antennas is extremely slow)
                 
                 domainMeshField = gmsh.model.mesh.field.add("Constant")
@@ -702,84 +667,28 @@ class MeshInfo():
             
             gmsh.model.mesh.generate(self.tdim)
             #gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out
-            ## Apparently gmsh's Python bindings don't allow all that I need for the below to work...
-            #===================================================================
-            # if(self.reference): ## mark the cells corresponding to the defect now. Need to make this after mesh generation so it does not affect the meshing... there must be a better way to do this
-            #     tet_type = 4  # tetrahedron
-            #     elem_tags, elem_node_tags = gmsh.model.mesh.getElementsByType(tet_type)
-            #     elem_node_tags = np.array(elem_node_tags).reshape(-1, 4)
-            #     elem_tags = np.array(elem_tags)
-            #     node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-            #     node_coords = node_coords.reshape(-1, 3)
-            #     tag_to_index = {tag: i for i, tag in enumerate(node_tags)}
-            #     tet_idx = np.vectorize(tag_to_index.get)(elem_node_tags)
-            #     cellcenters = node_coords[tet_idx].mean(axis=1)
-            #     
-            #     gmsh.model.add('Defect Tool') ## just the defect, since apparently gmsh has no way to check if a cell is within another object without influencing the meshing
-            #     defectDimTags = makeDefect()
-            #     gmsh.model.occ.synchronize()
-            #     gmsh.model.mesh.generate(2)
-            #      
-            #     node_tags_t, node_coords_t, _ = gmsh.model.mesh.getNodes()
-            #     node_coords_t = node_coords_t.reshape(-1, 3)
-            #     tag_to_index_t = {tag: i for i, tag in enumerate(node_tags_t)}
-            #     tri_type = 2
-            #     _, elem_node_tags_t = gmsh.model.mesh.getElementsByType(tri_type)
-            #     tris = np.array(elem_node_tags_t).reshape(-1, 3)
-            #     tris = np.vectorize(tag_to_index_t.get)(tris)
-            #     tool_mesh = trimesh.Trimesh(vertices=node_coords_t, faces=tris, process=True)
-            #     
-            #     inside = tool_mesh.contains(cellcenters)
-            #     inside_tags = elem_tags[inside]
-            #     
-            #     
-            #     #===============================================================
-            #     # defect_surfaces = gmsh.model.getBoundary(defectDimTags, oriented=False, recursive=True)
-            #     # defect_faces = [s[1] for s in defect_surfaces if s[0] == 2] ## dimension 2 surfaces only
-            #     # distf = gmsh.model.mesh.field.add("Distance")
-            #     # gmsh.model.mesh.field.setNumbers(distf, "FacesList", defect_faces)
-            #     # gmsh.model.mesh.field.setAsBackgroundMesh(0) ## not sure what this does
-            #     # tet_type = 4  # tetrahedra
-            #     # _, elem_nodes = gmsh.model.mesh.getElementsByType(tet_type)
-            #     # elem_nodes = np.array(elem_nodes).reshape(-1, 4) - 1  # zero-based indexing
-            #     # node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
-            #     # coords = node_coords.reshape(-1, 3)
-            #     # barycenters = coords[elem_nodes].mean(axis=1)
-            #     # distances = gmsh.model.mesh.field.evaluate(distf, barycenters.flatten().tolist())
-            #     # defect_cells = np.array([1 if d < self.h/10 else 0 for d in distances])
-            #     # print(f"Marked {defect_cells.sum()} / {len(defect_cells)} cells inside defect.")
-            #     # defect_cell_idx = np.nonzero(defect_cells)[0]
-            #     # entities_to_mark = [(3, int(elem)) for elem in defect_cell_idx.tolist()]
-            #     # defect_marker = gmsh.model.addPhysicalGroup(self.tdim, entities_to_mark)
-            #     #===============================================================
-            #      
-            #     gmsh.model.remove() ## Removes the activate model. 
-            #     gmsh.model.setCurrent('The Model')
-            #     defect_marker = gmsh.model.addPhysicalGroup(self.tdim, [])
-            #     gmsh.model.mesh.setPhysicalGroup(self.tdim, defect_marker, inside_tags.tolist())
-            #===================================================================
-                
-            if(viewGMSH):
-                print(f'{mat_markers=}, {antennaMat_markers=}, {defect_markers=}, {domain_marker=}, {pml_marker=}, {pec_surface_marker=}, {farfield_surface_marker=}, {antenna_surface_markers=}')
-                print(f'{matDimTags=}, {antennaMatDimTags=}, {domainDimTags=}, {pmlDimTags=}, {PEC_surfaces=}, {farfield_surface=}, {antenna_surfaces=}')
-                
-                entities = gmsh.model.getEntitiesForPhysicalGroup(3, mat_markers)
+            
+            
+            if(self.justInterpolationSubmesh):
+                ## Based on gmsh's tutorial 13, this just takes the material and makes a mesh around it
                 elem_types = []
                 elem_tags = []
                 elem_node_tags = []
                 
-                for e in entities:
-                    types, tags, nodes = gmsh.model.mesh.getElements(3, e)
-                    elem_types.extend(types)
-                    elem_tags.extend(tags)
-                    elem_node_tags.extend(nodes)
+                for marker in mat_markers:
+                
+                    entities = gmsh.model.getEntitiesForPhysicalGroup(3, marker)
+                    for e in entities:
+                        types, tags, nodes = gmsh.model.mesh.getElements(3, e)
+                        elem_types.extend(types)
+                        elem_tags.extend(tags)
+                        elem_node_tags.extend(nodes)
                 
                 used_nodes = set()
                 for nodes in elem_node_tags:
                     used_nodes.update(nodes)
                 used_nodes = list(used_nodes)
-
-                
+        
                 node_tags, node_coords, _ = gmsh.model.mesh.getNodes()
                 node_map = dict(zip(node_tags, range(len(node_tags))))
                 
@@ -787,28 +696,43 @@ class MeshInfo():
                 for t in used_nodes:
                     i = node_map[t]
                     coords.extend(node_coords[3*i:3*i+3])
-
-                
+        
                 gmsh.model.add("submesh")
-
-                gmsh.model.mesh.addNodes(
-                    3,
-                    1,
-                    used_nodes,
-                    coords
-                )
+                
+                v = gmsh.model.addDiscreteEntity(3, 1) ## just volume
+                gmsh.model.mesh.addNodes(3, v, used_nodes, coords)
                 
                 for etype, etags, enodes in zip(elem_types, elem_tags, elem_node_tags):
-                    gmsh.model.mesh.addElements(
-                        3,
-                        1,
-                        [etype],
-                        [etags],
-                        [enodes]
-                    )
-
+                    gmsh.model.mesh.addElements(3, 1, [etype], [etags], [enodes])
+        
+                gmsh.model.mesh.createTopology()
+                bnd = gmsh.model.getBoundary(gmsh.model.getEntities(3), oriented=False)
+                s = gmsh.model.addDiscreteEntity(3, 4, [e[1] for e in bnd]) ## just surface
+                gmsh.model.removeEntities([(3, v)])
+                gmsh.model.removeEntities([(3, s)])
+                includeBoundary = True
+                curveAngle = 180
+                gmsh.model.mesh.classifySurfaces(4 * pi / 180., includeBoundary, False, curveAngle * pi / 180.)
                 
+                gmsh.model.mesh.createGeometry()
+                 
+                s = gmsh.model.getEntities(2)
+                l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
+                vol = gmsh.model.geo.addVolume([l])
+                mat_markers = [gmsh.model.addPhysicalGroup(3, [vol])] ## need some physical group, even if this gives an error
+                gmsh.model.geo.synchronize()
                 
+                size = self.interpolationSubmeshSize
+                if(size < 0):
+                    size = self.h
+                
+                gmsh.option.setNumber("Mesh.CharacteristicLengthMin", size) ## just use a uniform mesh size
+                gmsh.option.setNumber("Mesh.CharacteristicLengthMax", size)
+                gmsh.model.mesh.generate(3)
+            
+            if(viewGMSH):
+                print(f'{mat_markers=}, {antennaMat_markers=}, {defect_markers=}, {domain_marker=}, {pml_marker=}, {pec_surface_marker=}, {farfield_surface_marker=}, {antenna_surface_markers=}')
+                print(f'{matDimTags=}, {antennaMatDimTags=}, {domainDimTags=}, {pmlDimTags=}, {PEC_surfaces=}, {farfield_surface=}, {antenna_surfaces=}')
                 gmsh.fltk.run() ## gives a PETSc error when run in a spack installation
                 exit()
             
@@ -840,7 +764,10 @@ class MeshInfo():
         self.meshingTime = timer() - t1 ## Time it took to make the mesh. Given to mem-time estimator
         if(self.verbosity > 0 and self.comm.rank == self.model_rank): ## start by giving some estimated calculation times/memory costs
             nloc = self.mesh.topology.index_map(self.mesh.topology.dim).size_local
-            print(f'Mesh generated in {self.meshingTime:.2e} s - {self.ncells} global cells, {nloc} local cells')
+            if(self.justInterpolationSubmesh):
+                print(f'Interpolation submesh generated in {self.meshingTime:.2e} s - {self.ncells} global cells, {nloc} local cells')
+            else:
+                print(f'Mesh generated in {self.meshingTime:.2e} s - {self.ncells} global cells, {nloc} local cells')
             sys.stdout.flush()
             
     def plotMeshPartition(self):

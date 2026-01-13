@@ -927,12 +927,13 @@ class Scatt3DProblem():
             sys.stdout.flush()
            
     #@profile
-    def makeOptVectors(self, DUTMesh=False, skipQs=False):
+    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMeshInfo=None):
         '''
         Computes the optimization vectors from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
         :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
         :param skipQs: Skip writing the actual optimization vectors
+        :param reconstructionMeshInfo: If not None, interpolates data onto this reconstruction mesh for saving
         '''
         ## First, save mesh to xdmf
         if(DUTMesh):
@@ -944,7 +945,12 @@ class Scatt3DProblem():
             FEMm = self.FEMmesh_ref
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
-            xdmf.write_mesh(meshInfo.mesh)
+            if(reconstructionMeshInfo is None):
+                xdmf.write_mesh(meshInfo.mesh)
+            else:
+                xdmf.write_mesh(reconstructionMeshInfo.mesh)
+                rmesh_WSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, ("DG", 0))
+                rmesh_Wfun = dolfinx.fem.Function(rmesh_WSpace)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
@@ -952,43 +958,72 @@ class Scatt3DProblem():
             sys.stdout.flush()
         
         ### start with the 'information' functions, which are defined on the computational meshes
-        ## save this stuff all on the regular, full mesh
-        cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.WSpace))*ufl.dx)).array
-        
-        ## save some problem/mesh data
-        FEMm.epsr.x.array[:] = FEMm.dofs_map
-        #self.epsr.name = 'dpf-map' ## can use names, but makes looking in paraview more annoying
-        xdmf.write_function(FEMm.epsr, -4)
-        FEMm.epsr.x.array[:] = cell_volumes
-        #self.epsr.name = 'Cell Volumes'
-        xdmf.write_function(FEMm.epsr, -3)
-        FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
-        #self.epsr.name = 'epsr_ref'
-        xdmf.write_function(FEMm.epsr, -2)
-        if(DUTMesh or self.dutOnRefMesh):
-            FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
-            #self.epsr.name = 'epsr_dut'
-            xdmf.write_function(FEMm.epsr, -1)
-        elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-            epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
-            mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
+        if(reconstructionMeshInfo is None):
+            ## save this stuff all on the regular, full mesh
+            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.WSpace))*ufl.dx)).array
+            
+            ## save some problem/mesh data
+            FEMm.epsr.x.array[:] = FEMm.dofs_map
+            #self.epsr.name = 'dpf-map' ## can use names, but makes looking in paraview more annoying
+            xdmf.write_function(FEMm.epsr, -4)
+            FEMm.epsr.x.array[:] = cell_volumes
+            #self.epsr.name = 'Cell Volumes'
+            xdmf.write_function(FEMm.epsr, -3)
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
+            #self.epsr.name = 'epsr_ref'
+            xdmf.write_function(FEMm.epsr, -2)
+            if(DUTMesh or self.dutOnRefMesh):
+                FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
+                #self.epsr.name = 'epsr_dut'
+                xdmf.write_function(FEMm.epsr, -1)
+            elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
+                epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
+                mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
+                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.WSpace, self.FEMmesh_DUT.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                epsr_dut.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_dataR2D)
+                epsr_dut.x.scatter_forward()
+                FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
+                #self.epsr.name = 'epsr_dut'
+                xdmf.write_function(FEMm.epsr, -1)
+        else:
+            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rmesh_WSpace))*ufl.dx)).array
+            
+            mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
             num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.WSpace, self.FEMmesh_DUT.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-            epsr_dut.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_dataR2D)
-            epsr_dut.x.scatter_forward()
-            FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
-            #self.epsr.name = 'epsr_dut'
-            xdmf.write_function(FEMm.epsr, -1)
+            interpolation_data = dolfinx.fem.create_interpolation_data(rmesh_WSpace, FEMm.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             
+            FEMm.epsr.x.array[:] = FEMm.dofs_map
+            rmesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
+            rmesh_Wfun.x.scatter_forward()
+            xdmf.write_function(rmesh_Wfun, -4) ## dofs map
+            rmesh_Wfun.x.array[:] = cell_volumes
+            xdmf.write_function(rmesh_Wfun, -3) ## cell volumes
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
+            rmesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
+            rmesh_Wfun.x.scatter_forward()
+            xdmf.write_function(rmesh_Wfun, -2) ## epsr_ref
+            if(DUTMesh or self.dutOnRefMesh):
+                FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
+                rmesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
+                rmesh_Wfun.x.scatter_forward()
+                xdmf.write_function(rmesh_Wfun, -1) ## epsr_dut
+            elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
+                interpolation_data = dolfinx.fem.create_interpolation_data(rmesh_WSpace, self.FEMmesh_DUT.WSpace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                rmesh_Wfun.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_data)
+                rmesh_Wfun.x.scatter_forward()
+                xdmf.write_function(rmesh_Wfun, -1) ## epsr_dut     
+                                    
         if(not DUTMesh and not skipQs): ## Do the interpolation to find qs, then save them
             antCount = max(meshInfo.N_antennas, 1) # if no antennas, still save something
+            Em_ref = dolfinx.fem.Function(FEMm.VSpace)
+            En = dolfinx.fem.Function(FEMm.VSpace)
             for nf in range(self.Nf):
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 if( (self.verbosity > 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                     print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
-                Em_ref = dolfinx.fem.Function(FEMm.VSpace)
-                En = dolfinx.fem.Function(FEMm.VSpace)
                 for m in range(antCount): 
                     self.readSol(Em_ref, ref=True, freq=nf, excitation=m)
                     for n in range(antCount):
@@ -1007,11 +1042,40 @@ class Scatt3DProblem():
                                 En.x.scatter_forward()
                         else:
                             self.readSol(En, ref=True, freq=nf, excitation=n)
-                        q = dolfinx.fem.Function(FEMm.WSpace) ## calculate q on the reference mesh
-                        q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.WSpace)) *ufl.dx)
-                        q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
-                        dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
-                        q.x.scatter_forward()
+                        if(reconstructionMeshInfo is None):
+                            q = dolfinx.fem.Function(FEMm.WSpace) ## calculate q on the reference mesh
+                            q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.WSpace)) *ufl.dx)
+                            q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
+                            dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
+                            q.x.scatter_forward()
+                        else: ## interpolate the E-fields directly to the reconstruction mesh, then calculate q
+                            if(nf == 0 and n == 0): ## just set up once - first, make the functions spaces and interpolate
+                                curl_element = basix.ufl.element('N1curl', reconstructionMeshInfo.mesh.basix_cell(), FEMm.fem_degree)
+                                rmesh_VSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, curl_element)
+                                rmesh_En = dolfinx.fem.Function(rmesh_VSpace)
+                                
+                                rmesh_Em_ref = dolfinx.fem.Function(rmesh_VSpace)
+                                mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
+                                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+                                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                                interpolation_data_ref2rec = dolfinx.fem.create_interpolation_data(rmesh_VSpace, FEMm.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                                if(not self.dutOnRefMesh): ## En is on the DUT mesh
+                                    interpolation_data_dut2rec = dolfinx.fem.create_interpolation_data(rmesh_VSpace, self.FEMmesh_DUT.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                            
+                            rmesh_Em_ref.interpolate_nonmatching(Em_ref, cells, interpolation_data=interpolation_data_ref2rec)
+                            rmesh_Em_ref.x.scatter_forward()
+                            if(self.dutOnRefMesh): ## En is on the DUT mesh
+                                rmesh_En.interpolate_nonmatching(En, cells, interpolation_data=interpolation_data_ref2rec)
+                            else:
+                                rmesh_En.interpolate_nonmatching(En, cells, interpolation_data=interpolation_data_dut2rec)
+                            rmesh_En.x.scatter_forward()
+                            
+                            ## then, calculate as before
+                            q = dolfinx.fem.Function(rmesh_WSpace)
+                            q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(rmesh_En, rmesh_Em_ref)* ufl.conj(ufl.TestFunction(rmesh_WSpace)) *ufl.dx)
+                            q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
+                            dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
+                            q.x.scatter_forward()
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}' ## it turns out names can make it more of a pain than using timesteps
                         xdmf.write_function(q, nf*antCount*antCount + m*antCount + n)
@@ -1349,10 +1413,9 @@ class Scatt3DProblem():
         
     def calcNearField(self, reference=True, direction = 'forward', FEKOcomp=True, showPlots = True):
         '''
-        Computes + plots the near-field along a line, using interpolation. Compares to miepython's e_near, which is untested. Should still be similar (for farfield test case)
+        Computes + plots the near-field along a line, using interpolation. Compares to a FEKO simulation for epsr=2 and a=0.33.
         Returns array of near-field values calculated and corresponding FEKO values. For epsr = 2 and other matching settings
         :param reference: Whether this is being computed for the DUT case or the reference
-        :param direction: 'forward' for on-axis (z) scattering, 'side' for sideways (y) scattering
         :param FEKOcomp: Also plots a comparison with FEKO results
         '''
         t1 = timer()
@@ -1368,167 +1431,144 @@ class Scatt3DProblem():
 
         ## also compare internal electric fields inside the sphere, at distances rs
         numpts = 1001
-        rs = np.linspace(0, FEMm.meshInfo.PML_radius*.99, numpts)
-        negrs = np.linspace(-1*FEMm.meshInfo.PML_radius*.99, 0, numpts)
-        enears = np.zeros((np.size(rs), 3), dtype=complex)
-        enearsbw = np.zeros((np.size(rs), 3), dtype=complex) ## backward (I think)
-        
-        ### find the simulated values for those radii, at some angle
-        points = np.zeros((3, numpts*2))
-        if(direction == 'forward'):
-            points[2] = np.hstack((negrs, rs)) ## this should be the forward scattering
-            if(FEKOcomp):
-                FEKOdat = np.loadtxt('TestStuff/ForwardScatt.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
-                FEKOpos = FEKOdat[:, 2]
-        elif(direction == 'side'):
-            points[1] = np.hstack((negrs, rs)) ## this should be the side-scattering (y-axis)
-            if(FEKOcomp):
-                FEKOdat = np.loadtxt('TestStuff/SidewaysScatt.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
-                FEKOpos = FEKOdat[:, 1]
-        
-        if(FEKOcomp):
-            FEKO_Es = np.zeros((np.shape(FEKOdat)[0], 3), dtype=complex)
-            FEKO_Es[:, 0] = FEKOdat[:, 3] + 1j*FEKOdat[:, 4] - 1 ## minus 1 to remove incident field?
-            FEKO_Es[:, 1] = FEKOdat[:, 5] + 1j*FEKOdat[:, 6]
-            FEKO_Es[:, 2] = FEKOdat[:, 7] + 1j*FEKOdat[:, 8]
-        
+        posvec = np.linspace(-FEMm.meshInfo.PML_radius*.99, FEMm.meshInfo.PML_radius*.99, numpts)
+        freq = self.fvec[0]
+        lambdat = c0/freq
+        k = 2*pi/lambdat
+        m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
+        a = FEMm.meshInfo.object_scale ## radius
+        for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## plot scattering along the x-, y-, and z- axes
+            ### first load the FEKO values
+            points = np.zeros((3, numpts))
+            points[index] = posvec
             
-        bb_tree = dolfinx.geometry.bb_tree(FEMm.meshInfo.mesh, FEMm.meshInfo.mesh.topology.dim)
-        cells = []
-        points_on_proc = [] ## points on this processor
-        cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, points.T) # Find cells whose bounding-box collide with the the points
-        colliding_cells = dolfinx.geometry.compute_colliding_cells(FEMm.meshInfo.mesh, cell_candidates, points.T) # Choose one of the cells that contains the point
-        idx_on_proc_list = [] ## list of indices on the MPI process
-        for i, point in enumerate(points.T):
-            if len(colliding_cells.links(i)) > 0:
-                points_on_proc.append(point)
-                idx_on_proc_list.append(i)
-                cells.append(colliding_cells.links(i)[0])
-
-        E_part = solFun.eval(points_on_proc, cells) ## less/non-interpolated
-        E_parts = self.comm.gather(E_part, root=self.model_rank) ### list of lists of E-fields at the indices
-        indices = self.comm.gather(idx_on_proc_list, root=self.model_rank) ## list of lists of indices of contained points
-        idx_found = [] ## indices that have already been found
-        E_values = np.zeros((numpts*2, 3), dtype=complex)
-        if (self.comm.rank == 0): ## use the first-found E_values where processes meet (have not checked, but presumably the values should be the same for all processes) - discard any indices that have been found before
-            for b in range(len(indices)): ## iterate over the lists of lists
-                if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in, and not sure how the list of E-fields would look like, might not need this conditional - never seen it yet)
-                    print('onlyone', indices[b])
-                    ##try this stuff if I get an error
-                    #idx_found = idx_found + indices[b] ## add it to found list
-                    #E_values[indices[b][0], :] = E_parts[b][:] ## use this value for the electric field
-                    print(E_parts[b])
-                elif(np.size(indices[b]) == 0): # if no elements on a process
-                    continue
-                for k in range(len(indices[b])): ## check each index in the list
-                    idx = indices[b][k] # the index
-                    if(idx not in idx_found): ## if the index had not already been found
-                        idx_found = idx_found + [idx] ## add it to found list
-                        E_values[idx, :] = E_parts[b][k][:] ## use this value for the electric field
-        
-        if(self.comm.rank == 0 and self.verbosity>1):
-            print(f'done, in {timer()-t1:.3f} s')
-            sys.stdout.flush()
-        
-        if(showPlots and self.comm.rank == self.model_rank): ## generate miepython values if necessary
-            fig1 = plt.figure()
-            ax1 = plt.subplot(1, 1, 1)
-            ax1.grid(True)
-            fig2 = plt.figure()
-            ax2 = plt.subplot(1, 1, 1)
-            ax2.grid(True)
-            fig3 = plt.figure()
-            ax3 = plt.subplot(1, 1, 1)
-            ax3.grid(True)
-            
-            m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
-            freq = self.fvec[0]
-            lambdat = c0/freq
-            k = 2*pi/lambdat
-            x = k*FEMm.meshInfo.object_scale
-            coefs = miepython.core.coefficients(m, x, internal=True)
-            def planeWaveSph(x):
-                '''
-                Plane wave to be subtracted from miepython, so only the scattered field is left. Converts to r-, theta-, phi- pols
-                :param x: some given position you want to find the field on
-                :param k: wavenumber
-                '''
-                if(direction == 'forward'): ## along the z-axis
-                    E_pw = np.array([self.PW_pol[1], self.PW_pol[2], self.PW_pol[0]])
-                elif(direction == 'side'): ## along x
-                    E_pw = np.array([self.PW_pol[2], self.PW_pol[1], self.PW_pol[0]])
-                k_pw = k*self.PW_dir ## z-directed
-                E_pw = E_pw*np.exp(-1j*np.dot(k_pw, x))
-                return E_pw
-            for q in range(len(rs)):
-                r = rs[q]
-                nr = -1*negrs[q] ## still positive, just in other direction due to angle
-                if(np.abs(r)<FEMm.meshInfo.object_scale): ## miepython seems to include the incident field inside the sphere
-                    t = 1
-                else:
-                    t = 0
-                if(np.abs(nr)<FEMm.meshInfo.object_scale): ## miepython seems to include the incident field inside the sphere
-                    t2 = 1
-                else:
-                    t2 = 0
-                if(direction == 'forward'):
-                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, r, pi, pi/2) - t*planeWaveSph(points[:, q])
-                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, nr, 0, pi/2) - t2*planeWaveSph(points[:, q+numpts])
-                elif(direction == 'side'):
-                    enears[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, r, pi/2, pi/2) - t*planeWaveSph(points[:, q])
-                    enearsbw[q] = miepython.field.e_near(coefs, 2*pi/k, 2*FEMm.meshInfo.object_scale, m, nr, -pi/2, pi/2) - t2*planeWaveSph(points[:, q+numpts])
+            if(FEKOcomp):
+                FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
+                FEKOpos = FEKOdat[:, index]
                 
-            enears = np.vstack((enearsbw, enears))
-            ## plot components
-            ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 0]), label='r-comp. miepython', linestyle = ':', color = 'red')
-            ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 1]), label='theta-comp. miepython', linestyle = ':', color = 'blue')
-            ax1.plot(np.hstack((negrs, rs)), np.abs(enears[:, 2]), label='phi-comp. miepython', linestyle = ':', color = 'green')
-            ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 0]), label='x-comp.', color = 'red')
-            ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 1]), label='y-comp.', color = 'blue')
-            ax1.plot(np.hstack((negrs, rs)), np.abs(E_values[:, 2]), label='z-comp.', color = 'green')
-            ## plot magnitudes
-            ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(enears[:, 0])**2+np.abs(enears[:, 1])**2+np.abs(enears[:, 2])**2), label='miepython')
-            ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(E_values[:, 0])**2+np.abs(E_values[:, 1])**2+np.abs(E_values[:, 2])**2), label='simulation')
-            #ax2.plot(np.hstack((negrs, rs)), np.sqrt(np.abs(E_values2[:, 0])**2+np.abs(E_values2[:, 1])**2+np.abs(E_values2[:, 2])**2), label='simulation, interpolated')
-            ## plot real/imags
-            ax3.plot(np.hstack((negrs, rs)), np.real(E_values[:, 0]), label='sim., x-pol real')
-            ax3.plot(np.hstack((negrs, rs)), np.imag(E_values[:, 0]), label='sim., x-pol imag.')
-            ax3.plot(np.hstack((negrs, rs)), np.real(enears[:, 2]), label='miepython, phi-pol real', linestyle = ':')
-            ax3.plot(np.hstack((negrs, rs)), np.imag(enears[:, 2]), label='miepython, phi-pol imag.', linestyle = ':')
-            ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label='FEKO, x-pol imag.', linestyle = '--')
-            ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO, x-pol real', linestyle = '--')
+                FEKO_E_i = np.transpose(np.outer(self.PW_pol, np.exp(1j*k*np.dot(self.PW_dir, np.transpose(FEKOdat[:, 0:3])))))
+                
+                FEKO_Es = np.zeros((np.shape(FEKOdat)[0], 3), dtype=complex)
+                FEKO_Es[:, 0] = FEKOdat[:, 3] + 1j*FEKOdat[:, 4]
+                FEKO_Es[:, 1] = FEKOdat[:, 5] + 1j*FEKOdat[:, 6]
+                FEKO_Es[:, 2] = FEKOdat[:, 7] + 1j*FEKOdat[:, 8]
+                
+                FEKO_Es = FEKO_Es - FEKO_E_i ## remove the incident wave
+            ## then find the simulated values
+                
+            bb_tree = dolfinx.geometry.bb_tree(FEMm.meshInfo.mesh, FEMm.meshInfo.mesh.topology.dim)
+            cells = []
+            points_on_proc = [] ## points on this processor
+            cell_candidates = dolfinx.geometry.compute_collisions_points(bb_tree, points.T) # Find cells whose bounding-box collide with the the points
+            colliding_cells = dolfinx.geometry.compute_colliding_cells(FEMm.meshInfo.mesh, cell_candidates, points.T) # Choose one of the cells that contains the point
+            idx_on_proc_list = [] ## list of indices on the MPI process
+            for i, point in enumerate(points.T):
+                if len(colliding_cells.links(i)) > 0:
+                    points_on_proc.append(point)
+                    idx_on_proc_list.append(i)
+                    cells.append(colliding_cells.links(i)[0])
+    
+            E_part = solFun.eval(points_on_proc, cells) ## it is possible to interpolate here, though that mostly helps for lower degree solutions
+            E_parts = self.comm.gather(E_part, root=self.model_rank) ### list of lists of E-fields at the indices
+            indices = self.comm.gather(idx_on_proc_list, root=self.model_rank) ## list of lists of indices of contained points
+            idx_found = [] ## indices that have already been found
+            E_values = np.zeros((numpts, 3), dtype=complex)
+            if (self.comm.rank == 0): ## use the first-found E_values where processes meet (have not checked, but presumably the values should be the same for all processes) - discard any indices that have been found before
+                for b in range(len(indices)): ## iterate over the lists of lists
+                    if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in, and not sure how the list of E-fields would look like, might not need this conditional - never seen it yet)
+                        print('onlyone', indices[b])
+                        ##try this stuff if I get an error
+                        #idx_found = idx_found + indices[b] ## add it to found list
+                        #E_values[indices[b][0], :] = E_parts[b][:] ## use this value for the electric field
+                        print(E_parts[b])
+                    elif(np.size(indices[b]) == 0): # if no elements on a process
+                        continue
+                    for o in range(len(indices[b])): ## check each index in the list
+                        idx = indices[b][o] # the index
+                        if(idx not in idx_found): ## if the index had not already been found
+                            idx_found = idx_found + [idx] ## add it to found list
+                            E_values[idx, :] = E_parts[b][o][:] ## use this value for the electric field
             
-            ax1.legend()
-            ax2.legend()
-            ax3.legend()
-            ax1.set_xlabel('Radius [m]')
-            ax2.set_xlabel('Radius [m]')
-            ax3.set_xlabel('Radius [m]')
-            ax1.set_ylabel('E-field Components')
-            ax2.set_ylabel('E-field Magnitude')
-            ax3.set_ylabel('E-field Components')
-            ax1.set_title('Absolute values of components')
-            ax2.set_title('E-field magnitudes')
-            ax3.set_title('Real/imag. parts of incident pol.')
+            if(showPlots and self.comm.rank == self.model_rank): ## make the plots
+                fig1 = plt.figure()
+                ax1 = plt.subplot(1, 1, 1)
+                ax1.grid(True)
+                fig2 = plt.figure()
+                ax2 = plt.subplot(1, 1, 1)
+                ax2.grid(True)
+                fig3 = plt.figure()
+                ax3 = plt.subplot(1, 1, 1)
+                ax3.grid(True)
+                
+                import sphere_scattering ## Mie theory calculations
+                Qinc, Qsca, Qint = sphere_scattering.ComputeQcoefficients(k, a, self.material_epsrs[0], self.material_murs[0], theta0=1e-6, phi0=0, E0_theta=1, E0_phi=0)
+                E = sphere_scattering.ComputeField(Qinc, Qsca, Qint, k, a, points, self.material_epsrs[0], self.material_murs[0])
+                E = np.transpose(np.conjugate(E))
+                E_i = np.transpose(np.outer(self.PW_pol, np.exp(1j * k*np.dot(self.PW_dir, points))))
+                E = E - E_i ## to remove incident wave?
+                
+                ## plot components
+                ax1.plot(posvec, np.abs(E_values[:, 0]), label='x-comp.', color = 'red')
+                ax1.plot(posvec, np.abs(E_values[:, 1]), label='y-comp.', color = 'blue')
+                ax1.plot(posvec, np.abs(E_values[:, 2]), label='z-comp.', color = 'green')
+                ## plot magnitudes
+                ax2.plot(posvec, np.sqrt(np.abs(E_values[:, 0])**2+np.abs(E_values[:, 1])**2+np.abs(E_values[:, 2])**2), label='simulation')
+                ## plot real/imags
+                ax3.plot(posvec, np.real(E_values[:, 0]), label='sim., x-pol real')
+                ax3.plot(posvec, np.imag(E_values[:, 0]), label='sim., x-pol imag.')
+                if(name=='z'): ## different plane-wave directions, so switch for plotting
+                    posvec = -posvec
+                    FEKOpos = -FEKOpos
+                ## plot components
+                ax1.plot(posvec, np.abs(E[:, 0]), label='x-comp. mie theory', linestyle = ':', color = 'red')
+                ax1.plot(posvec, np.abs(E[:, 1]), label='y-comp. mie theory', linestyle = ':', color = 'blue')
+                ax1.plot(posvec, np.abs(E[:, 2]), label='z-comp. mie theory', linestyle = ':', color = 'green')
+                ## plot magnitudes
+                ax2.plot(posvec, np.sqrt(np.abs(E[:, 0])**2+np.abs(E[:, 1])**2+np.abs(E[:, 2])**2), label='mie theory')
+                ## plot real/imags
+                ax3.plot(posvec, np.real(E[:, 0]), label='mie theory, x-pol real', linestyle = ':')
+                ax3.plot(posvec, np.imag(E[:, 0]), label='mie theory, x-pol imag.', linestyle = ':')
+                ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label='FEKO, x-pol imag.', linestyle = '--')
+                ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO, x-pol real', linestyle = '--')
+                
+                #ax3.plot(posvec, np.real(E_i), label='Ei, x-pol real', linestyle = '--')
+                #ax3.plot(posvec, np.imag(E_i), label='Ei, x-pol imag', linestyle = '--')
+                
+                ax1.legend()
+                ax2.legend()
+                ax3.legend()
+                ax1.set_xlabel('Radius [m]')
+                ax2.set_xlabel('Radius [m]')
+                ax3.set_xlabel('Radius [m]')
+                ax1.set_ylabel('E-field Components')
+                ax2.set_ylabel('E-field Magnitude')
+                ax3.set_ylabel('E-field Components')
+                ax1.set_title(name+'-Axis: Absolute values of components')
+                ax2.set_title(name+'-Axis: E-field magnitudes')
+                ax3.set_title(name+'-Axis: Real/imag. parts of incident pol.')
+                
+                ax1.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
+                ax1.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
+                ax2.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
+                ax2.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
+                ax3.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
+                ax3.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
+                ax1.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
+                ax1.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
+                ax2.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
+                ax2.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
+                ax3.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
+                ax3.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
+                fig1.tight_layout()
+                fig2.tight_layout()
+                fig3.tight_layout()
+                #plt.show()
+                
+        if(self.comm.rank == 0 and self.verbosity>1):
+                print(f'done, in {timer()-t1:.3f} s')
+                sys.stdout.flush()
             
-            ax1.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
-            ax1.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
-            ax2.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
-            ax2.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
-            ax3.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
-            ax3.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
-            ax1.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
-            ax1.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
-            ax2.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
-            ax2.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
-            ax3.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
-            ax3.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
-            fig1.tight_layout()
-            fig2.tight_layout()
-            fig3.tight_layout()
-            #plt.show()
-            
-        if(FEKOcomp and not showPlots and self.comm.rank==self.model_rank): ## can't find bounding boxes for the exact points in the FEKO values, so interpolate
+        if(FEKOcomp and not showPlots and self.comm.rank==self.model_rank and index==1): ## can't find bounding boxes for the exact points in the FEKO values, so interpolate
             Erealsx = np.real(E_values[:, 0])
             Eimagsx = np.imag(E_values[:, 0])
             Ereturns = np.interp(FEKOpos, points[1], Erealsx) + 1j*np.interp(FEKOpos, points[1], Eimagsx)

@@ -23,6 +23,7 @@ import psutil, threading, os, time
 from timeit import default_timer as timer
 import scipy
 import builtins
+import meshMaker
 
 def print(*args, **kwargs):
     return builtins.print(*args, flush=True, **kwargs)
@@ -442,7 +443,7 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshOptions={'doIt': False}):
+def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
@@ -453,7 +454,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     :param onlyNAntennas: Use indices such that it is like we only had N antennas to measure with. This will round. If 0, uses all data
     :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells. This is to keep the matrix so small it can be computed in memory
     :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
-    :param reconstructionMeshOptions: If 'doIt' is True, rather than performing the reconstruction on the reference mesh, creates a new 'reconstruction mesh' around the object's location. This mesh still contains the object's geometry, though not the defect's. (This is so that the reconstruction can be done on a mesh of arbitrary mesh size/etc properties)
+    :param reconstructionMeshInfo: If not None, should be a MeshInfo of the reconstruction mesh. Then, saved data will be interpolated onto this mesh for the reconstruction.
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -525,7 +526,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             
             idxOrig = mesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
             dofs = WSpace.dofmap.index_map ## has info about dofs on each process
-            
+        
         
         ## load in the problem data
         print('data loaded in')
@@ -536,6 +537,10 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idxOrig]
             epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idxOrig]
             N = len(cell_volumes)
+            
+            if(not reconstructionMeshInfo is None): ## instead use the reconstruction mesh, and interpolate the original epsrs
+                rec_WSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, ("DG", 0))
+                cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
             
             idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
             
@@ -578,19 +583,24 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                     for n in range(N_antennas): ## receiving index
                         i = nf*N_antennas*N_antennas + m*N_antennas + n
                         if(i in idxNC):
-                            Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
-                            
-                            if(reconstructionMeshOptions['doIt']): ## create a reconstruction mesh instead
-                                ## make the reconstruction mesh
-                                
+                            if(not reconstructionMeshInfo is None): ## use the reconstruction mesh instead
+                                Apart = dolfinx.fem.Function(WSpace)
+                                Apart.x.array[:] = np.array(f['Function']['real_f'][str(i)]).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()[idxOrig]
                                 ## create interpolation from the saved mesh to this one
+                                rec_cells = dolfinx.fem.Function(rec_WSpace)  ## need to interpolate onto the ref mesh
+                                mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
+                                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+                                cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                                interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                                rec_cells.interpolate_nonmatching(Apart, cells, interpolation_data=interpolation_data)
                                 
-                                ## A matrix from interpolation
-                                pass
-                            
-                            
-                            A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                A[indexCount,:] = rec_cells.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                            else:
+                                Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
+                                A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                
                             indexCount +=1
+                            
             del Apart ## maybe this will help with clearing memory
         gc.collect()
         
@@ -606,9 +616,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         ## prepare the solution/output file
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
-        
-        if(reconstructionMeshOptions['doIt']): ## instead use the interpolation mesh, and interpolate the original epsrs
-            pass
         
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='w')  
         f.write_mesh(mesh)
@@ -833,13 +840,13 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         print()
         errs = [] ## in case I want to return errors
         print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
-        rcond = 10**-1.8 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
+        rcond = 10**-1.85 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
         
         timestep = 3
         if(not returnResults or timestep in returnResults): ## if it is empty, or requested
-            x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])#np.linalg.pinv(A_ap, rcond = rcond) @ b
+            x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b #numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             cells.x.array[:] = x_temp + 0j
             f.write_function(cells, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
@@ -848,7 +855,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(not onlyAPriori):
             timestep = 4
             if(not returnResults or timestep in returnResults): ## if it is empty, or requested
-                x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])#np.linalg.pinv(A, rcond = rcond) @ b
+                x_temp[idx_non_pml] = np.linalg.pinv(A, rcond = rcond) @ b #numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 cells.x.array[:] = x_temp + 0j
                 f.write_function(cells, 4)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])

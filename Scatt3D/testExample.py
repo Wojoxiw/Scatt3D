@@ -28,27 +28,22 @@ import scatteringProblem
 import memTimeEstimation
 import postProcessing
 
-
-
-
-
-
-
 from scattnlay import scattnlay, fieldnlay
 
 # Sphere and wave parameters
 wavelength = 1.0
-x = 2*np.pi * 0.33 / wavelength   # size parameter for radius=0.5
+a = .0098
+x = 2*np.pi * a / wavelength   # size parameter for radius=0.5
 m = 2.0 + 0.0j                    # refractive index
 
 # Grid in x-z plane
-Nx = 20000
-x_vals = np.linspace(-20, 20, Nx)
+Nx = 200
+x_vals = np.linspace(-20, 20, Nx)*a
 
 
 
 # Call fieldnlay: returns (terms, E, H)
-terms, E, H = fieldnlay(np.zeros(1)+x, np.zeros(1)+m, x_vals, np.zeros_like(x_vals), np.zeros_like(x_vals), mp=True)
+terms, E, H = fieldnlay(np.zeros(1)+x, np.zeros(1)+m, np.zeros_like(x_vals), x_vals, np.zeros_like(x_vals),  mp=True)
 print(np.shape(E))
 # E has shape (Npoints, 3) with complex field vector at each point
 Ex = E[:,0]
@@ -61,9 +56,14 @@ E2 = np.sum(np.abs(E)**2, axis=1)
 
 # Plot
 plt.figure(figsize=(6,6))
-plt.plot(x_vals, E[:,0])
-plt.plot(x_vals, E[:,1])
-plt.plot(x_vals, E[:,2])
+plt.plot(x_vals, np.real(E[:,0]), color='red')
+plt.plot(x_vals, np.real(E[:,1]), color='blue')
+plt.plot(x_vals, np.real(E[:,2]), color='green')
+plt.plot(x_vals, np.imag(E[:,0]), linestyle = ':', color='red')
+plt.plot(x_vals, np.imag(E[:,1]), linestyle = ':', color='blue')
+plt.plot(x_vals, np.imag(E[:,2]), linestyle = ':', color='green')
+plt.axvline(x=a, color='gray')
+plt.axvline(x=-a, color='gray')
 plt.xlabel('x')
 plt.ylabel('E2')
 plt.title('Electric field intensity |E|^2 around sphere')

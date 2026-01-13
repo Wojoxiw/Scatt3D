@@ -75,24 +75,27 @@ if __name__ == '__main__':
             
     def testRun(h = 1/2, degree=1): ## A quick test run to check it works. Default settings make this run in seconds
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.46, dome_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, computeBoth=True, Nf=1, fem_degree=degree, E_ref_anim=True)
         prevRuns.memTimeAppend(prob)
         
+        rmeshInfo = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', justInterpolationSubmesh=True, reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
+        prob.makeOptVectors(reconstructionMeshInfo = rmeshInfo)
+        
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+        mesh_settings = {'h': h, 'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
         if(dutOnRefMesh):
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, verbosity = verbosity, h=h, **mesh_settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh',justInterpolationSubmesh = True, reference = False, verbosity = verbosity, **mesh_settings)
         else:
-            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, h=h, **mesh_settings)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **mesh_settings)
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         #refMesh.plotMeshPartition()
         if(not dutOnRefMesh):
-            dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, h=h, **mesh_settings)
+            dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **mesh_settings)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
         else:
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
@@ -611,11 +614,48 @@ if __name__ == '__main__':
                     plt.ylabel('Reconstruction Error')
                     plt.title(f'Degree {degree} reconstruction errors')
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
+                    
+    def reconstructionMeshSizeTesting(sim = True): ## Runs the basic simulation, performing the reconstruction with different mesh sizes to see what seems best. sim=True to run the simulation, False for the reconstructions
+        mesh_settings={'h': 1/3.5, 'N_antennas': 9, 'viewGMSH': True, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5}
+        if(sim):
+            testFullExample(degree=3, dutOnRefMesh=True, antennaType='patch', runName='reconstructionMeshSizeTesting', 
+                            mesh_settings=mesh_settings,
+                            prob_settings={'antenna_mat_epsrs': [2.1*(1 + 0j), 4.4*(1 - .11/4.4j)]}) ## 2.1 in the coax, 4.4 in the patch substrate
+            if(comm.rank == model_rank):
+                print('Simulation part complete.')
+        else: ## reconstruct, then make the plot(s)
+            errs = []
+            oh = np.linspace(2, 10, 0.25)
+            for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
+                rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+                recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
+                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSizeoh{oh}', onlyAPriori=False, returnResults=[3,4,25,28], reconstructionMeshInfo=recMesh))
+            
+                if(comm.rank == model_rank):
+                    fig = plt.figure()
+                    ax1 = plt.subplot(1, 1, 1)
+                    
+                    ax1.plot(oh, errs[:, 0], label='SVD_ap')
+                    ax1.plot(oh, errs[:, 1], label='SVD')
+                    ax1.plot(oh, errs[:, 2], label='spgl lasso_ap')
+                    ax1.plot(oh, errs[:, 3], label='spgl lasso')
+                     
+                    ax1.legend()
+                    ax1.grid(True)
+                    plt.xlabel(r'1/Mesh Size (in $\lambda$)')
+                    plt.ylabel('Reconstruction Error')
+                    plt.title(f'Reconstruction errors by Mesh Size')
+                    plt.savefig(folder+runName+f'reconstructionMeshSizes.png')
+            if(comm.rank == model_rank):
+                print('Plotting complete.')
     
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
+    
+    reconstructionMeshSizeTesting()
+    #reconstructionMeshSizeTesting(False)
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
@@ -628,11 +668,12 @@ if __name__ == '__main__':
     #runName = 'testRunSmall' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
-    runName = 'testRunD3'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'Nf': 11})
-    
+    #===========================================================================
+    # runName = 'testRunD3'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    #                 prob_settings={'Nf': 11})
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowerBandwidth' ## roughly where the S11 of the patch is below 0.8
@@ -641,14 +682,12 @@ if __name__ == '__main__':
     #                 prob_settings={'freqs': np.linspace(9.1e9, 10.8e9, 11)}) ## roughly where the S11 of the patch is below 0.8
     #===========================================================================
     
-    
     #===========================================================================
     # runName = 'testRunD3EvenLowerBandwidth' ## roughly where the S11 of the patch is below 0.6
     # testFullExample(h=1/3, degree=3, runName=runName,
     #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
     #                 prob_settings={'freqs': np.linspace(9.4e9, 10.32e9, 11)}) 
     #===========================================================================
-    
     
     #===========================================================================
     # runName = 'testRunPMLisPEC'
@@ -669,7 +708,7 @@ if __name__ == '__main__':
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall_ypol', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
     
@@ -695,11 +734,11 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTestd3' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    #runName = 'patchPatternTestd3' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
     #testPatchPattern(h=1/3.66, degree=3, freqs = np.linspace(10e9, 12e9, 1), name=runName, showPlots=True)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
-    runName = 'testingComplexObject' ## h=1/8
+    #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)
     #postProcessing.solveFromQs(folder+runName)
     
