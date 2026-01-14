@@ -636,7 +636,7 @@ if __name__ == '__main__':
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
                 rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSizeoh{oh}', onlyAPriori=False, returnResults=[3,4,25,28], reconstructionMeshInfo=recMesh))
+                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_h{h}', onlyAPriori=False, returnResults=[3,4,25,28], reconstructionMeshInfo=recMesh))
             
                 if(comm.rank == model_rank):
                     fig = plt.figure()
