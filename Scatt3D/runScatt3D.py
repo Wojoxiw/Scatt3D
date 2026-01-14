@@ -616,6 +616,7 @@ if __name__ == '__main__':
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
                     
     def reconstructionMeshSizeTesting(sim = True): ## Runs the basic simulation, performing the reconstruction with different mesh sizes to see what seems best. sim=True to run the simulation, False for the reconstructions
+        runName='reconstructionMeshSizeTesting'
         Nants = 9
         mesh_settings={'h': 1/3.5, 'N_antennas': Nants, 'viewGMSH': False, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5}
         if(sim):
@@ -624,7 +625,7 @@ if __name__ == '__main__':
                 epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
                 epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
                 epsrs.append(2.1*(1 - 0j)) ## coax
-            testFullExample(degree=3, dutOnRefMesh=True, antennaType='patch', runName='reconstructionMeshSizeTesting', 
+            testFullExample(degree=3, dutOnRefMesh=True, antennaType='patch', runName=runName, 
                             mesh_settings=mesh_settings,
                             prob_settings={'antenna_mat_epsrs': epsrs}) ## 4.4 in the patch substrate, 2.1 in the coax
             if(comm.rank == model_rank):
@@ -658,10 +659,10 @@ if __name__ == '__main__':
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
-    reconstructionErrorTestPlots(False)
+    #reconstructionErrorTestPlots(False)
     
     #reconstructionMeshSizeTesting()
-    #reconstructionMeshSizeTesting(False)
+    reconstructionMeshSizeTesting(False)
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
