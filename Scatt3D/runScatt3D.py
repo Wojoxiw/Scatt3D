@@ -715,6 +715,8 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
     
@@ -727,7 +729,7 @@ if __name__ == '__main__':
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall_ypol', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
     
