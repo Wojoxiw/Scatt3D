@@ -543,26 +543,31 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                 mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
                 num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
                 cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cellData, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+                interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
                 
                 cellData.x.array[:] = dofs_map
                 rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
                 dofs_map = rec_cellData.x.array[:]
                 
                 cellData.x.array[:] = epsr_ref
+                #print(epsr_ref, np.mean(np.real(epsr_ref)), np.mean(np.imag(epsr_ref)), np.min(epsr_ref))
                 rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
                 epsr_ref = rec_cellData.x.array[:]
+                #print(epsr_ref, np.mean(np.real(epsr_ref)), np.mean(np.imag(epsr_ref)), np.min(epsr_ref))
                 
                 cellData.x.array[:] = epsr_dut
                 rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
                 epsr_dut = rec_cellData.x.array[:]
                 
                 cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
-                cellData = rec_cellData
+                cellData = dolfinx.fem.Function(rec_WSpace)
+                idx_non_pml = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be no PML in the reconstruction mesh
+            else:
+                idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
             
             N = len(cell_volumes)
             
-            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
+            
             
             #===================================================================
             # midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
@@ -617,13 +622,14 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         print(f'all data loaded in, {len(idxNC)}/{Nb} rows used')
         
-        
-        #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
-        idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
+        if(not reconstructionMeshInfo is None):
+            idx_ap = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be just the object in the reconstruction mesh
+        else:
+            #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
+            idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
         A_ap = A[:, np.nonzero(np.real(dofs_map[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
-        print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells')
+        print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells, {np.size(idx_ap)} in-object cells')
         print('shape of b:', np.shape(b))
-        print('in-object cells:', np.size(idx_ap))
         
         ## prepare the solution/output file
         solutionFile = problemName+'post-process'+solutionName+'.xdmf'
@@ -633,6 +639,8 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             f.write_mesh(reconstructionMeshInfo.mesh)
         else:
             f.write_mesh(mesh)
+        cellData.x.array[:] = dofs_map + 0j
+        f.write_function(cellData, -3)
         cellData.x.array[:] = epsr_ref + 0j
         f.write_function(cellData, -2)
         cellData.x.array[:] = epsr_dut + 0j

@@ -636,25 +636,23 @@ if __name__ == '__main__':
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
                 rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_h{h}', onlyAPriori=False, returnResults=[3,4,25,28], reconstructionMeshInfo=recMesh))
-            
-                if(comm.rank == model_rank):
-                    fig = plt.figure()
-                    ax1 = plt.subplot(1, 1, 1)
-                    
-                    ax1.plot(oh, errs[:, 0], label='SVD_ap')
-                    ax1.plot(oh, errs[:, 1], label='SVD')
-                    ax1.plot(oh, errs[:, 2], label='spgl lasso_ap')
-                    ax1.plot(oh, errs[:, 3], label='spgl lasso')
-                     
-                    ax1.legend()
-                    ax1.grid(True)
-                    plt.xlabel(r'1/Mesh Size (in $\lambda$)')
-                    plt.ylabel('Reconstruction Error')
-                    plt.title(f'Reconstruction errors by Mesh Size')
-                    plt.savefig(folder+runName+f'reconstructionMeshSizes.png')
+                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28], reconstructionMeshInfo=recMesh))
             if(comm.rank == model_rank):
+                errs = np.transpose(np.array(errs))
+                fig = plt.figure()
+                ax1 = plt.subplot(1, 1, 1)
+                
+                ax1.plot(oh, errs[0], label='SVD')
+                ax1.plot(oh, errs[1], label='spgl lasso')
+                 
+                ax1.legend()
+                ax1.grid(True)
+                plt.xlabel(r'1/Mesh Size (in $\lambda$)')
+                plt.ylabel('Reconstruction Error')
+                plt.title(f'Reconstruction errors by Mesh Size')
+                plt.savefig(folder+runName+f'reconstructionMeshSizes.png')
                 print('Plotting complete.')
+                plt.show()
     
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
@@ -662,7 +660,7 @@ if __name__ == '__main__':
     #reconstructionErrorTestPlots(False)
     
     #reconstructionMeshSizeTesting()
-    reconstructionMeshSizeTesting(False)
+    #reconstructionMeshSizeTesting(False)
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
@@ -690,6 +688,11 @@ if __name__ == '__main__':
     #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
     #                 prob_settings={'Nf': 11})
     #===========================================================================
+    
+    runName = 'testRun_airDefect_Objectepsr3'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+                    prob_settings={'Nf': 11, 'material_epsrs' : [3.0*(1 - 0.01j)], 'defect_epsrs' : [1 - 0j]})
     
     #===========================================================================
     # runName = 'testRunD3LowerBandwidth' ## roughly where the S11 of the patch is below 0.8
@@ -724,7 +727,7 @@ if __name__ == '__main__':
     
     #runName = 'testRunPatches' ## h=1/3.5, degree 3
     #testFullExample(h=1/3.5, degree=3, antennaType='patch', runName=runName)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #postProcessing.solveFromQs(folder+'testRunSmall_ypol', folder+'testRunPatches', solutionName='SsFromPatches', onlyAPriori=True) ## aka testRunDifferentDUTAntennas2
     
