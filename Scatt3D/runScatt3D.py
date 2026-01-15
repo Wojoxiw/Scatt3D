@@ -689,10 +689,10 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    runName = 'testRun_airDefect_Objectepsr3'
+    runName = 'testRun_airDefect_Objectepsr1.5'
     testFullExample(h=1/3, degree=3, runName=runName,
                     mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'Nf': 11, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [1 - 0j]})
+                    prob_settings={'Nf': 11, 'material_epsrs' : [1.5*(1 - 0.01j)], 'defect_epsrs' : [1 - 0j]})
     
     #===========================================================================
     # runName = 'testRunD3LowerBandwidth' ## roughly where the S11 of the patch is below 0.8
