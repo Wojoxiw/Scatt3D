@@ -547,17 +547,18 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                 
                 cellData.x.array[:] = dofs_map
                 rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
-                dofs_map = rec_cellData.x.array[:]
+                cellData.x.scatter_forward()
+                dofs_map = rec_cellData.x.array[:].copy()
                 
                 cellData.x.array[:] = epsr_ref
-                #print(epsr_ref, np.mean(np.real(epsr_ref)), np.mean(np.imag(epsr_ref)), np.min(epsr_ref))
                 rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
-                epsr_ref = rec_cellData.x.array[:]
-                #print(epsr_ref, np.mean(np.real(epsr_ref)), np.mean(np.imag(epsr_ref)), np.min(epsr_ref))
+                cellData.x.scatter_forward()
+                epsr_ref = rec_cellData.x.array[:].copy()
                 
                 cellData.x.array[:] = epsr_dut
                 rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
-                epsr_dut = rec_cellData.x.array[:]
+                cellData.x.scatter_forward()
+                epsr_dut = rec_cellData.x.array[:].copy()
                 
                 cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
                 cellData = dolfinx.fem.Function(rec_WSpace)
@@ -612,6 +613,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                                 Apart.x.array[:] = np.array(f['Function']['real_f'][str(i)]).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()[idxOrig]
                                 ## create interpolation from the saved mesh to this one
                                 cellData.interpolate_nonmatching(Apart, cells, interpolation_data=interpolation_data)
+                                cellData.x.scatter_forward()
                                 A[indexCount,:] = cellData.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
                             else:
                                 Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
