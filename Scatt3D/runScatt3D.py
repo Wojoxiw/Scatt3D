@@ -615,52 +615,82 @@ if __name__ == '__main__':
                     plt.title(f'Degree {degree} reconstruction errors')
                     plt.savefig(folder+runName+f'reconstructioncomparisonsdeg{degree}.png')
                     
-    def reconstructionMeshSizeTesting(sim = True): ## Runs the basic simulation, performing the reconstruction with different mesh sizes to see what seems best. sim=True to run the simulation, False for the reconstructions
+    def reconstructionMeshSizeTesting(sim = 1, dutOnRefMesh=True):
+        '''
+        Runs the basic simulation, performing the reconstruction with different mesh sizes to see what seems best.
+        :param sim: =0 to run the simulation, =1 for reconstruction to a new mesh by interpolating saved As, =2 for reconstruction to a new mesh by interpolating E-fields
+        '''
         runName='reconstructionMeshSizeTesting'
         Nants = 9
+        degree = 3
         mesh_settings={'h': 1/3.5, 'N_antennas': Nants, 'viewGMSH': False, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5}
-        if(sim):
-            epsrs = []
-            for n in range(Nants): ## each patch has 3 dielectric zones
-                epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
-                epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
-                epsrs.append(2.1*(1 - 0j)) ## coax
-            testFullExample(degree=3, dutOnRefMesh=True, antennaType='patch', runName=runName, 
-                            mesh_settings=mesh_settings,
-                            prob_settings={'antenna_mat_epsrs': epsrs}) ## 4.4 in the patch substrate, 2.1 in the coax
+        epsrs = []
+        for n in range(Nants): ## each patch has 3 dielectric zones
+            epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+            epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
+            epsrs.append(2.1*(1 - 0j)) ## coax
+        if(sim==0):
+            prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+            mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': 'patch'} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+            prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True, 'antenna_mat_epsrs': epsrs}
+            if(dutOnRefMesh):
+                refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, verbosity = verbosity, **mesh_settings)
+            else:
+                refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **mesh_settings)
+            if(not dutOnRefMesh):
+                dutMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, viewGMSH = False, verbosity = verbosity, **mesh_settings)
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
+            else:
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
+            prevRuns.memTimeAppend(prob)
             if(comm.rank == model_rank):
                 print('Simulation part complete.')
-        else: ## reconstruct, then make the plot(s)
+                
+        elif(sim==1): ## reconstruct with interpolated As, then make the plot(s)
             errs = []
             oh = np.linspace(2, 10, (10-2)*4+1)
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
                 rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28], reconstructionMeshInfo=recMesh))
-            if(comm.rank == model_rank):
-                errs = np.transpose(np.array(errs))
-                fig = plt.figure()
-                ax1 = plt.subplot(1, 1, 1)
+                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28], reconstructionMeshInfo=recMesh))   
+        elif(sim==2): ## reconstruct with interpolated Es, then make the plot(s)
+            mesh_settings = {'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': 'patch'} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+            prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True, 'antenna_mat_epsrs': epsrs, 'computeImmediately': False}
+            errs = []
+            oh = np.linspace(2, 10, (10-2)*4+1)
+            for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
+                rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+                recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
+                prob = scatteringProblem.Scatt3DProblem(comm, recMesh, dutMesh, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, dataFolder=folder, **prob_settings)
+                prob.makeOptVectors(reconstructionMesh=True)
+                errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28]))
                 
-                ax1.plot(oh, errs[0], label='SVD')
-                ax1.plot(oh, errs[1], label='spgl lasso')
-                 
-                ax1.legend()
-                ax1.grid(True)
-                plt.xlabel(r'1/Mesh Size (in $\lambda$)')
-                plt.ylabel('Reconstruction Error')
-                plt.title(f'Reconstruction errors by Mesh Size')
-                plt.savefig(folder+runName+f'reconstructionMeshSizes.png')
-                print('Plotting complete.')
-                plt.show()
-    
+        if(comm.rank == model_rank and sim>0):
+            errs = np.transpose(np.array(errs))
+            fig = plt.figure()
+            ax1 = plt.subplot(1, 1, 1)
+            
+            ax1.plot(oh, errs[0], label='SVD')
+            ax1.plot(oh, errs[1], label='spgl lasso')
+             
+            ax1.legend()
+            ax1.grid(True)
+            plt.xlabel(r'1/Mesh Size (in $\lambda$)')
+            plt.ylabel('Reconstruction Error')
+            plt.title(f'Reconstruction errors by Mesh Size')
+            plt.savefig(folder+runName+f'reconstructionMeshSizes.png')
+            print('Plotting complete.')
+            plt.show()
+            
+            
     #testRun(h=1/2)
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
-    #reconstructionMeshSizeTesting()
-    #reconstructionMeshSizeTesting(False)
+    reconstructionMeshSizeTesting(0)
+    #reconstructionMeshSizeTesting(1)
+    reconstructionMeshSizeTesting(2)
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
@@ -689,10 +719,12 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    runName = 'testRun_airDefect_Objectepsr2.1'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-                    prob_settings={'Nf': 11, 'material_epsrs' : [2.1*(1 - 0.01j)], 'defect_epsrs' : [1 - 0j]})
+    #===========================================================================
+    # runName = 'testRun_airDefect_Objectepsr2.1'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    #                 prob_settings={'Nf': 11, 'material_epsrs' : [2.1*(1 - 0.01j)], 'defect_epsrs' : [1 - 0j]})
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowerBandwidth' ## roughly where the S11 of the patch is below 0.8
@@ -715,7 +747,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })

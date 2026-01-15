@@ -391,10 +391,20 @@ class Scatt3DProblem():
         else: ## If just starting, create/overwrite the mesh
             adios4dolfinx.write_mesh(fname, mesh)
             setattr(self, fname, True)
+            WFun = dolfinx.fem.Function(self.FEMmesh_ref.WSpace)
+            WFun.x.array[:] = self.FEMmesh_ref.dofs_map
+            adios4dolfinx.write_function(fname, WFun, time=0, name=f'{nameAdd}_dofsmap') ## also save the dofsmap, for interpolation mesh reasons
+            if(not ref and hasattr(self, 'FEMmesh_DUT')):
+                WFun.x.array[:] = self.FEMmesh_DUT.epsr_array_dut
+            elif(not ref):
+                WFun.x.array[:] = self.FEMmesh_ref.epsr_array_dut
+            else:
+                WFun.x.array[:] = self.FEMmesh_ref.epsr_array_ref
+            adios4dolfinx.write_function(fname, WFun, time=0, name=f'{nameAdd}_epsr') ## also save the epsr, for interpolation mesh reasons
         
         adios4dolfinx.write_function(fname, sol, time=0, name=f'{nameAdd}_excitation{excitation}_freq{freq}')
         
-    def readSol(self, fun, ref, freq, excitation):
+    def readSol(self, fun, ref, freq, excitation, special=None):
         '''
         Similar to saveSol, but instead returns the function, so it can be used to calculate things. Must make sure the function is defined on the same mesh as the saved data.
         Since it seems there is no way to consistently read data back into the same function space... for some reason (bugged)? I try interpolation instead.
@@ -402,6 +412,7 @@ class Scatt3DProblem():
         :param ref: Whether it is reference or dut
         :param freq: Frequency index
         :param excitation: Excitation index
+        :param special: If not None, loads in specified WSpace function rather than a solution
         '''
         if(ref): ## first, pick the right mesh and name it ref or dut
             nameAdd = 'Ref'
@@ -415,18 +426,31 @@ class Scatt3DProblem():
         fname = self.dataFolder+self.name+nameAdd+'.Solutions'
         
         in_mesh = adios4dolfinx.read_mesh(fname, self.comm)
-        curl_element = basix.ufl.element('N1curl', in_mesh.basix_cell(), FEMm.fem_degree)
-        Vspace = dolfinx.fem.functionspace(in_mesh, curl_element)
-        Vfun = dolfinx.fem.Function(Vspace)
-        
-        adios4dolfinx.read_function(fname, Vfun, time=0, name=f'{nameAdd}_excitation{excitation}_freq{freq}')
-        
-        mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
-        num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-        cells = np.arange(num_cells_on_proc, dtype=np.int32)
-        interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.VSpace, Vspace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-        fun.interpolate_nonmatching(Vfun, cells, interpolation_data=interpolation_dataR2D)
-        fun.x.scatter_forward()
+        if(special is None):
+            curl_element = basix.ufl.element('N1curl', in_mesh.basix_cell(), FEMm.fem_degree)
+            VSpace = dolfinx.fem.functionspace(in_mesh, curl_element)
+            VFun = dolfinx.fem.Function(VSpace)
+            
+            adios4dolfinx.read_function(fname, VFun, time=0, name=f'{nameAdd}_excitation{excitation}_freq{freq}')
+            
+            mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
+            num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.VSpace, VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            fun.interpolate_nonmatching(VFun, cells, interpolation_data=interpolation_data)
+            fun.x.scatter_forward()
+        else:
+            WSpace = dolfinx.fem.functionspace(self.meshInfo.mesh, ("DG", 0))
+            WFun = dolfinx.fem.Function(WSpace)
+            
+            adios4dolfinx.read_function(fname, WFun, time=0, name=f'{nameAdd}_{special}')
+            
+            mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
+            num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+            interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.WSpace, WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            fun.interpolate_nonmatching(WFun, cells, interpolation_data=interpolation_data)
+            fun.x.scatter_forward()
             
     #@profile
     def ComputeSolutions(self, computeRef = True):
@@ -927,13 +951,13 @@ class Scatt3DProblem():
             sys.stdout.flush()
            
     #@profile
-    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMeshInfo=None):
+    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False):
         '''
         Computes the optimization vectors from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
         :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
         :param skipQs: Skip writing the actual optimization vectors
-        :param reconstructionMeshInfo: If not None, interpolates data onto this reconstruction mesh for saving
+        :param reconstructionMesh: If True, the problem should be made with the interpolation mesh, so the dofs_map should be interpolated in. Data is loaded from the actual mesh and run.
         '''
         ## First, save mesh to xdmf
         if(DUTMesh):
@@ -945,12 +969,6 @@ class Scatt3DProblem():
             FEMm = self.FEMmesh_ref
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
-            if(reconstructionMeshInfo is None):
-                xdmf.write_mesh(meshInfo.mesh)
-            else:
-                xdmf.write_mesh(reconstructionMeshInfo.mesh)
-                rmesh_WSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, ("DG", 0))
-                rmesh_Wfun = dolfinx.fem.Function(rmesh_WSpace)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
@@ -958,63 +976,42 @@ class Scatt3DProblem():
             sys.stdout.flush()
         
         ### start with the 'information' functions, which are defined on the computational meshes
-        if(reconstructionMeshInfo is None):
-            ## save this stuff all on the regular, full mesh
-            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.WSpace))*ufl.dx)).array
-            
-            ## save some problem/mesh data
-            FEMm.epsr.x.array[:] = FEMm.dofs_map
-            #self.epsr.name = 'dpf-map' ## can use names, but makes looking in paraview more annoying
-            xdmf.write_function(FEMm.epsr, -4)
-            FEMm.epsr.x.array[:] = cell_volumes
-            #self.epsr.name = 'Cell Volumes'
-            xdmf.write_function(FEMm.epsr, -3)
-            FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
-            #self.epsr.name = 'epsr_ref'
-            xdmf.write_function(FEMm.epsr, -2)
-            if(DUTMesh or self.dutOnRefMesh):
-                FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
-                #self.epsr.name = 'epsr_dut'
-                xdmf.write_function(FEMm.epsr, -1)
-            elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-                epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
-                mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
-                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-                cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.WSpace, self.FEMmesh_DUT.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                epsr_dut.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_dataR2D)
-                epsr_dut.x.scatter_forward()
-                FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
-                #self.epsr.name = 'epsr_dut'
-                xdmf.write_function(FEMm.epsr, -1)
+        ## save this stuff all on the regular, full mesh
+        cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.WSpace))*ufl.dx)).array
+        
+        ## save some problem/mesh data
+        if(reconstructionMesh): ## load in the DUT dofs_map, since getting defect data is the point
+            self.readSol(FEMm.epsr, ref=False, freq=0, excitation=0, special='dofsmap')
         else:
-            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rmesh_WSpace))*ufl.dx)).array
-            
-            mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
+            FEMm.epsr.x.array[:] = FEMm.dofs_map
+        
+        #self.epsr.name = 'dofs-map' ## can use names, but makes looking in paraview more annoying
+        xdmf.write_function(FEMm.epsr, -4)
+        FEMm.epsr.x.array[:] = cell_volumes
+        #self.epsr.name = 'Cell Volumes'
+        xdmf.write_function(FEMm.epsr, -3)
+        FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
+        #self.epsr.name = 'epsr_ref'
+        xdmf.write_function(FEMm.epsr, -2)
+        if(reconstructionMesh): ## load in the DUT dofs_map, since getting defect data is the point
+            self.readSol(FEMm.epsr, ref=False, freq=0, excitation=0, special='epsr')
+            #self.epsr.name = 'epsr_dut'
+            xdmf.write_function(FEMm.epsr, -1)
+        elif(DUTMesh or self.dutOnRefMesh):
+            FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
+            #self.epsr.name = 'epsr_dut'
+            xdmf.write_function(FEMm.epsr, -1)
+        elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
+            epsr_dut = dolfinx.fem.Function(FEMm.epsr.function_space)  ## need to interpolate onto the ref mesh
+            mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
             num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
             cells = np.arange(num_cells_on_proc, dtype=np.int32)
-            interpolation_data = dolfinx.fem.create_interpolation_data(rmesh_WSpace, FEMm.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-            
-            FEMm.epsr.x.array[:] = FEMm.dofs_map
-            rmesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
-            rmesh_Wfun.x.scatter_forward()
-            xdmf.write_function(rmesh_Wfun, -4) ## dofs map
-            rmesh_Wfun.x.array[:] = cell_volumes
-            xdmf.write_function(rmesh_Wfun, -3) ## cell volumes
-            FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
-            rmesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
-            rmesh_Wfun.x.scatter_forward()
-            xdmf.write_function(rmesh_Wfun, -2) ## epsr_ref
-            if(DUTMesh or self.dutOnRefMesh):
-                FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
-                rmesh_Wfun.interpolate_nonmatching(FEMm.epsr, cells, interpolation_data=interpolation_data)
-                rmesh_Wfun.x.scatter_forward()
-                xdmf.write_function(rmesh_Wfun, -1) ## epsr_dut
-            elif(hasattr(self, 'S_dut')): ## see which cells in the ref mesh contain the DUT (roughly)
-                interpolation_data = dolfinx.fem.create_interpolation_data(rmesh_WSpace, self.FEMmesh_DUT.WSpace, cells, padding=1e-12) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                rmesh_Wfun.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_data)
-                rmesh_Wfun.x.scatter_forward()
-                xdmf.write_function(rmesh_Wfun, -1) ## epsr_dut     
+            interpolation_dataR2D = dolfinx.fem.create_interpolation_data(FEMm.WSpace, self.FEMmesh_DUT.WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
+            epsr_dut.interpolate_nonmatching(self.FEMmesh_DUT.epsr_array_dut, cells, interpolation_data=interpolation_dataR2D)
+            epsr_dut.x.scatter_forward()
+            FEMm.epsr.x.array[:] = epsr_dut.x.array[:]
+            #self.epsr.name = 'epsr_dut'
+            xdmf.write_function(FEMm.epsr, -1)
                                     
         if(not DUTMesh and not skipQs): ## Do the interpolation to find qs, then save them
             antCount = max(meshInfo.N_antennas, 1) # if no antennas, still save something
@@ -1028,54 +1025,14 @@ class Scatt3DProblem():
                     self.readSol(Em_ref, ref=True, freq=nf, excitation=m)
                     for n in range(antCount):
                         if(self.ErefEdut): ## Eref*Edut should provide a superior reconstruction with fully simulated data
-                            if(self.dutOnRefMesh): ## dut same mesh as ref
-                                self.readSol(En, ref=False, freq=nf, excitation=n)
-                            else: ## interpolate from dut mesh to ref mesh
-                                if(nf == 0 and n == 0): ## just set up once
-                                    sol_dut = dolfinx.fem.Function(self.FEMmesh_DUT.VSpace)
-                                    mesh_cell_map = FEMm.meshInfo.mesh.topology.index_map(FEMm.meshInfo.mesh.topology.dim)
-                                    num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-                                    cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                                    interpolation_dataD2R = dolfinx.fem.create_interpolation_data(FEMm.VSpace, self.FEMmesh_DUT.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                                self.readSol(sol_dut, ref=False, freq=nf, excitation=n)
-                                En.interpolate_nonmatching(sol_dut, cells, interpolation_data=interpolation_dataD2R)
-                                En.x.scatter_forward()
+                            self.readSol(En, ref=False, freq=nf, excitation=n)
                         else:
                             self.readSol(En, ref=True, freq=nf, excitation=n)
-                        if(reconstructionMeshInfo is None):
-                            q = dolfinx.fem.Function(FEMm.WSpace) ## calculate q on the reference mesh
-                            q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.WSpace)) *ufl.dx)
-                            q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
-                            dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
-                            q.x.scatter_forward()
-                        else: ## interpolate the E-fields directly to the reconstruction mesh, then calculate q
-                            if(nf == 0 and n == 0): ## just set up once - first, make the functions spaces and interpolate
-                                curl_element = basix.ufl.element('N1curl', reconstructionMeshInfo.mesh.basix_cell(), FEMm.fem_degree)
-                                rmesh_VSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, curl_element)
-                                rmesh_En = dolfinx.fem.Function(rmesh_VSpace)
-                                
-                                rmesh_Em_ref = dolfinx.fem.Function(rmesh_VSpace)
-                                mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
-                                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-                                cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                                interpolation_data_ref2rec = dolfinx.fem.create_interpolation_data(rmesh_VSpace, FEMm.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                                if(not self.dutOnRefMesh): ## En is on the DUT mesh
-                                    interpolation_data_dut2rec = dolfinx.fem.create_interpolation_data(rmesh_VSpace, self.FEMmesh_DUT.VSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                            
-                            rmesh_Em_ref.interpolate_nonmatching(Em_ref, cells, interpolation_data=interpolation_data_ref2rec)
-                            rmesh_Em_ref.x.scatter_forward()
-                            if(self.dutOnRefMesh): ## En is on the DUT mesh
-                                rmesh_En.interpolate_nonmatching(En, cells, interpolation_data=interpolation_data_ref2rec)
-                            else:
-                                rmesh_En.interpolate_nonmatching(En, cells, interpolation_data=interpolation_data_dut2rec)
-                            rmesh_En.x.scatter_forward()
-                            
-                            ## then, calculate as before
-                            q = dolfinx.fem.Function(rmesh_WSpace)
-                            q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(rmesh_En, rmesh_Em_ref)* ufl.conj(ufl.TestFunction(rmesh_WSpace)) *ufl.dx)
-                            q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
-                            dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
-                            q.x.scatter_forward()
+                        q = dolfinx.fem.Function(FEMm.WSpace) ## calculate q on the reference mesh
+                        q_cell = dolfinx.fem.form(-1j*k0/eta0/2*ufl.dot(En, Em_ref)* ufl.conj(ufl.TestFunction(FEMm.WSpace)) *ufl.dx)
+                        q.x.array[:] = 0j ## assemble_vector does not 0, just adds - must zero beforehand
+                        dolfinx.fem.petsc.assemble_vector(q.x.petsc_vec, q_cell)
+                        q.x.scatter_forward()
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}' ## it turns out names can make it more of a pain than using timesteps
                         xdmf.write_function(q, nf*antCount*antCount + m*antCount + n)
