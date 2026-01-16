@@ -46,6 +46,7 @@ class FEMmesh():
                  meshInfo, ## either the reference or dut MeshData from meshMaker.py
                  degree, ## FE degree, from the problem
                  quaddeg, ## quadrature degree, from the problem
+                 justInterping, ## If True, skip some setup
                  ):
         self.meshInfo = meshInfo
         self.tdim = 3                             # Dimension of triangles/tetraedra. 3 for 3D
@@ -54,9 +55,9 @@ class FEMmesh():
         self.dxquaddeg = quaddeg
         self.meshInfo.mesh.topology.create_connectivity(self.tdim, self.tdim)
         self.meshInfo.mesh.topology.create_connectivity(self.fdim, self.tdim) ## required when there are no antennas, for some reason
-        self.InitializeFEM()
+        self.InitializeFEM(justInterping)
         
-    def InitializeFEM(self):
+    def InitializeFEM(self, justInterping):
         # Set up some FEM function spaces and boundary condition stuff.
         curl_element = basix.ufl.element('N1curl', self.meshInfo.mesh.basix_cell(), self.fem_degree)
         self.VSpace = dolfinx.fem.functionspace(self.meshInfo.mesh, curl_element)
@@ -80,23 +81,25 @@ class FEMmesh():
         self.ds_pec = self.ds(self.meshInfo.pec_surface_marker)
         self.Ezero = dolfinx.fem.Function(self.VSpace)
         self.Ezero.x.array[:] = 0.0
-        self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.VSpace, entity_dim=self.fdim, entities=self.meshInfo.meshData.facet_tags.find(self.meshInfo.pec_surface_marker))
-        self.bc_pec = dolfinx.fem.dirichletbc(self.Ezero, self.pec_dofs)
-        if(self.meshInfo.FF_surface): ## if there is a farfield surface, mark cells on the surface
-            self.dS_farfield = self.dS(self.meshInfo.farfield_surface_marker)
-            cells = []
-            ff_facets = self.meshInfo.meshData.facet_tags.find(self.meshInfo.farfield_surface_marker)
-            facets_to_cells = self.meshInfo.mesh.topology.connectivity(self.fdim, self.tdim)
-            for facet in ff_facets:
-                for cell in facets_to_cells.links(facet):
-                    if cell not in cells:
-                        cells.append(cell)
-            cells.sort()
-            self.farfield_cells = cells
-        else:
-            self.farfield_cells = []
+        
+        if(not justInterping):
+            self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.VSpace, entity_dim=self.fdim, entities=self.meshInfo.meshData.facet_tags.find(self.meshInfo.pec_surface_marker))
+            self.bc_pec = dolfinx.fem.dirichletbc(self.Ezero, self.pec_dofs)
+            if(self.meshInfo.FF_surface): ## if there is a farfield surface, mark cells on the surface
+                self.dS_farfield = self.dS(self.meshInfo.farfield_surface_marker)
+                cells = []
+                ff_facets = self.meshInfo.meshData.facet_tags.find(self.meshInfo.farfield_surface_marker)
+                facets_to_cells = self.meshInfo.mesh.topology.connectivity(self.fdim, self.tdim)
+                for facet in ff_facets:
+                    for cell in facets_to_cells.links(facet):
+                        if cell not in cells:
+                            cells.append(cell)
+                cells.sort()
+                self.farfield_cells = cells
+            else:
+                self.farfield_cells = []
             
-    def InitializeMaterial(self, material_epsrs, material_murs, antenna_mat_epsrs, antenna_mat_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg):
+    def InitializeMaterial(self, material_epsrs, material_murs, antenna_mat_epsrs, antenna_mat_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg, justInterping):
         # Set up material parameters. Not changing mur for now, need to edit this if doing so
         if(len(material_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
             material_epsrs = [material_epsrs[0] for x in self.meshInfo.mat_markers]
@@ -128,7 +131,8 @@ class FEMmesh():
         self.pml_dofs = self.meshInfo.meshData.cell_tags.find(self.meshInfo.pml_marker)
         self.domain_dofs = self.meshInfo.meshData.cell_tags.find(self.meshInfo.domain_marker)
         
-        self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.WSpace, entity_dim=self.fdim, entities=self.meshInfo.meshData.facet_tags.find(self.meshInfo.pec_surface_marker)) ## should be empty since these surfaces are not 3D, I think
+        if(not justInterping):
+            self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.WSpace, entity_dim=self.fdim, entities=self.meshInfo.meshData.facet_tags.find(self.meshInfo.pec_surface_marker)) ## should be empty since these surfaces are not 3D, I think
         
         self.epsr = dolfinx.fem.Function(self.WSpace)
         self.mur = dolfinx.fem.Function(self.WSpace)
@@ -143,8 +147,9 @@ class FEMmesh():
             self.epsr.x.array[self.mat_dofsList[k]] = 2+1j*k
         for k in range(len(self.defect_dofsList)):
             self.epsr.x.array[self.defect_dofsList[k]] = 3+1j*k
-        self.epsr.x.array[self.pec_dofs] = 5 ## shouldn't be any, since any PEC volumes were removed
-        self.epsr.x.array[self.farfield_cells] = 1
+        if(not justInterping):
+            self.epsr.x.array[self.pec_dofs] = 5 ## shouldn't be any, since any PEC volumes were removed
+            self.epsr.x.array[self.farfield_cells] = 1
         self.dofs_map = self.epsr.x.array.copy()
         
         ## then the cases - first, set reference values
@@ -210,6 +215,7 @@ class Scatt3DProblem():
                  E_dut_anim = False, ## if True, plot the E_dut animation after E_dut is computed
                  E_anim_allAnts = False, ## If True and multiple antennas, saves the E-fields for each exciting antenna
                  E_anim_freqs = [], ## List of indices of fvec to save the animation for. If empty, will just use the central frequency
+                 justInterping = False, ## If True, skips much of the setup - only use this when loading in saved data for interpolation
                  ):
         """Initialize the problem."""
         
@@ -257,11 +263,11 @@ class Scatt3DProblem():
         self.PW_pol = PW_pol
 
         # Set up mesh information
-        self.FEMmesh_ref = FEMmesh(refMeshInfo, fem_degree, quaddeg)
-        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
+        self.FEMmesh_ref = FEMmesh(refMeshInfo, fem_degree, quaddeg, justInterping)
+        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg, justInterping)
         if(DUTMeshInfo != None):
-            self.FEMmesh_DUT = FEMmesh(DUTMeshInfo, fem_degree, quaddeg)
-            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg)
+            self.FEMmesh_DUT = FEMmesh(DUTMeshInfo, fem_degree, quaddeg, justInterping)
+            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg, justInterping)
             
         self.E_ref_anim = E_ref_anim
         self.E_dut_anim = E_dut_anim
@@ -270,6 +276,7 @@ class Scatt3DProblem():
             self.E_anim_freqs = E_anim_freqs
         else: ## if it isn't set, just use the center
             self.E_anim_freqs = [int(len(self.fvec)/2)]
+            
         
         # Calculate solutions
         if(computeImmediately):
@@ -440,7 +447,7 @@ class Scatt3DProblem():
             fun.interpolate_nonmatching(VFun, cells, interpolation_data=interpolation_data)
             fun.x.scatter_forward()
         else:
-            WSpace = dolfinx.fem.functionspace(self.meshInfo.mesh, ("DG", 0))
+            WSpace = dolfinx.fem.functionspace(in_mesh, ("DG", 0))
             WFun = dolfinx.fem.Function(WSpace)
             
             adios4dolfinx.read_function(fname, WFun, time=0, name=f'{nameAdd}_{special}')
@@ -964,11 +971,11 @@ class Scatt3DProblem():
             FEMm = self.FEMmesh_DUT
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'DUTmesh.xdmf', file_mode='w')
-            xdmf.write_mesh(meshInfo.mesh)
         else:
             FEMm = self.FEMmesh_ref
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
+        xdmf.write_mesh(meshInfo.mesh)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):

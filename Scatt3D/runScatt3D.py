@@ -661,7 +661,7 @@ if __name__ == '__main__':
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
                 rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-                prob = scatteringProblem.Scatt3DProblem(comm, recMesh, dutMesh, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, dataFolder=folder, **prob_settings)
+                prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, dataFolder=folder, justInterping=True, **prob_settings)
                 prob.makeOptVectors(reconstructionMesh=True)
                 errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28]))
                 
@@ -688,7 +688,7 @@ if __name__ == '__main__':
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
-    reconstructionMeshSizeTesting(0)
+    #reconstructionMeshSizeTesting(0)
     #reconstructionMeshSizeTesting(1)
     reconstructionMeshSizeTesting(2)
     
