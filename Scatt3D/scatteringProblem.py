@@ -16,9 +16,8 @@ from petsc4py import PETSc
 import memTimeEstimation
 from pathlib import Path
 from matplotlib import pyplot as plt
-from matplotlib.collections import _MeshData
+import matplotlib.lines as mlines
 import miepython
-import miepython.field
 import resource
 import meshMaker
 import h5py
@@ -1452,6 +1451,11 @@ class Scatt3DProblem():
                         if(idx not in idx_found): ## if the index had not already been found
                             idx_found = idx_found + [idx] ## add it to found list
                             E_values[idx, :] = E_parts[b][o][:] ## use this value for the electric field
+                            
+                np.savez(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{FEMm.meshInfo.h/FEMm.meshInfo.lambda0:.2e}.npz', E_values=E_values)
+            
+            linewidth = 1.5
+            vlinewidth = 3
             
             if(showPlots and self.comm.rank == self.model_rank): ## make the plots
                 fig1 = plt.figure()
@@ -1463,6 +1467,19 @@ class Scatt3DProblem():
                 fig3 = plt.figure()
                 ax3 = plt.subplot(1, 1, 1)
                 ax3.grid(True)
+                
+                ax1.axvline(FEMm.meshInfo.object_scale, label = r'r$_{\mathrm{sphere}}$', color = 'black', linewidth=vlinewidth)
+                ax1.axvline(-1*FEMm.meshInfo.object_scale, color = 'black', linewidth=vlinewidth)
+                ax2.axvline(FEMm.meshInfo.object_scale, color = 'black', linewidth=vlinewidth)
+                ax2.axvline(-1*FEMm.meshInfo.object_scale, color = 'black', linewidth=vlinewidth)
+                ax3.axvline(FEMm.meshInfo.object_scale, color = 'black', linewidth=vlinewidth)
+                ax3.axvline(-1*FEMm.meshInfo.object_scale, color = 'black', linewidth=vlinewidth)
+                ax1.axvline(FEMm.meshInfo.domain_radius, label=r'r$_{\mathrm{PML}}$', color = 'gray', linewidth=vlinewidth)
+                ax1.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray', linewidth=vlinewidth)
+                ax2.axvline(FEMm.meshInfo.domain_radius, color = 'gray', linewidth=vlinewidth)
+                ax2.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray', linewidth=vlinewidth)
+                ax3.axvline(FEMm.meshInfo.domain_radius, color = 'gray', linewidth=vlinewidth)
+                ax3.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray', linewidth=vlinewidth)
                 
                 import sphere_scattering ## Mie theory calculations
                 Qinc, Qsca, Qint = sphere_scattering.ComputeQcoefficients(k, a, self.material_epsrs[0], self.material_murs[0], theta0=1e-6, phi0=0, E0_theta=1, E0_phi=0)
@@ -1478,8 +1495,15 @@ class Scatt3DProblem():
                 ## plot magnitudes
                 ax2.plot(posvec, np.sqrt(np.abs(E_values[:, 0])**2+np.abs(E_values[:, 1])**2+np.abs(E_values[:, 2])**2), label='simulation')
                 ## plot real/imags
-                ax3.plot(posvec, np.real(E_values[:, 0]), label='sim., x-pol real')
-                ax3.plot(posvec, np.imag(E_values[:, 0]), label='sim., x-pol imag.')
+                ax3.plot(posvec, np.real(E_values[:, 0]), label=r'sim. ($\lambda/h=$'+f'{FEMm.meshInfo.lambda0/FEMm.meshInfo.h:.1f})', linewidth=linewidth, linestyle = 'solid', color='tab:blue')
+                ax3.plot(posvec, np.imag(E_values[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color='tab:blue')
+                
+                ## also plot the result with other mesh sizes?
+                for ho, color in [(1/2, 'tab:orange'), (1/10, 'tab:red')]:
+                    E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
+                    ax3.plot(posvec, np.real(E_load[:, 0]), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=linewidth, linestyle = 'solid', color=color)
+                    ax3.plot(posvec, np.imag(E_load[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color=color)
+                    
                 if(name=='z'): ## different plane-wave directions, so switch for plotting
                     posvec = -posvec
                     FEKOpos = -FEKOpos
@@ -1490,17 +1514,17 @@ class Scatt3DProblem():
                 ## plot magnitudes
                 ax2.plot(posvec, np.sqrt(np.abs(E[:, 0])**2+np.abs(E[:, 1])**2+np.abs(E[:, 2])**2), label='mie theory')
                 ## plot real/imags
-                ax3.plot(posvec, np.real(E[:, 0]), label='mie theory, x-pol real', linestyle = ':')
-                ax3.plot(posvec, np.imag(E[:, 0]), label='mie theory, x-pol imag.', linestyle = ':')
-                ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label='FEKO, x-pol imag.', linestyle = '--')
-                ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO, x-pol real', linestyle = '--')
+                ax3.plot(posvec, np.real(E[:, 0]), label='mie theory', linestyle = 'solid', linewidth=linewidth, color='tab:green')
+                ax3.plot(posvec, np.imag(E[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:green')
+                ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:purple')
+                ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO', linestyle = 'solid', linewidth=linewidth, color='tab:purple')
                 
                 #ax3.plot(posvec, np.real(E_i), label='Ei, x-pol real', linestyle = '--')
                 #ax3.plot(posvec, np.imag(E_i), label='Ei, x-pol imag', linestyle = '--')
                 
                 ax1.legend()
                 ax2.legend()
-                ax3.legend()
+                
                 ax1.set_xlabel('Radius [m]')
                 ax2.set_xlabel('Radius [m]')
                 ax3.set_xlabel('Radius [m]')
@@ -1511,18 +1535,18 @@ class Scatt3DProblem():
                 ax2.set_title(name+'-Axis: E-field magnitudes')
                 ax3.set_title(name+'-Axis: Real/imag. parts of incident pol.')
                 
-                ax1.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
-                ax1.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
-                ax2.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
-                ax2.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
-                ax3.axvline(FEMm.meshInfo.object_scale, label = 'radius', color = 'black')
-                ax3.axvline(-1*FEMm.meshInfo.object_scale, color = 'black')
-                ax1.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
-                ax1.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
-                ax2.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
-                ax2.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
-                ax3.axvline(FEMm.meshInfo.domain_radius, label = 'radius', color = 'gray')
-                ax3.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray')
+                first_legend = ax3.legend(framealpha=0.5, ncol=1, loc = 'lower left')
+                ##second legend to distinguish between dashed and regular lines (phi- and theta- pols)
+                handleds = []
+                line_dashed = mlines.Line2D([], [], color='black', linestyle='solid', linewidth=linewidth, label=r'real') ##fake lines to create second legend elements
+                handleds.append(line_dashed)
+                line_solid = mlines.Line2D([], [], color='black', linestyle='--', linewidth=linewidth, label=r'imag.') ##fake lines to create second legend elements
+                handleds.append(line_solid)
+                    
+                second_legend = ax3.legend(handles=handleds, loc='lower right', framealpha=0.5)
+                ax3.add_artist(first_legend)
+                ax3.add_artist(second_legend)
+                
                 fig1.tight_layout()
                 fig2.tight_layout()
                 fig3.tight_layout()
