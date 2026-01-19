@@ -679,6 +679,7 @@ if __name__ == '__main__':
             plt.ylabel('Reconstruction Error')
             plt.title(f'Reconstruction errors by Mesh Size')
             plt.savefig(folder+runName+f'reconstructionMeshSizes.png')
+            np.savez(f'{folder}{runName}reconstructionMeshSizeData.npz', oh=oh, errs=errs)
             print('Plotting complete.')
             plt.show()
             
@@ -781,7 +782,7 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/3.5, degree=3, showPlots=True)
+    #testSphereScattering(h=1/3.5, degree=1, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')

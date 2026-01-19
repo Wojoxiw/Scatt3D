@@ -1488,6 +1488,49 @@ class Scatt3DProblem():
                 E_i = np.transpose(np.outer(self.PW_pol, np.exp(1j * k*np.dot(self.PW_dir, points))))
                 E = E - E_i ## to remove incident wave?
                 
+                import miepython
+                import miepython.field
+                
+                m = np.sqrt(self.material_epsrs[0]) ## complex index of refraction - if it is not PEC
+                freq = self.fvec[0]
+                lambdat = c0/freq
+                k = 2*pi/lambdat
+                a = FEMm.meshInfo.object_scale
+                x = k*a
+                coefs = miepython.core.coefficients(m, x, internal=True)
+                
+                #===============================================================
+                # mie_Es = np.zeros((len(posvec), 3), dtype=complex)
+                # for i in range(len(posvec)):
+                #     if(name=='z'):
+                #         theta = 0
+                #         phi = 0
+                #     elif(name=='y'):
+                #         theta = pi/2
+                #         phi = 0
+                #     elif(name=='x'):
+                #         theta = pi/2
+                #         phi = pi/2
+                #     if(posvec[i]<0):
+                #         phi = phi+np.pi
+                #     
+                #     mie = miepython.field.e_near(coefs, lambdat, 2*ae, m, posvec[i], theta, phi)
+                #     
+                #     mie_Es[i, 0] = mie[0]*np.sin(theta)*np.cos(phi) + mie[1]*np.cos(theta)*np.cos(phi) - mie[2]*np.sin(phi) ## x-comp
+                #     mie_Es[i, 1] = mie[0]*np.sin(theta)*np.sin(phi) + mie[1]*np.cos(theta)*np.sin(phi) + mie[2]*np.cos(phi) ## y-comp
+                #     mie_Es[i, 2] = mie[0]*np.cos(theta) - mie[1]*np.sin(theta) ## z-comp
+                #===============================================================
+                    
+                from scattnlay import scattnlay, fieldnlay
+                terms, E2, H = fieldnlay(np.zeros(1)+x, np.zeros(1)+m, points[0]/a*2, points[1]/a*2, points[2]/a*2,  mp=True)
+                
+                mie_Es = E2
+                mie_Es = mie_Es - E_i
+                mie_Es = np.conj(mie_Es) ## because the imaginary part is negative for some reason
+                
+                ax3.plot(posvec, np.imag(mie_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:cyan')
+                ax3.plot(posvec, np.real(mie_Es[:, 0]), label='scattnlay', linestyle = 'solid', linewidth=linewidth, color='tab:cyan')
+                
                 ## plot components
                 ax1.plot(posvec, np.abs(E_values[:, 0]), label='x-comp.', color = 'red')
                 ax1.plot(posvec, np.abs(E_values[:, 1]), label='y-comp.', color = 'blue')

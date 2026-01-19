@@ -33,12 +33,12 @@ from scattnlay import scattnlay, fieldnlay
 # Sphere and wave parameters
 wavelength = 1.0
 a = .0098
-x = 2*np.pi * a / wavelength   # size parameter for radius=0.5
-m = 2.0 + 0.0j                    # refractive index
+x = 2.073#2*np.pi * a / wavelength   # size parameter for radius=0.5
+m = 1.4142312394902266-0.007070979427384589j#2.0 + 0.0j                    # refractive index
 
 # Grid in x-z plane
-Nx = 200
-x_vals = np.linspace(-20, 20, Nx)*a
+Nx = 2000
+x_vals = np.linspace(-800, 800, Nx)*a
 
 
 
@@ -65,7 +65,7 @@ plt.plot(x_vals, np.imag(E[:,2]), linestyle = ':', color='green')
 plt.axvline(x=a, color='gray')
 plt.axvline(x=-a, color='gray')
 plt.xlabel('x')
-plt.ylabel('E2')
+plt.ylabel('E')
 plt.title('Electric field intensity |E|^2 around sphere')
 plt.axis('equal')
 plt.show()
