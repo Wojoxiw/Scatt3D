@@ -443,7 +443,7 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None):
+def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
@@ -455,6 +455,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     :param onlyAPriori: only perform the a-priori reconstruction, using just the object's cells.
     :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
     :param reconstructionMeshInfo: If not None, should be a MeshInfo of the reconstruction mesh. Then, saved data will be interpolated onto this mesh for the reconstruction.
+    :param plotSs: If True, just plots some Ss
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -487,34 +488,34 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         Nf = len(fvec)
         Np = S_ref.shape[-1]
         
-        #=======================================================================
-        # ### PLOT S11 STUFF
-        # #print(S_ref)
-        # for m in np.arange(N_antennas):
-        #     plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A#{m})') ## try plotting the Ss
-        # #plt.plot(np.abs(S_dut.flatten()))
-        # fekof = 'TestStuff/FEKO patch S11.dat'
-        # fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        # plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-        # plt.plot()
-        # plt.grid()
-        # plt.ylabel(r'S$_{11}$ [dB]')
-        # plt.xlabel(r'Frequency [GHz]')
-        # plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
-        # plt.legend()
-        # plt.show()
-        # ## then plot the phase of S11, also
-        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
-        # plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
-        # plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
-        # plt.grid()
-        # plt.ylabel(r'Phase of S$_{11}$ [radians]')
-        # plt.xlabel(r'Frequency [GHz]')
-        # plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
-        # plt.legend()
-        # plt.show()
-        # exit()
-        #=======================================================================
+        
+        if(plotSs):### PLOT S11 STUFF
+            print((c0/10e9)/data['meshSize'])
+            #print(S_ref)
+            for m in np.arange(N_antennas):
+                plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A#{m})') ## try plotting the Ss
+            #plt.plot(np.abs(S_dut.flatten()))
+            fekof = 'TestStuff/FEKO patch S11 new.dat'
+            fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+            plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+            plt.plot()
+            plt.grid()
+            plt.ylabel(r'S$_{11}$ [dB]')
+            plt.xlabel(r'Frequency [GHz]')
+            plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
+            plt.legend()
+            plt.show()
+            ## then plot the phase of S11, also
+            plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
+            plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
+            plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
+            plt.grid()
+            plt.ylabel(r'Phase of S$_{11}$ [radians]')
+            plt.xlabel(r'Frequency [GHz]')
+            plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
+            plt.legend()
+            plt.show()
+            return
         
         Nb = len(b) ## number of rows, or 'data points' to be used
         

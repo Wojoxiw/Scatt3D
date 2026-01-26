@@ -88,6 +88,15 @@ if __name__ == '__main__':
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         mesh_settings = {'h': h, 'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
+        
+        if(mesh_settings['antenna_type'] == 'patch'): ## set the dielectrics for the antennas
+            epsrs=[]
+            for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
+                epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+                epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
+                epsrs.append(2.1*(1 - 0j))
+            prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
+        
         if(dutOnRefMesh):
             refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = False, verbosity = verbosity, **mesh_settings)
         else:
@@ -168,10 +177,13 @@ if __name__ == '__main__':
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
+        epsrs=[]
+        epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+        epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
+        epsrs.append(2.1*(1 - 0j))
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, material_epsrs=[2.1]) ## the first 3 materials per antenna are the antenna's dielectric volume
-        prob.saveEFieldsForAnim()
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
         prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         prevRuns.memTimeAppend(prob)
  
@@ -788,9 +800,11 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #runName = 'patchPatternTestd3' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    #testPatchPattern(h=1/3.66, degree=3, freqs = np.linspace(10e9, 12e9, 1), name=runName, showPlots=True)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
+    # runName = 'patchPatternTest_ho3.5' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 12), name=runName, showPlots=False)
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    #===========================================================================
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)

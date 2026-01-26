@@ -1284,11 +1284,11 @@ class Scatt3DProblem():
                             ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
                             ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
                             
-                            fekof = 'TestStuff/FEKO patch gain.dat'
+                            fekof = 'TestStuff/FEKO patch gain new.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
                             print(np.shape(fekoData))
-                            ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
-                            ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$/H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$/E-plane)', linewidth = 1.2, color = 'red', linestyle = '--')
                         else: ## don't normalize, compare FFs
                             ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
                             ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
@@ -1339,7 +1339,6 @@ class Scatt3DProblem():
                         
                         fekof = 'TestStuff/FEKO patch gain.dat'
                         fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                        print(np.shape(fekoData))
                         ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
                         ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
                         gainsNormalized = mag/np.max(mag)

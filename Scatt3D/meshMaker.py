@@ -179,14 +179,14 @@ class MeshInfo():
         self.antenna_width = antenna_width * self.lambda0
         self.antenna_height = antenna_height * self.lambda0
         self.antenna_depth = antenna_depth * self.lambda0
-        if(self.antenna_type == 'patch' or self.antenna_type == 'patchtest'): ## specify the dimensions here, for a patch active near 10 GHz
+        if(self.antenna_type == 'patch' or self.antenna_type == 'patchtest'): ## specify the dimensions here, for a patch active near 10 GHz. Taken from FEKO sim.
             self.antenna_height = 1e-3 ## the height
-            self.patch_length = 9.056e-3
-            self.patch_width = 13.518e-3
+            self.patch_length = 12.905e-3
+            self.patch_width = 13.986e-3
             self.antenna_width = self.patch_width*2 ## the width
             self.antenna_depth = self.patch_length*2 ## the length (in x)
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
-            self.feed_offset = 2.697e-3
+            self.feed_offset = 2.227e-3
             
         if(antenna_bounding_box_offset == 0): ## if unset
             self.bb = min(h/2, self.lambda0/10)
@@ -209,7 +209,7 @@ class MeshInfo():
         elif(object_geom == 'complex1'):
             self.object_scale = object_radius * self.lambda0
         elif(object_geom == '' or object_geom is None):
-            pass
+            self.object_scale = 0
         else:
             print('Nonvalid object geom, exiting...')
             exit()
@@ -391,8 +391,8 @@ class MeshInfo():
                 antennas_DimTags.append((self.tdim, coax_under))
                 
                 antennaMatDimTags.append((3, box)) ## these 3 should be dielectric
-                antennaMatDimTags.append((3, coax_outer))
                 antennaMatDimTags.append((3, patch))
+                antennaMatDimTags.append((3, coax_outer))
             
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
