@@ -92,10 +92,10 @@ if __name__ == '__main__':
         rmeshInfo = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', justInterpolationSubmesh=True, reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
         prob.makeOptVectors(reconstructionMeshInfo = rmeshInfo)
         
-    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example
+    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', ErefEdut=False, runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         mesh_settings = {'h': h, 'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
-        prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': True, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
+        prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': ErefEdut, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
         
         if(mesh_settings['antenna_type'] == 'patch'): ## set the dielectrics for the antennas
             epsrs=[]
@@ -727,14 +727,14 @@ if __name__ == '__main__':
     
     
     runName = 'testRunComplex2Obj'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'viewGMSH': False},
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     
     #===========================================================================
     # runName = 'testRunD3'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 prob_settings={'Nf': 10})
     #===========================================================================
     
