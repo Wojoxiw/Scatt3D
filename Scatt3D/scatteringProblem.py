@@ -1481,10 +1481,13 @@ class Scatt3DProblem():
                 ax3.axvline(-1*FEMm.meshInfo.domain_radius, color = 'gray', linewidth=vlinewidth)
                 
                 import sphere_scattering ## Mie theory calculations
+                
+                pointsMie = points[:, np.nonzero((posvec>-FEMm.meshInfo.domain_radius) & (posvec<FEMm.meshInfo.domain_radius))[0]] ## only calculate within the domain
+                posvecMie = pointsMie[index]
                 Qinc, Qsca, Qint = sphere_scattering.ComputeQcoefficients(k, a, self.material_epsrs[0], self.material_murs[0], theta0=1e-6, phi0=0, E0_theta=1, E0_phi=0)
-                E = sphere_scattering.ComputeField(Qinc, Qsca, Qint, k, a, points, self.material_epsrs[0], self.material_murs[0])
+                E = sphere_scattering.ComputeField(Qinc, Qsca, Qint, k, a, pointsMie, self.material_epsrs[0], self.material_murs[0])
                 E = np.transpose(np.conjugate(E))
-                E_i = np.transpose(np.outer(self.PW_pol, np.exp(1j * k*np.dot(self.PW_dir, points))))
+                E_i = np.transpose(np.outer(self.PW_pol, np.exp(1j * k*np.dot(self.PW_dir, pointsMie))))
                 E = E - E_i ## to remove incident wave?
                 
                 import miepython
@@ -1520,15 +1523,17 @@ class Scatt3DProblem():
                 #     mie_Es[i, 2] = mie[0]*np.cos(theta) - mie[1]*np.sin(theta) ## z-comp
                 #===============================================================
                     
-                from scattnlay import scattnlay, fieldnlay
-                terms, E2, H = fieldnlay(np.zeros(1)+x, np.zeros(1)+m, points[0]/a*2, points[1]/a*2, points[2]/a*2,  mp=True)
-                
-                mie_Es = E2
-                mie_Es = mie_Es - E_i
-                mie_Es = np.conj(mie_Es) ## because the imaginary part is negative for some reason
-                
-                ax3.plot(posvec, np.imag(mie_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:cyan')
-                ax3.plot(posvec, np.real(mie_Es[:, 0]), label='scattnlay', linestyle = 'solid', linewidth=linewidth, color='tab:cyan')
+                #===============================================================
+                # from scattnlay import scattnlay, fieldnlay
+                # terms, E2, H = fieldnlay(np.zeros(1)+x, np.zeros(1)+m, points[0]/a*2, points[1]/a*2, points[2]/a*2,  mp=True)
+                # 
+                # mie_Es = E2
+                # mie_Es = mie_Es - E_i
+                # mie_Es = np.conj(mie_Es) ## because the imaginary part is negative for some reason
+                # 
+                # ax3.plot(posvec, np.imag(mie_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:cyan')
+                # ax3.plot(posvec, np.real(mie_Es[:, 0]), label='scattnlay', linestyle = 'solid', linewidth=linewidth, color='tab:cyan')
+                #===============================================================
                 
                 ## plot components
                 ax1.plot(posvec, np.abs(E_values[:, 0]), label='x-comp.', color = 'red')
@@ -1541,23 +1546,23 @@ class Scatt3DProblem():
                 ax3.plot(posvec, np.imag(E_values[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color='tab:blue')
                 
                 ## also plot the result with other mesh sizes?
-                for ho, color in [(1/2, 'tab:orange'), (1/10, 'tab:red')]:
+                for ho, color in [(1/10, 'tab:red')]: #(1/2, 'tab:orange')
                     E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
                     ax3.plot(posvec, np.real(E_load[:, 0]), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=linewidth, linestyle = 'solid', color=color)
                     ax3.plot(posvec, np.imag(E_load[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color=color)
                     
                 if(name=='z'): ## different plane-wave directions, so switch for plotting
-                    posvec = -posvec
+                    posvecMie = -posvecMie
                     FEKOpos = -FEKOpos
                 ## plot components
-                ax1.plot(posvec, np.abs(E[:, 0]), label='x-comp. mie theory', linestyle = ':', color = 'red')
-                ax1.plot(posvec, np.abs(E[:, 1]), label='y-comp. mie theory', linestyle = ':', color = 'blue')
-                ax1.plot(posvec, np.abs(E[:, 2]), label='z-comp. mie theory', linestyle = ':', color = 'green')
+                ax1.plot(posvecMie, np.abs(E[:, 0]), label='x-comp. mie theory', linestyle = ':', color = 'red')
+                ax1.plot(posvecMie, np.abs(E[:, 1]), label='y-comp. mie theory', linestyle = ':', color = 'blue')
+                ax1.plot(posvecMie, np.abs(E[:, 2]), label='z-comp. mie theory', linestyle = ':', color = 'green')
                 ## plot magnitudes
-                ax2.plot(posvec, np.sqrt(np.abs(E[:, 0])**2+np.abs(E[:, 1])**2+np.abs(E[:, 2])**2), label='mie theory')
+                ax2.plot(posvecMie, np.sqrt(np.abs(E[:, 0])**2+np.abs(E[:, 1])**2+np.abs(E[:, 2])**2), label='mie theory')
                 ## plot real/imags
-                ax3.plot(posvec, np.real(E[:, 0]), label='mie theory', linestyle = 'solid', linewidth=linewidth, color='tab:green')
-                ax3.plot(posvec, np.imag(E[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:green')
+                ax3.plot(posvecMie, np.real(E[:, 0]), label='mie theory', linestyle = 'solid', linewidth=linewidth, color='tab:green')
+                ax3.plot(posvecMie, np.imag(E[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:green')
                 ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:purple')
                 ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO', linestyle = 'solid', linewidth=linewidth, color='tab:purple')
                 
@@ -1588,6 +1593,7 @@ class Scatt3DProblem():
                 second_legend = ax3.legend(handles=handleds, loc='lower right', framealpha=0.5)
                 ax3.add_artist(first_legend)
                 ax3.add_artist(second_legend)
+                ax3.set_xlim(posvec[0], posvec[-1])
                 
                 fig1.tight_layout()
                 fig2.tight_layout()

@@ -153,7 +153,7 @@ mamba activate Scatt3D
 # mamba env remove -n Scatt3D # to remove it for reinstalling.
 mamba install fenics-dolfinx mpich petsc=*=complex*
 mamba install scipy matplotlib python-gmsh pyvista pyvistaqt spgl1 h5py psutil memory_profiler numpy miepython cvxpy cvxopt
-pip install PyScalapack imageio[ffmpeg] wigners
+pip install PyScalapack imageio[ffmpeg] wigners latex
 ##
 
 Potential jobscript thing to send/retrieve data to node-local disks:

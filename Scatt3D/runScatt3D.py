@@ -62,6 +62,14 @@ if __name__ == '__main__':
     if(len(sys.argv) == 1): ## assume computing on local computer, not cluster. In jobscript for cluster, give a dummy argument
         filename = 'localCompTimesMems.npz'
         matplotlib.use("QtAgg") ## so that plots actually appear
+        plt.rc('axes', titlesize=16)     # fontsize of the axes title
+        plt.rc('axes', labelsize=20)    # fontsize of the x and y labels
+        plt.rc('xtick', labelsize=14)    # fontsize of the tick labels
+        plt.rc('ytick', labelsize=14)    # fontsize of the tick labels
+        plt.rc('legend', fontsize=12)    # legend fontsize
+        plt.rc('figure', titlesize=30)  # fontsize of the figure title'
+        plt.rc('text', usetex=True) ## use latex to generate the font
+        plt.rc('text.latex', preamble=r'\usepackage{amsmath} \usepackage{bm}') ## load in some packages so I can bold stuff
     else:
         filename = 'prevRuns.npz'
         
@@ -184,7 +192,8 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
-        prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
+        if(showPlots):
+            prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -703,7 +712,7 @@ if __name__ == '__main__':
     
     #reconstructionMeshSizeTesting(0)
     #reconstructionMeshSizeTesting(1)
-    reconstructionMeshSizeTesting(2)
+    #reconstructionMeshSizeTesting(2)
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
@@ -721,16 +730,13 @@ if __name__ == '__main__':
     # runName = 'testRunComplex2Obj'
     # testFullExample(h=1/3, degree=3, runName=runName,
     #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11})
+    #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    
-    #===========================================================================
-    # runName = 'testRunD3'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11})
-    #===========================================================================
+    runName = 'testRunD3'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
+                    prob_settings={'Nf': 10})
     
     #===========================================================================
     # runName = 'testRun_airDefect_Objectepsr2.1'
@@ -760,7 +766,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
@@ -794,7 +800,7 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/3.5, degree=1, showPlots=True)
+    #testSphereScattering(h=1/3.5, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
@@ -802,7 +808,7 @@ if __name__ == '__main__':
     
     #===========================================================================
     # runName = 'patchPatternTest_ho3.5' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 12), name=runName, showPlots=False)
+    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
     #===========================================================================
     

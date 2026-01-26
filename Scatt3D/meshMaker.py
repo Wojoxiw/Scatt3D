@@ -180,13 +180,13 @@ class MeshInfo():
         self.antenna_height = antenna_height * self.lambda0
         self.antenna_depth = antenna_depth * self.lambda0
         if(self.antenna_type == 'patch' or self.antenna_type == 'patchtest'): ## specify the dimensions here, for a patch active near 10 GHz. Taken from FEKO sim.
-            self.antenna_height = 1e-3 ## the height
-            self.patch_length = 12.905e-3
-            self.patch_width = 13.986e-3
-            self.antenna_width = self.patch_width*2 ## the width
-            self.antenna_depth = self.patch_length*2 ## the length (in x)
+            self.antenna_height = 1.55e-3 ## the height
+            self.patch_length = 5.900e-3
+            self.patch_width = 10.04e-3
+            self.antenna_width = 24.05e-3 ## the width
+            self.antenna_depth = 13.68e-3 ## the length (in x)
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
-            self.feed_offset = 2.227e-3
+            self.feed_offset = 2.252e-3
             
         if(antenna_bounding_box_offset == 0): ## if unset
             self.bb = min(h/2, self.lambda0/10)

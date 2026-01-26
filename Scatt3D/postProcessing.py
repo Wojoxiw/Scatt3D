@@ -493,7 +493,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             print((c0/10e9)/data['meshSize'])
             #print(S_ref)
             for m in np.arange(N_antennas):
-                plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A#{m})') ## try plotting the Ss
+                plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A_{m})') ## try plotting the Ss
             #plt.plot(np.abs(S_dut.flatten()))
             fekof = 'TestStuff/FEKO patch S11 new.dat'
             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
