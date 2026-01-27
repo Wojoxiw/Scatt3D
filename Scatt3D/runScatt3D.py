@@ -192,8 +192,7 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
-        if(showPlots):
-            prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
+        prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -733,10 +732,12 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    runName = 'testRunD3'
-    testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'Nf': 10})
+    #===========================================================================
+    # runName = 'testRunD3'
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'Nf': 10})
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRun_airDefect_Objectepsr2.1'
@@ -766,7 +767,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
@@ -806,11 +807,9 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #===========================================================================
-    # runName = 'patchPatternTest_ho3.5' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
-    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
-    #===========================================================================
+    runName = 'patchPatternTest_ho10' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    testPatchPattern(h=1/10, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)

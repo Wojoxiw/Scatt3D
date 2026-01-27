@@ -1277,6 +1277,8 @@ class Scatt3DProblem():
                     #print('intensity',np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2)
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,0]), label = 'theta-pol')
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,1]), label = 'phi-pol')'
+                    np.savez(f'{self.dataFolder}{self.name}_SimulatedFFs_hOverLamb{FEMm.meshInfo.h/FEMm.meshInfo.lambda0:.2e}.npz', farfields=farfields)
+                    
                     mag = np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2
                     
                     if(plotFF):

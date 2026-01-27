@@ -457,16 +457,13 @@ class MeshInfo():
                     defectDimTags.append((self.tdim, defect))
                 elif(self.defect_geom == 'complex2'): ## two cylinder that doesn't go all the way through, one near centre one near edge, and an oblate cylindrical ring defect around one cylinder
                     defect = gmsh.model.occ.addCylinder(self.object_scale*0.36,-self.object_scale*0.3,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius)
-                    defect = gmsh.model.occ.intersect([(self.tdim, defect)], matDimTags, removeTool=False)[0][0][1] ## only include the part of the defect in the object (for some reason, it extends beyond)
                     defectDimTags.append((self.tdim, defect))
                     defect2 = gmsh.model.occ.addCylinder(self.object_scale*0.06,-self.object_scale*0.01,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius)
-                    defect2 = gmsh.model.occ.intersect([(self.tdim, defect2)], matDimTags, removeTool=False)[0][0][1] ## only include the part of the defect in the object (for some reason, it extends beyond)
                     defectDimTags.append((self.tdim, defect2))
                     
                     defect3 = gmsh.model.occ.addCylinder(0,0,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius*2.5)
                     defect3Inner = gmsh.model.occ.addCylinder(0,0,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius*2)
                     defect3 = gmsh.model.occ.cut([(self.tdim, defect3)], [(self.tdim, defect3Inner)])[0][0][1]
-                    defect3 = gmsh.model.occ.intersect([(self.tdim, defect3)], matDimTags, removeTool=False)[0][0][1] ## only include the part of the defect in the object (for some reason, it extends beyond)
                     gmsh.model.occ.dilate([(self.tdim, defect3)], 0, 0, 0, 1.46, 1, 1) ## stretch it in x
                     defectDimTags.append((self.tdim, defect3))
                 elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
