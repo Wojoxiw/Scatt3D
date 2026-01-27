@@ -184,7 +184,7 @@ if __name__ == '__main__':
     def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9]), name='patchPatternTest', showPlots=True): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
         epsrs=[]
         epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
         epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
@@ -801,7 +801,7 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/3.5, degree=3, showPlots=True)
+    #testSphereScattering(h=1/8, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
