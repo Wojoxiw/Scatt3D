@@ -617,7 +617,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = max(1.5, np.sqrt(epsr)) ## just so the material is always relatively well resolved
+                    sf = min(1.6, np.sqrt(epsr)) ## just so the material is always relatively well resolved
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [matDimTags[n][1]])
@@ -629,7 +629,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = max(2.5, np.sqrt(epsr)) ## antenna volume is probably more important than the objects
+                    sf = max(2, np.sqrt(epsr)) ## antenna volume is probably more important than the objects
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(antennaDielectricMeshField, 'VolumesList', [antennaMatDimTags[n][1]])

@@ -725,12 +725,10 @@ if __name__ == '__main__':
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
     
-    #===========================================================================
-    # runName = 'testRunComplex2Obj'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
-    #===========================================================================
+    runName = 'testRunComplex2Obj'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     
     #===========================================================================
     # runName = 'testRunD3'
@@ -767,7 +765,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
@@ -807,8 +805,8 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTest_ho10' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    testPatchPattern(h=1/10, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    #runName = 'patchPatternTest_ho10' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    #testPatchPattern(h=1/10, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
     
     #runName = 'testingComplexObject' ## h=1/8
