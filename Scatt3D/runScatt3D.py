@@ -197,9 +197,11 @@ if __name__ == '__main__':
         epsrs.append(2.1*(1 - 0j))
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
         if(len(freqs) == 1): ## plot the given frequency, if there is only 1
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
             prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
+        else: ## save Ss
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -845,9 +847,9 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTest_ho8' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    runName = 'patchPatternTest_ho8' #'patchPatternTest_ho8' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
     testPatchPattern(h=1/8, degree=3, name=runName, showPlots=False)
+    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
     
     #runName = 'testingComplexObject' ## h=1/8
