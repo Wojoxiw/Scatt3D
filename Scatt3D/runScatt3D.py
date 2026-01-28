@@ -92,7 +92,7 @@ if __name__ == '__main__':
         rmeshInfo = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', justInterpolationSubmesh=True, reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
         prob.makeOptVectors(reconstructionMeshInfo = rmeshInfo)
         
-    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', ErefEdut=False, runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example
+    def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', ErefEdut=False, runName=runName, mesh_settings={}, prob_settings={}): ## Testing toward a full example. Default settings are to reconstruct with ErefEref, and S-parameters for both cases from the DUT sim.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         mesh_settings = {'h': h, 'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': ErefEdut, 'verbosity': verbosity, 'Nf': 11, 'computeBoth': True} | prob_settings
@@ -703,6 +703,23 @@ if __name__ == '__main__':
             print('Plotting complete.')
             plt.show()
             
+    def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
+        fname  = f'{folder}meshSizeByErrStuff.npz'## for the data files
+        if(plotting): ## make the plots, assuming data already made
+            load = np.load(fname)
+            meshSizes = load['meshSizes']
+            SSNFE = load['SSNFE']
+            accRefRef = load['accRefRef']
+            accRefDut = load['accRefDut']
+            
+            plt.plot(meshSizes, SSNFE, label='SS N-F E')
+        else:
+            meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4] ## h/lambda
+            # start with SSNFE
+            for ho, color in [(1/8, 'tab:red')]: #(1/2, 'tab:orange')
+                E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
+                for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
+                    pass
             
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
@@ -731,6 +748,11 @@ if __name__ == '__main__':
     #                 mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4.5, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
+    
+    runName = 'testRunD3.3'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'Nf': 11})
     
     #===========================================================================
     # runName = 'testRunD3'
@@ -801,15 +823,17 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/8, degree=3, showPlots=True)
+    #testSphereScattering(h=1/3.5, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTest_ho8' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=True)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    #===========================================================================
+    # runName = 'patchPatternTest_ho3.5' #'patchPatternTest_ho8' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 12), name=runName, showPlots=False)
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    #===========================================================================
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)

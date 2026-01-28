@@ -881,7 +881,7 @@ class Scatt3DProblem():
                 sys.stdout.flush()
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
-                Zrel.value = k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this factor is only multiplied by then divided by - unneeded (also only makes sense for a waveguide?)
+                Zrel.value = 1/self.antenna_mat_epsrs[-1]*k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 for n in range(antCount):
@@ -1288,7 +1288,6 @@ class Scatt3DProblem():
                             
                             fekof = 'TestStuff/FEKO patch gain new.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                            print(np.shape(fekoData))
                             ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$/H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--')
                             ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$/E-plane)', linewidth = 1.2, color = 'red', linestyle = '--')
                         else: ## don't normalize, compare FFs
@@ -1297,7 +1296,6 @@ class Scatt3DProblem():
                             
                             fekof = 'TestStuff/FEKO patch Efield.dat' ## FEKO seems to normalize to 1 Watt output power, so do that for this code when comparing
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                            print(np.shape(fekoData))
                             ax1.plot(fekoData[0], fekoData[2], label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
                             ax1.plot(fekoData[0], fekoData[1], label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
                     else:
@@ -1548,7 +1546,7 @@ class Scatt3DProblem():
                 ax3.plot(posvec, np.imag(E_values[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color='tab:blue')
                 
                 ## also plot the result with other mesh sizes?
-                for ho, color in [(1/10, 'tab:red')]: #(1/2, 'tab:orange')
+                for ho, color in [(1/8, 'tab:red')]: #(1/2, 'tab:orange')
                     E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
                     ax3.plot(posvec, np.real(E_load[:, 0]), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=linewidth, linestyle = 'solid', color=color)
                     ax3.plot(posvec, np.imag(E_load[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color=color)

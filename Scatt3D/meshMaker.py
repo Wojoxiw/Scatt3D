@@ -187,6 +187,12 @@ class MeshInfo():
             self.antenna_depth = 13.68e-3 ## the length (in x)
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = 2.252e-3
+            self.kc = 0 ## cutoff wavenumber
+        elif(self.antenna_type == 'waveguide'):
+            self.kc = pi/self.antenna_width ## cutoff wavenumber... maybe correct
+        else:
+            print('Nonvalid antenna geom, exiting...')
+            exit()
             
         if(antenna_bounding_box_offset == 0): ## if unset
             self.bb = min(h/2, self.lambda0/10)
@@ -196,7 +202,7 @@ class MeshInfo():
         self.phi_antennas = np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## placement angles
         self.pos_antennas = np.array([[self.antenna_radius*np.cos(phi), self.antenna_radius*np.sin(phi), self.antenna_z_offset] for phi in self.phi_antennas]) ## placement positions
         self.rot_antennas = self.phi_antennas + np.pi/2 ## rotation so that they face the center
-        self.kc = pi/self.antenna_width ## cutoff wavenumber
+        
         ## Object + defect(s) parameters
         self.reconstruction_submesh_radius = min(object_radius*self.lambda0*1.2, (object_radius+0.15)*self.lambda0) ## should ideally contain slightly more than the object
         if(object_geom == 'sphere'):
@@ -617,7 +623,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = min(1.6, np.sqrt(epsr)) ## just so the material is always relatively well resolved
+                    sf = max(1.5, np.sqrt(epsr)) ## just so the material is always relatively well resolved
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [matDimTags[n][1]])
@@ -629,7 +635,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = max(2, np.sqrt(epsr)) ## antenna volume is probably more important than the objects
+                    sf = max(2.5, np.sqrt(epsr)) ## antenna volume is probably more important than the objects
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(antennaDielectricMeshField, 'VolumesList', [antennaMatDimTags[n][1]])
