@@ -102,7 +102,7 @@ if __name__ == '__main__':
             for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
                 epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
                 epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
-                epsrs.append(2.1*(1 - 0j))
+                epsrs.append(2.1*(1 - 0.01j))
             prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
         
         if(dutOnRefMesh):
@@ -194,7 +194,7 @@ if __name__ == '__main__':
         epsrs=[]
         epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
         epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
-        epsrs.append(2.1*(1 - 0j))
+        epsrs.append(2.1*(1 - 0.01j))
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         if(len(freqs) == 1): ## plot the given frequency, if there is only 1
@@ -719,7 +719,7 @@ if __name__ == '__main__':
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
             
-            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=2)
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=f'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2)
         
         fekof = 'TestStuff/FEKO patch S11 new.dat'
         fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
@@ -727,7 +727,7 @@ if __name__ == '__main__':
         plt.grid()
         plt.ylabel(r'S$_{11}$ [dB]')
         plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Simulated vs FEKO |S$_{11}$|')
+        plt.title(r'Simulated vs FEKO |S$_{11}$')
         plt.legend()
         plt.tight_layout()
         plt.show()
@@ -778,10 +778,12 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    runName = 'testRunD3.3'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'Nf': 21})
+    #===========================================================================
+    # runName = 'testRunD3.3'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'Nf': 21})
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowContrast'
@@ -825,7 +827,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
@@ -865,14 +867,12 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #===========================================================================
-    # runName = 'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    # #testPatchPattern(h=1/1, degree=3, name=runName, showPlots=True)
-    # #testPatchPattern(h=1/1, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
-    # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
-    # 
-    # patchSsPlot([1, 3.5, 8])
-    #===========================================================================
+    runName = 'patchPatternTest_ho8.0' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    testPatchPattern(h=1/1, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    testPatchPattern(h=1/1, degree=3, name=runName, showPlots=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+     
+    #patchSsPlot([1, 3.5, 8])
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)

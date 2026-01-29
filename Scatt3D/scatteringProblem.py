@@ -882,6 +882,7 @@ class Scatt3DProblem():
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
                 Zrel.value = 1/self.antenna_mat_epsrs[-1]*k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
+                print(f'{self.antenna_mat_epsrs[-1]=}')
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 for n in range(antCount):
