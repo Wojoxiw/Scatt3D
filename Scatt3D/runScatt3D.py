@@ -120,7 +120,7 @@ if __name__ == '__main__':
         if(recMesh): ## make the opt vects on the rec mesh... try h=1/10
             rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
             recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-            prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, justInterping=True, computeImmediately=False **prob_settings)
+            prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, justInterping=True, computeImmediately=False, **prob_settings)
             prob.makeOptVectors(reconstructionMesh=True)
         prevRuns.memTimeAppend(prob)
     
@@ -733,7 +733,7 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        fname  = f'{folder}meshSizeByErrStuff.npz'## for the data files
+        fname  = f'{folder}meshSizeByErrStuff.npz' ## for the data files - save data after each run
         if(plotting): ## make the plots, assuming data already made
             load = np.load(fname)
             meshSizes = load['meshSizes']
@@ -745,10 +745,28 @@ if __name__ == '__main__':
         else:
             meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4] ## h/lambda
             # start with SSNFE
-            for ho, color in [(1/8, 'tab:red')]: #(1/2, 'tab:orange')
-                #E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
-                for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
-                    pass
+            def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
+                prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+                refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
+                #refMesh.plotMeshPartition()
+                #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+                freqs = np.linspace(10e9, 12e9, 1)
+                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
+                if(showPlots):
+                    prob.calcNearField(direction='side')
+                prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
+                prevRuns.memTimeAppend(prob)
+            # then ErefEref basic case
+            runName = 'testRunD3.3'
+            testFullExample(h=1/3, degree=3, runName=runName, ErefEdut=False,
+                            mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                            prob_settings={'Nf': 21})
+            postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[25]) ## a-priori lasso solution
+            # then ErefEdut basic case
+            testFullExample(h=1/3, degree=3, runName=runName, ErefEdut=True,
+                            mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                            prob_settings={'Nf': 21})
+            postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[25]) ## a-priori lasso solution
             
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
@@ -778,12 +796,10 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    #===========================================================================
-    # runName = 'testRunD3.3'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 21})
-    #===========================================================================
+    runName = 'testRunD3.3'
+    testFullExample(h=1/3, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'Nf': 21})
     
     #===========================================================================
     # runName = 'testRunD3LowContrast'
@@ -791,41 +807,7 @@ if __name__ == '__main__':
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 prob_settings={'Nf': 21, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     #===========================================================================
-    
-    #===========================================================================
-    # runName = 'testRunD3'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 10})
-    #===========================================================================
-    
-    #===========================================================================
-    # runName = 'testRun_airDefect_Objectepsr2.1'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11, 'material_epsrs' : [2.1*(1 - 0.01j)], 'defect_epsrs' : [1 - 0j]})
-    #===========================================================================
-    
-    #===========================================================================
-    # runName = 'testRunD3LowerBandwidth' ## roughly where the S11 of the patch is below 0.8
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'freqs': np.linspace(9.1e9, 10.8e9, 11)}) ## roughly where the S11 of the patch is below 0.8
-    #===========================================================================
-    
-    #===========================================================================
-    # runName = 'testRunD3EvenLowerBandwidth' ## roughly where the S11 of the patch is below 0.6
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 5, 'domain_radius': 4, 'domain_height': 1.5, 'viewGMSH': False},
-    #                 prob_settings={'freqs': np.linspace(9.4e9, 10.32e9, 11)}) 
-    #===========================================================================
-    
-    #===========================================================================
-    # runName = 'testRunPMLisPEC'
-    # testFullExample(h=1/3, degree=3, runName=runName,
-    #                 mesh_settings={'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'domain_height': 1.1, 'dome_height': 0.6, 'viewGMSH': False},
-    #                 prob_settings={'Nf': 11})
-    #===========================================================================
+
     
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
@@ -848,8 +830,6 @@ if __name__ == '__main__':
     #runName = 'testRunDifferentDUTAntennas' ## h=1/3.6, d3
     #testRunDifferentDUTAntennas(h=1/3.6, degree=3)
     
-    
-    
     #testFullExample(h=1/8, degree=1)
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=False)
     
@@ -867,10 +847,12 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchPatternTest_ho8.0' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    testPatchPattern(h=1/8.0, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
-    testPatchPattern(h=1/8.0, degree=3, name=runName, showPlots=False)
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    #===========================================================================
+    # runName = 'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    # testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=False)
+    # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    #===========================================================================
      
     #patchSsPlot([1, 3.5, 8])
     

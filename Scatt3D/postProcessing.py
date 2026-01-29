@@ -870,7 +870,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         
         timestep = 3
         if(not returnResults or timestep in returnResults): ## if it is empty, or requested
-            x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b #numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+            x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]) #np.linalg.pinv(A_ap, rcond = rcond) @ b
             cellData.x.array[:] = x_temp + 0j
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
@@ -879,7 +879,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(not onlyAPriori):
             timestep = 4
             if(not returnResults or timestep in returnResults): ## if it is empty, or requested
-                x_temp[idx_non_pml] = np.linalg.pinv(A, rcond = rcond) @ b #numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
+                x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]) #np.linalg.pinv(A, rcond = rcond) @ b
                 cellData.x.array[:] = x_temp + 0j
                 f.write_function(cellData, 4)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
