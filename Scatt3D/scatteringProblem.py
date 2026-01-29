@@ -882,7 +882,6 @@ class Scatt3DProblem():
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
                 Zrel.value = 1/self.antenna_mat_epsrs[-1]*k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
-                print(f'{self.antenna_mat_epsrs[-1]=}')
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 for n in range(antCount):
@@ -1278,30 +1277,37 @@ class Scatt3DProblem():
                     #print('intensity',np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2)
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,0]), label = 'theta-pol')
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,1]), label = 'phi-pol')'
-                    np.savez(f'{self.dataFolder}{self.name}_SimulatedFFs_hOverLamb{FEMm.meshInfo.h/FEMm.meshInfo.lambda0:.2e}.npz', farfields=farfields)
+                    np.savez(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{FEMm.meshInfo.h/FEMm.meshInfo.lambda0:.2e}.npz', farfields=farfields)
                     
                     mag = np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2
-                    
+                    linewidth = 1.5
                     if(plotFF):
                         if True: ## normalize and compare to FEKO values
-                            ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
-                            ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                            #ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = ':')
+                            #ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
                             
+                            for ho, color in [(1.0, 'tab:orange'), (3.5, 'tab:blue'), (8.0, 'tab:red')]: ## just plot the following cases
+                                data = np.load(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{1/ho:.2e}.npz')
+                                FFs = data['farfields']
+                                mag = np.abs(FFs[b,:,0])**2 + np.abs(FFs[b,:,1])**2  
+                                ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), linewidth = linewidth, color = color, linestyle = ':')
+                                ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')
+                                
                             fekof = 'TestStuff/FEKO patch gain new.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                            ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=90^\circ$/H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--')
-                            ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO ($\phi=0^\circ$/E-plane)', linewidth = 1.2, color = 'red', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), linewidth = linewidth, color = 'tab:purple', linestyle = ':')
+                            ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO', linewidth = linewidth, color = 'tab:purple', linestyle = '-')
                         else: ## don't normalize, compare FFs
-                            ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
-                            ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                            ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = '-')
+                            ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
                             
-                            fekof = 'TestStuff/FEKO patch Efield.dat' ## FEKO seems to normalize to 1 Watt output power, so do that for this code when comparing
+                            fekof = 'TestStuff/FEKO patch Efield.dat' ## FEKO seems to normalize to 1 Watt output power, so do that for this code when comparing (I have not been able to get this to match)
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                            ax1.plot(fekoData[0], fekoData[2], label = r'FEKO ($\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '--')
-                            ax1.plot(fekoData[0], fekoData[1], label = r'FEKO ($\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[2], label = r'FEKO ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = '--')
+                            ax1.plot(fekoData[0], fekoData[1], label = r'FEKO ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '--')
                     else:
-                        ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated (H-plane/$\phi=90^\circ$)', linewidth = 1.2, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
-                        ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated (E-plane/$\phi=0^\circ$)', linewidth = 1.2, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                        ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated (H-plane/$\phi=90^\circ$)', linewidth = linewidth, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
+                        ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated (E-plane/$\phi=0^\circ$)', linewidth = linewidth, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
                     
                     plt.xlabel('Theta [degrees]')
                     
@@ -1316,17 +1322,30 @@ class Scatt3DProblem():
                             else: ## if not, we are changing theta angles and in the parallel plane
                                 mie[i] = miepython.i_par(m, x, np.cos((angles[i, 0]*pi/180)), norm='qsca')*pi*FEMm.meshInfo.object_scale**2 ## +pi/2 since it seems backwards => forwards
                         
-                        ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = 1.2, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
-                        ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = 1.2, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
+                        ax1.plot(angles[:nvals, 0], mie[:nvals], label = 'Miepython (H-plane)', linewidth = linewidth, color = 'blue', linestyle = '--') ## first part should be H-plane ## -180 so 0 is the forward direction
+                        ax1.plot(angles[nvals:, 0], mie[nvals:], label = 'Miepython (E-plane)', linewidth = linewidth, color = 'red', linestyle = '--') ## -90 so 0 is the forward direction
                         
                         ##plot error
-                        ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = 1.2, color = 'blue', linestyle = ':')
-                        ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = 1.2, color = 'red', linestyle = ':')
+                        ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = linewidth, color = 'blue', linestyle = ':')
+                        ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = linewidth, color = 'red', linestyle = ':')
                         print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
                         plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
                     else:
                         plt.title(f'FF E-field Intensity ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
-                    ax1.legend()
+                    if(plotFF):
+                        first_legend = ax1.legend(framealpha=0.5, ncol=1, loc = 'lower left')
+                        ##second legend to distinguish between dashed and regular lines (phi- and theta- pols)
+                        handleds = []
+                        line_dashed = mlines.Line2D([], [], color='black', linestyle='solid', linewidth=linewidth, label=r'E-plane') ##fake lines to create second legend elements
+                        handleds.append(line_dashed)
+                        line_solid = mlines.Line2D([], [], color='black', linestyle=':', linewidth=linewidth, label=r'H-plane') ##fake lines to create second legend elements
+                        handleds.append(line_solid)
+                            
+                        second_legend = ax1.legend(handles=handleds, loc='lower right', framealpha=0.5)
+                        ax1.add_artist(first_legend)
+                        ax1.add_artist(second_legend)
+                    else:
+                        ax1.legend()
                     #ax1.set_yscale('log')
                     ax1.grid(True)
                     plt.savefig(self.dataFolder+self.name+'FFs.png')
