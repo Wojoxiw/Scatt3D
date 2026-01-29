@@ -825,7 +825,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 11})
     #===========================================================================
     
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
