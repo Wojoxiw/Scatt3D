@@ -120,7 +120,7 @@ if __name__ == '__main__':
         if(recMesh): ## make the opt vects on the rec mesh... try h=1/10
             rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
             recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-            prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, justInterping=True, **prob_settings)
+            prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, justInterping=True, computeImmediately=False **prob_settings)
             prob.makeOptVectors(reconstructionMesh=True)
         prevRuns.memTimeAppend(prob)
     
@@ -712,6 +712,26 @@ if __name__ == '__main__':
             print('Plotting complete.')
             plt.show()
             
+    def patchSsPlot(hols): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
+        for ho in hols:
+            name = f'patchPatternTest_ho{ho:.1f}'
+            data = np.load(folder+name+'output.npz')
+            S11 = data['S_ref'][:, 0, 0]
+            fvec = data['fvec']
+            
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=2)
+        
+        fekof = 'TestStuff/FEKO patch S11 new.dat'
+        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+        plt.grid()
+        plt.ylabel(r'S$_{11}$ [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Simulated vs FEKO |S$_{11}$|')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+        
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
         fname  = f'{folder}meshSizeByErrStuff.npz'## for the data files
         if(plotting): ## make the plots, assuming data already made
@@ -846,10 +866,12 @@ if __name__ == '__main__':
     #testSolverSettings(h=1/6)
     
     #===========================================================================
-    # runName = 'patchPatternTest_ho8' #'patchPatternTest_ho8' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    # #testPatchPattern(h=1/8, degree=3, name=runName, showPlots=False)
-    # testPatchPattern(h=1/8, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    # runName = 'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    # #testPatchPattern(h=1/1, degree=3, name=runName, showPlots=True)
+    # #testPatchPattern(h=1/1, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    # 
+    # patchSsPlot([1, 3.5, 8])
     #===========================================================================
     
     #runName = 'testingComplexObject' ## h=1/8

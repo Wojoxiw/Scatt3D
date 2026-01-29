@@ -498,7 +498,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             fekof = 'TestStuff/FEKO patch S11 new.dat'
             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
             plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-            plt.plot()
             plt.grid()
             plt.ylabel(r'S$_{11}$ [dB]')
             plt.xlabel(r'Frequency [GHz]')
