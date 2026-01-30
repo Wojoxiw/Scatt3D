@@ -1295,17 +1295,17 @@ class Scatt3DProblem():
                             #ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = ':')
                             #ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
                             
-                            for ho, color in [(1.0, 'tab:orange'), (3.5, 'tab:blue'), (8.0, 'tab:red')]: ## just plot the following cases
+                            for ho, color in [(3.5, 'tab:blue'), (8.0, 'tab:red')]: #(1.0, 'tab:orange') ## just plot the following cases
                                 data = np.load(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{1/ho:.2e}.npz')
                                 FFs = data['farfields']
                                 mag = np.abs(FFs[b,:,0])**2 + np.abs(FFs[b,:,1])**2  
-                                ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), linewidth = linewidth, color = color, linestyle = ':')
-                                ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')
+                                ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '--')
+                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')
                                 
                             fekof = 'TestStuff/FEKO patch gain new.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                            ax1.plot(fekoData[0], fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2]))), linewidth = linewidth, color = 'tab:purple', linestyle = ':')
-                            ax1.plot(fekoData[0], fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2]))), label = r'FEKO', linewidth = linewidth, color = 'tab:purple', linestyle = '-')
+                            ax1.plot(fekoData[0], 20*np.log10(fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2])))), linewidth = linewidth, color = 'tab:purple', linestyle = '--')
+                            ax1.plot(fekoData[0], 20*np.log10(fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2])))), label = r'FEKO', linewidth = linewidth, color = 'tab:purple', linestyle = '-')
                         else: ## don't normalize, compare FFs
                             ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = '-')
                             ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
@@ -1340,9 +1340,10 @@ class Scatt3DProblem():
                         print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
                         plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
                     else:
-                        plt.title(f'FF E-field Intensity ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
+                        plt.title(f'Normalized Patch Antenna Gain')
+                        plt.ylabel('Gain [dB]')
                     if(plotFF):
-                        first_legend = ax1.legend(framealpha=0.5, ncol=1, loc = 'lower left')
+                        first_legend = ax1.legend(framealpha=0.5, ncol=1, loc = 'upper left')
                         ##second legend to distinguish between dashed and regular lines (phi- and theta- pols)
                         handleds = []
                         line_dashed = mlines.Line2D([], [], color='black', linestyle='solid', linewidth=linewidth, label=r'E-plane') ##fake lines to create second legend elements
@@ -1350,13 +1351,14 @@ class Scatt3DProblem():
                         line_solid = mlines.Line2D([], [], color='black', linestyle=':', linewidth=linewidth, label=r'H-plane') ##fake lines to create second legend elements
                         handleds.append(line_solid)
                             
-                        second_legend = ax1.legend(handles=handleds, loc='lower right', framealpha=0.5)
+                        second_legend = ax1.legend(handles=handleds, loc='upper right', framealpha=0.5)
                         ax1.add_artist(first_legend)
                         ax1.add_artist(second_legend)
                     else:
                         ax1.legend()
                     #ax1.set_yscale('log')
                     ax1.grid(True)
+                    plt.tight_layout()
                     plt.savefig(self.dataFolder+self.name+'FFs.png')
                     if(showPlots):
                         plt.show()

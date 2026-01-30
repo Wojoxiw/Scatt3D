@@ -725,9 +725,9 @@ if __name__ == '__main__':
         fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
         plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
         plt.grid()
-        plt.ylabel(r'S$_{11}$ [dB]')
+        plt.ylabel(r'$|$S$_{11}|$ [dB]')
         plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Simulated vs FEKO |S$_{11}$')
+        plt.title(r'Patch Antenna Reflection Coefficient')
         plt.legend()
         plt.tight_layout()
         plt.show()
@@ -804,17 +804,17 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    runName = 'testRunD3.3'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'Nf': 21})
-    
     #===========================================================================
-    # runName = 'testRunD3LowContrast'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    # runName = 'testRunD3.3'
+    # testFullExample(h=1/3, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 21, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
+    #                 prob_settings={'Nf': 21})
     #===========================================================================
+    
+    runName = 'testRunD3LowContrast'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'Nf': 21, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
@@ -854,14 +854,12 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #===========================================================================
-    # runName = 'patchPatternTest_ho1.0' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    # #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
-    # #testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=False)
-    # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
-    #  
-    # patchSsPlot([1, 3.5, 8])
-    #===========================================================================
+    runName = 'patchPatternTest' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    #testPatchPattern(h=1/1, degree=1, name=runName, showPlots=True) ## plot the FF comp. with Feko
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
+    
+    patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)
