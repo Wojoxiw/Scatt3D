@@ -690,7 +690,7 @@ if __name__ == '__main__':
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
                 rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-                prob.switchToRecMesh(recMesh)
+                prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, dataFolder=folder, justInterping=True, **prob_settings)
                 prob.makeOptVectors(reconstructionMesh=True)
                 errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28]))
                 
@@ -808,13 +808,13 @@ if __name__ == '__main__':
     # runName = 'testRunD3.3'
     # testFullExample(h=1/3, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 21})
+    #                 prob_settings={'Nf': 26})
     #===========================================================================
     
     runName = 'testRunD3LowContrast'
     testFullExample(h=1/3.5, degree=3, runName=runName,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'Nf': 21, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
+                    prob_settings={'Nf': 26, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     

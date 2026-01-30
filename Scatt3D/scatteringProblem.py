@@ -288,12 +288,15 @@ class Scatt3DProblem():
                 self.compute(computeRef, makeOptVects=self.makeOptVects)
     
     
-    def switchToRecMesh(self, recMesh):
+    def switchToRecMesh(self, recMeshInfo):
         '''
         Switches the problem's ref mesh to a reconstruction mesh, so that optimization vectors are saved on that mesh.
         :param recMesh: The reconstruction mesh
         '''
-        self.FEMmesh_ref = FEMmesh(self.FEMmesh_ref.meshInfo, self.FEMmesh_ref.fem_degree, self.FEMmesh_ref.dxquaddeg, justInterping=True)
+        if(self.comm.rank == self.model_rank):
+            print('Switching to reconstruction mesh...')
+        sys.stdout.flush()
+        self.FEMmesh_ref = FEMmesh(recMeshInfo, self.FEMmesh_ref.fem_degree, self.FEMmesh_ref.dxquaddeg, justInterping=True)
         self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, self.epsr_bkg, self.mur_bkg, justInterping=True)
     
     #@profile
@@ -984,6 +987,19 @@ class Scatt3DProblem():
             meshInfo = FEMm.meshInfo
             xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
         xdmf.write_mesh(meshInfo.mesh)
+        
+        if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
+            if( hasattr(self, 'S_ref') and meshInfo.N_antennas>0 ): ## need at least S_ref and 1 antenna - otherwise, do not save
+                if(not hasattr(self, 'S_dut')):
+                    self.S_dut = np.array(0)
+                    b = np.array(0)
+                else:
+                    b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
+                    for nf in range(self.Nf):
+                        for m in range(meshInfo.N_antennas):
+                            for n in range(meshInfo.N_antennas):
+                                b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
+                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
@@ -1052,18 +1068,6 @@ class Scatt3DProblem():
                         #q.name = f'freq{nf}m={m}n={n}' ## it turns out names can make it more of a pain than using timesteps
                         xdmf.write_function(q, nf*antCount*antCount + m*antCount + n)
         xdmf.close()
-        if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
-            if( hasattr(self, 'S_ref') and meshInfo.N_antennas>0 ): ## need at least S_ref and 1 antenna - otherwise, do not save
-                if(not hasattr(self, 'S_dut')):
-                    self.S_dut = np.array(0)
-                    b = np.array(0)
-                else:
-                    b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
-                    for nf in range(self.Nf):
-                        for m in range(meshInfo.N_antennas):
-                            for n in range(meshInfo.N_antennas):
-                                b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
                 
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
             print(f'   done.')
