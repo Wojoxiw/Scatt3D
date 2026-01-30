@@ -733,7 +733,7 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4] ## h/lambda
+        meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5] ## h/lambda
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -745,7 +745,7 @@ if __name__ == '__main__':
                 NFerrs.append(err)
                 
                 ## then calculate the ErefEref err
-                ErefErefErrs.append(postProcessing.reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect'))
+                #ErefErefErrs.append(postProcessing.reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect'))
                 ## then the ErefEdut err
                 
             
@@ -765,15 +765,15 @@ if __name__ == '__main__':
                     prob.calcNearField() ## saves the data to a file
                     
                     # then ErefEref basic case
-                    testFullExample(h=1/3.5, degree=3, runName=runName+'ErefEref', ErefEdut=False,
+                    testFullExample(h=hol, degree=3, runName=runName+'ErefEref', ErefEdut=False,
                                     mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                                    prob_settings={'Nf': 21})
+                                    prob_settings={'Nf': 26})
                     postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName='', onlyAPriori=True)
                     
                     # then ErefEdut basic case
-                    testFullExample(h=1/3.5, degree=3, runName=runName+'_ErefEdut', ErefEdut=True,
+                    testFullExample(h=hol, degree=3, runName=runName+'_ErefEdut', ErefEdut=True,
                                     mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                                    prob_settings={'Nf': 21})
+                                    prob_settings={'Nf': 26})
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
@@ -784,6 +784,9 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(0)
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
+    
+    plotMeshSizeByErrors()
+    
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
     
@@ -804,10 +807,12 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 10, 'defect_epsrs': [2.0*(1 - 0.01j), 4.0*(1 - 0.01j), 3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    runName = 'testRunD3.3'
-    testFullExample(h=1/3, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'Nf': 26})
+    #===========================================================================
+    # runName = 'testRunD3.3'
+    # testFullExample(h=1/3, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'Nf': 26})
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowContrast'
@@ -816,7 +821,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 26, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
