@@ -120,7 +120,7 @@ if __name__ == '__main__':
         if(recMesh): ## make the opt vects on the rec mesh... try h=1/10
             rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
             recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-            prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, justInterping=True, computeImmediately=False, **prob_settings)
+            prob.switchToRecMesh(recMesh)
             prob.makeOptVectors(reconstructionMesh=True)
         prevRuns.memTimeAppend(prob)
     
@@ -183,7 +183,7 @@ if __name__ == '__main__':
         freqs = np.linspace(10e9, 12e9, 1)
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
         if(showPlots):
-            prob.calcNearField(direction='side')
+            prob.calcNearField()
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
         prevRuns.memTimeAppend(prob)
         
@@ -243,7 +243,7 @@ if __name__ == '__main__':
             refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, PML_thickness=0.5, domain_radius=0.9, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=deg, **meshOptions)
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, name=runName, MPInum = MPInum, makeOptVects=False, excitation = 'planewave', material_epsrs=[2.0*(1-0.01j)], Nf=1, fem_degree=deg, **probOptions)
             newval, khats, farfields, mies = prob.calcFarField(reference=True, compareToMie = False, showPlots=False, returnConvergenceVals=True) ## each return is FF surface area, khat integral at each angle, farfields+mies at each angle
-            simNF, FEKONF = prob.calcNearField(direction='side', FEKOcomp=True, showPlots=False)
+            simNF, FEKONF = prob.calcNearField(FEKOcomp=True, showPlots=False)
             prevRuns.memTimeAppend(prob)
             if(comm.rank == model_rank): ## only needed for main process
                 areaVals.append(newval)
@@ -690,7 +690,7 @@ if __name__ == '__main__':
             for h in 1/oh: ## do the reconstructions, then plot each time in case it crashes
                 rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': h, 'N_antennas': 9, 'order': 1, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
                 recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-                prob = scatteringProblem.Scatt3DProblem(comm, recMesh, MPInum = MPInum, name = runName, fem_degree=degree, dataFolder=folder, justInterping=True, **prob_settings)
+                prob.switchToRecMesh(recMesh)
                 prob.makeOptVectors(reconstructionMesh=True)
                 errs.append(postProcessing.solveFromQs(folder+runName, solutionName=f'recMeshSize_ho{1/h:.2f}', onlyAPriori=False, returnResults=[4,28]))
                 
@@ -733,40 +733,48 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        fname  = f'{folder}meshSizeByErrStuff.npz' ## for the data files - save data after each run
+        meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4] ## h/lambda
         if(plotting): ## make the plots, assuming data already made
-            load = np.load(fname)
-            meshSizes = load['meshSizes']
-            SSNFE = load['SSNFE']
-            accRefRef = load['accRefRef']
-            accRefDut = load['accRefDut']
+            NFerrs = []
+            ErefErefErrs = []
+            ErefEdutErrs = []
+            for hol in meshSizes: ## first, load in the data
+                err = 1 ## first calculate the near-field error
+                for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
+                    E_load = np.load(f'{folder}{runName}_SimulatedEs_{name}-axis.npz')['E_values']
+                NFerrs.append(err)
+                
+                ## then calculate the ErefEref err
+                ErefErefErrs.append(postProcessing.reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect'))
+                ## then the ErefEdut err
+                
             
-            plt.plot(meshSizes, SSNFE, label='SS N-F E')
+            plt.plot(meshSizes, NFerrs, label='SS N-F E')
+            plt.plot(meshSizes, ErefErefErrs, label='ErefEref')
+            plt.plot(meshSizes, ErefEdutErrs, label='ErefEdut')
         else:
-            meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4] ## h/lambda
-            # start with SSNFE
-            def testSphereScattering(h = 1/12, degree=1, showPlots=False): ## run a spherical domain and object, test the far-field scattering for an incident plane-wave from a sphere vs Mie theoretical result.
-                prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-                refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=h, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
-                #refMesh.plotMeshPartition()
-                #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-                freqs = np.linspace(10e9, 12e9, 1)
-                prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
-                if(showPlots):
-                    prob.calcNearField(direction='side')
-                prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
-                prevRuns.memTimeAppend(prob)
-            # then ErefEref basic case
-            runName = 'testRunD3.3'
-            testFullExample(h=1/3, degree=3, runName=runName, ErefEdut=False,
-                            mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                            prob_settings={'Nf': 21})
-            postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[25]) ## a-priori lasso solution
-            # then ErefEdut basic case
-            testFullExample(h=1/3, degree=3, runName=runName, ErefEdut=True,
-                            mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                            prob_settings={'Nf': 21})
-            postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[25]) ## a-priori lasso solution
+            degree = 3
+            for hol in meshSizes:
+                runName = f'meshSizeErrRun_ho{hol}'
+                if(os.path.isfile(f'{folder}{runName}_ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
+                    pass ## if it has, dont run again
+                else:
+                    # start with SSNFEprevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+                    refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=hol, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
+                    prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = np.array([10e9]), material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
+                    prob.calcNearField() ## saves the data to a file
+                    
+                    # then ErefEref basic case
+                    testFullExample(h=1/3.5, degree=3, runName=runName+'ErefEref', ErefEdut=False,
+                                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                                    prob_settings={'Nf': 21})
+                    postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName='', onlyAPriori=True)
+                    
+                    # then ErefEdut basic case
+                    testFullExample(h=1/3.5, degree=3, runName=runName+'_ErefEdut', ErefEdut=True,
+                                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                                    prob_settings={'Nf': 21})
+                    postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
@@ -807,8 +815,8 @@ if __name__ == '__main__':
     testFullExample(h=1/3.5, degree=3, runName=runName,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'Nf': 21, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
-
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
+    
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, returnResults=[99])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
@@ -847,13 +855,13 @@ if __name__ == '__main__':
     #testSolverSettings(h=1/6)
     
     #===========================================================================
-    # runName = 'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    # testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
-    # testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=False)
+    # runName = 'patchPatternTest_ho1.0' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    # #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    # #testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=False)
     # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True)
+    #  
+    # patchSsPlot([1, 3.5, 8])
     #===========================================================================
-     
-    #patchSsPlot([1, 3.5, 8])
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)

@@ -45,7 +45,7 @@ class FEMmesh():
                  meshInfo, ## either the reference or dut MeshData from meshMaker.py
                  degree, ## FE degree, from the problem
                  quaddeg, ## quadrature degree, from the problem
-                 justInterping, ## If True, skip some setup
+                 justInterping=False, ## If True, skip some setup
                  ):
         self.meshInfo = meshInfo
         self.tdim = 3                             # Dimension of triangles/tetraedra. 3 for 3D
@@ -98,7 +98,7 @@ class FEMmesh():
             else:
                 self.farfield_cells = []
             
-    def InitializeMaterial(self, material_epsrs, material_murs, antenna_mat_epsrs, antenna_mat_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg, justInterping):
+    def InitializeMaterial(self, material_epsrs, material_murs, antenna_mat_epsrs, antenna_mat_murs, defect_epsrs, defect_murs, epsr_bkg, mur_bkg, justInterping=False):
         # Set up material parameters. Not changing mur for now, need to edit this if doing so
         if(len(material_epsrs) == 1): ## if only one is specified, make sure it's value is used for all
             material_epsrs = [material_epsrs[0] for x in self.meshInfo.mat_markers]
@@ -214,7 +214,6 @@ class Scatt3DProblem():
                  E_dut_anim = False, ## if True, plot the E_dut animation after E_dut is computed
                  E_anim_allAnts = False, ## If True and multiple antennas, saves the E-fields for each exciting antenna
                  E_anim_freqs = [], ## List of indices of fvec to save the animation for. If empty, will just use the central frequency
-                 justInterping = False, ## If True, skips much of the setup - only use this when loading in saved data for interpolation
                  ):
         """Initialize the problem."""
         
@@ -260,13 +259,14 @@ class Scatt3DProblem():
         
         self.PW_dir = PW_dir
         self.PW_pol = PW_pol
-
+        
+        self.quaddeg = quaddeg
         # Set up mesh information
-        self.FEMmesh_ref = FEMmesh(refMeshInfo, fem_degree, quaddeg, justInterping)
-        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg, justInterping)
+        self.FEMmesh_ref = FEMmesh(refMeshInfo, fem_degree, quaddeg)
+        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, self.epsr_bkg, self.mur_bkg)
         if(DUTMeshInfo != None):
-            self.FEMmesh_DUT = FEMmesh(DUTMeshInfo, fem_degree, quaddeg, justInterping)
-            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, epsr_bkg, mur_bkg, justInterping)
+            self.FEMmesh_DUT = FEMmesh(DUTMeshInfo, fem_degree, quaddeg)
+            self.FEMmesh_DUT.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, self.epsr_bkg, self.mur_bkg)
             
         self.E_ref_anim = E_ref_anim
         self.E_dut_anim = E_dut_anim
@@ -286,6 +286,15 @@ class Scatt3DProblem():
                 self.compute(True, makeOptVects=self.makeOptVects)
             else: ## just compute the ref case, and make opt vects if asked for
                 self.compute(computeRef, makeOptVects=self.makeOptVects)
+    
+    
+    def switchToRecMesh(self, recMesh):
+        '''
+        Switches the problem's ref mesh to a reconstruction mesh, so that optimization vectors are saved on that mesh.
+        :param recMesh: The reconstruction mesh
+        '''
+        self.FEMmesh_ref = FEMmesh(self.FEMmesh_ref.meshInfo, self.FEMmesh_ref.fem_degree, self.FEMmesh_ref.dxquaddeg, justInterping=True)
+        self.FEMmesh_ref.InitializeMaterial(self.material_epsrs, self.material_murs, self.antenna_mat_epsrs, self.antenna_mat_murs, self.defect_epsrs, self.defect_murs, self.epsr_bkg, self.mur_bkg, justInterping=True)
     
     #@profile
     def compute(self, computeRef=True, makeOptVects=True):
@@ -1393,7 +1402,7 @@ class Scatt3DProblem():
         else: ## return nan for non-main processes, just in case
             return np.nan
         
-    def calcNearField(self, reference=True, direction = 'forward', FEKOcomp=True, showPlots = True):
+    def calcNearField(self, reference=True, FEKOcomp=True, showPlots = True):
         '''
         Computes + plots the near-field along a line, using interpolation. Compares to a FEKO simulation for epsr=2 and a=0.33.
         Returns array of near-field values calculated and corresponding FEKO values. For epsr = 2 and other matching settings
@@ -1471,7 +1480,7 @@ class Scatt3DProblem():
                             idx_found = idx_found + [idx] ## add it to found list
                             E_values[idx, :] = E_parts[b][o][:] ## use this value for the electric field
                             
-                np.savez(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{FEMm.meshInfo.h/FEMm.meshInfo.lambda0:.2e}.npz', E_values=E_values)
+                np.savez(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis.npz', E_values=E_values)
             
             linewidth = 1.5
             vlinewidth = 3
@@ -1621,8 +1630,8 @@ class Scatt3DProblem():
                 #plt.show()
                 
         if(self.comm.rank == 0 and self.verbosity>1):
-                print(f'done, in {timer()-t1:.3f} s')
-                sys.stdout.flush()
+            print(f'done, in {timer()-t1:.3f} s')
+            sys.stdout.flush()
             
         if(FEKOcomp and not showPlots and self.comm.rank==self.model_rank and index==1): ## can't find bounding boxes for the exact points in the FEKO values, so interpolate
             Erealsx = np.real(E_values[:, 0])
