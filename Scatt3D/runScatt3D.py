@@ -762,7 +762,7 @@ if __name__ == '__main__':
                     # start with SSNFEprevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
                     refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=hol, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
                     prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = np.array([10e9]), material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
-                    prob.calcNearField() ## saves the data to a file
+                    prob.calcNearField(showPlots=False) ## saves the data to a file
                     
                     # then ErefEref basic case
                     testFullExample(h=hol, degree=3, runName=runName+'ErefEref', ErefEdut=False,
