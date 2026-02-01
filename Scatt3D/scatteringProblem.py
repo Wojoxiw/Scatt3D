@@ -888,7 +888,7 @@ class Scatt3DProblem():
             '''
             S = np.zeros((self.Nf, meshInfo.N_antennas, meshInfo.N_antennas), dtype=complex)
             for nf in range(self.Nf):
-                if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
+                if( (self.verbosity >= 2.1 and self.comm.rank == self.model_rank) or (self.verbosity > 2.5) ):
                     print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
                 sys.stdout.flush()
                 k0 = 2*np.pi*self.fvec[nf]/c0
