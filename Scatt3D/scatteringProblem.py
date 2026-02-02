@@ -1066,6 +1066,10 @@ class Scatt3DProblem():
                         q.x.scatter_forward()
                         # Each function q is one row in the A-matrix, save it to file
                         #q.name = f'freq{nf}m={m}n={n}' ## it turns out names can make it more of a pain than using timesteps
+                        pml_cells = FEMm.meshInfo.meshData.cell_tags.find(FEMm.meshInfo.pml_marker)
+                        pml_dofs = dolfinx.fem.locate_dofs_topological(FEMm.WSpace, entity_dim=self.tdim, entities=pml_cells)
+                        q.x.array[pml_dofs] = 0#np.nan ## set q in the PML region to 0 (for plotting purposes, since we shouldn't ever use it anyway)
+                        
                         xdmf.write_function(q, nf*antCount*antCount + m*antCount + n)
         xdmf.close()
                 
