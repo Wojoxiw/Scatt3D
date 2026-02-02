@@ -787,7 +787,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    plotMeshSizeByErrors()
+    #plotMeshSizeByErrors()
     
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
@@ -830,7 +830,12 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 26, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     #===========================================================================
     
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
+    runName = 'testRunD3LowerContrastQsView'
+    testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'Nf': 26, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
