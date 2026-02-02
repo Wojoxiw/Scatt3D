@@ -754,6 +754,8 @@ if __name__ == '__main__':
             plt.plot(meshSizes, ErefEdutErrs, label='ErefEdut')
         else:
             degree = 3
+            mesh_setts = {'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])}
+            prob_setts = {'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]}
             for hol in meshSizes:
                 runName = f'meshSizeErrRun_ho{hol}'
                 if(os.path.isfile(f'{folder}{runName}_ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
@@ -765,15 +767,15 @@ if __name__ == '__main__':
                     prob.calcNearField(showPlots=False) ## saves the data to a file
                     
                     # then ErefEref basic case
-                    testFullExample(h=hol, degree=3.5, runName=runName+'ErefEref', ErefEdut=False,
-                                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                                    prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+                    testFullExample(h=hol, degree=3, runName=runName+'ErefEref', ErefEdut=False,
+                                    mesh_settings=mesh_setts,
+                                    prob_settings=prob_setts)
                     postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName='', onlyAPriori=True)
                     
                     # then ErefEdut basic case
-                    testFullExample(h=hol, degree=3.5, runName=runName+'ErefEdut', ErefEdut=True,
-                                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                                    prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+                    testFullExample(h=hol, degree=3, runName=runName+'ErefEdut', ErefEdut=True,
+                                    mesh_settings=mesh_setts,
+                                    prob_settings=prob_setts)
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
