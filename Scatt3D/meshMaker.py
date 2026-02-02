@@ -416,7 +416,7 @@ class MeshInfo():
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'complex2'): ## a rectangular prism - but more squarish
                 S1height = 0.23
-                obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2*0.76,-self.object_scale/2*S1height,self.object_scale,self.object_scale*0.76,self.object_scale*S1height) ## add it to the origin
+                obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2*0.44,-self.object_scale/2*S1height,self.object_scale,self.object_scale*0.44,self.object_scale*S1height) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry. It is also large. Defect should have same name
                 part1 = gmsh.model.occ.addSphere(0,0,0, self.object_scale*1.2) ## long ellipsoid in the centre
@@ -462,15 +462,15 @@ class MeshInfo():
                     defect = gmsh.model.occ.intersect([(self.tdim, defect)], matDimTags, removeTool=False)[0][0][1] ## only include the part of the defect in the object (for some reason, it extends beyond)
                     defectDimTags.append((self.tdim, defect))
                 elif(self.defect_geom == 'complex2'): ## two cylinder that doesn't go all the way through, one near centre one near edge, and an oblate cylindrical ring defect around one cylinder
-                    defect = gmsh.model.occ.addCylinder(self.object_scale*0.36,-self.object_scale*0.3,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius)
+                    defect = gmsh.model.occ.addCylinder(self.object_scale*0.4,-self.object_scale*0.15,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius*0.55)
                     defectDimTags.append((self.tdim, defect))
-                    defect2 = gmsh.model.occ.addCylinder(self.object_scale*0.06,-self.object_scale*0.01,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius)
+                    defect2 = gmsh.model.occ.addCylinder(self.object_scale*0.06,-self.object_scale*0.01,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius*0.7)
                     defectDimTags.append((self.tdim, defect2))
                     
                     defect3 = gmsh.model.occ.addCylinder(0,0,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius*2.5)
                     defect3Inner = gmsh.model.occ.addCylinder(0,0,-self.object_scale*S1height*(1/2-0.1),0,0,self.object_scale*S1height*(0.9), self.defect_radius*2)
                     defect3 = gmsh.model.occ.cut([(self.tdim, defect3)], [(self.tdim, defect3Inner)])[0][0][1]
-                    gmsh.model.occ.dilate([(self.tdim, defect3)], 0, 0, 0, 1.46, 1, 1) ## stretch it in x
+                    gmsh.model.occ.dilate([(self.tdim, defect3)], 0, 0, 0, 1.16, 0.55, 1) ## stretch it in x
                     defectDimTags.append((self.tdim, defect3))
                 elif(self.defect_geom == 'complex1'): ## do a sort of plane-shaped thing, making sure to avoid symmetry
                     defectDimTags = []
