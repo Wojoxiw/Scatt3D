@@ -733,9 +733,9 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5] ## h/lambda
+        meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5, 1/5, 1/5.5] ## h/lambda
         meshSizes = [1/1, 1/2, 1/3,  1/4, 1/5] ## h/lambda
-        #meshSizes = [1/1.5, 1/2.5, 1/3.5, 1/4.5, 1/5.5]
+        meshSizes = [1/1.5, 1/2.5, 1/3.5, 1/4.5, 1/5.5]
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -756,7 +756,7 @@ if __name__ == '__main__':
             plt.plot(meshSizes, ErefEdutErrs, label='ErefEdut')
         else:
             degree = 3
-            mesh_setts = {'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])}
+            mesh_setts = {'viewGMSH': True, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])}
             prob_setts = {'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]}
             for hol in meshSizes:
                 runName = f'meshSizeErrRun_ho{hol}'
