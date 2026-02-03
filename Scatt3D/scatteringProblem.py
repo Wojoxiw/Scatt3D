@@ -1476,19 +1476,16 @@ class Scatt3DProblem():
             E_values = np.zeros((numpts, 3), dtype=complex)
             if (self.comm.rank == 0): ## use the first-found E_values where processes meet (have not checked, but presumably the values should be the same for all processes) - discard any indices that have been found before
                 for b in range(len(indices)): ## iterate over the lists of lists
-                    if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in, and not sure how the list of E-fields would look like, might not need this conditional - never seen it yet)
-                        print('onlyone', indices[b])
-                        ##try this stuff if I get an error
-                        idx_found = idx_found + indices[b] ## add it to found list
-                        E_values[indices[b][0], :] = E_parts[b][:] ## use this value for the electric field
-                        print(E_parts[b])
-                    elif(np.size(indices[b]) == 0): # if no elements on a process
+                    if(np.size(indices[b]) == 0): # if no elements on a process
                         continue
                     for o in range(len(indices[b])): ## check each index in the list
                         idx = indices[b][o] # the index
                         if(idx not in idx_found): ## if the index had not already been found
                             idx_found = idx_found + [idx] ## add it to found list
-                            E_values[idx, :] = E_parts[b][o][:] ## use this value for the electric field
+                            if(np.size(indices[b]) == 1): ## if it's not a list (presumably this can happen if only 1 element is in)
+                                E_values[idx, :] = E_parts[b][:] ## use this value for the electric field
+                            else:
+                                E_values[idx, :] = E_parts[b][o][:] ## use this value for the electric field
                             
                 np.savez(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis.npz', E_values=E_values)
             
