@@ -813,7 +813,7 @@ if __name__ == '__main__':
             prob_setts = {'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]}
             for hol in meshSizes:
                 runName = f'meshSizeErrRun_ho{hol}'
-                if(os.path.isfile(f'{folder}{runName}_ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
+                if(os.path.isfile(f'{folder}{runName}ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
                     print(f'{runName} already computed, skipping...') ## if it has, dont run again
                 else:
                     # start with SSNFEprevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
