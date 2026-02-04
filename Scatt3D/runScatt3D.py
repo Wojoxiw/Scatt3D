@@ -733,17 +733,62 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = [1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5, 1/5, 1/5.5] ## h/lambda
+        #meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5, 1/5, 1/5.5]) ## h/lambda
         meshSizes = [1/1, 1/2, 1/3,  1/4, 1/5] ## h/lambda
-        meshSizes = [1/1.5, 1/2.5, 1/3.5, 1/4.5, 1/5.5]
+        #meshSizes = [1/1.5, 1/2.5, 1/3.5, 1/4.5, 1/5.5]
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
             ErefEdutErrs = []
             for hol in meshSizes: ## first, load in the data
-                err = 1 ## first calculate the near-field error
+                runName = f'meshSizeErrRun_ho{hol}'
+                err = 0 ## first calculate the near-field error
                 for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
-                    E_load = np.load(f'{folder}{runName}_SimulatedEs_{name}-axis.npz')['E_values']
+                    freq = 10e9
+                    lambdat = c0/freq
+                    k = 2*pi/lambdat
+                    PW_pol = [1, 0, 0]
+                    PW_dir = [0, 0, 1]
+                    PML_radius = 1.4*lambdat
+                    domain_radius = 0.9*lambdat
+                    numpts = 1001
+                    posvec = np.linspace(-PML_radius*.99, PML_radius*.99, numpts)
+                    points = np.zeros((3, numpts))
+                    points[index] = posvec
+                    pointsInDomain = points[:, np.nonzero(np.abs(posvec)<domain_radius)[0]] ## only calculate within the domain
+                    E_load = np.load(f'{folder}{runName}_SimulatedEs_{name}-axis.npz')['E_values'][np.nonzero(np.abs(posvec)<domain_radius)[0]] ## only use points in the domain
+                    
+                    FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
+                    FEKOpos = FEKOdat[:, index]
+                    FEKO_E_i = np.transpose(np.outer(PW_pol, np.exp(1j*k*np.dot(PW_dir, np.transpose(FEKOdat[:, 0:3])))))
+                    
+                    FEKO_Es = np.zeros((np.shape(FEKOdat)[0], 3), dtype=complex)
+                    FEKO_Es[:, 0] = FEKOdat[:, 3] + 1j*FEKOdat[:, 4]
+                    FEKO_Es[:, 1] = FEKOdat[:, 5] + 1j*FEKOdat[:, 6]
+                    FEKO_Es[:, 2] = FEKOdat[:, 7] + 1j*FEKOdat[:, 8]
+                    
+                    FEKO_Es = FEKO_Es - FEKO_E_i ## remove the incident wave
+                    
+                    ## interpolate simulated values to the FEKO points
+                    Erx = np.real(E_load[:, 0])
+                    Eix = np.imag(E_load[:, 0])
+                    Ery = np.real(E_load[:, 1])
+                    Eiy = np.imag(E_load[:, 1])
+                    Erz = np.real(E_load[:, 2])
+                    Eiz = np.imag(E_load[:, 2])
+                    Ex = np.interp(FEKOpos, pointsInDomain[index], Erx) + 1j*np.interp(FEKOpos, pointsInDomain[index], Eix)
+                    Ey = np.interp(FEKOpos, pointsInDomain[index], Ery) + 1j*np.interp(FEKOpos, pointsInDomain[index], Eiy)
+                    Ez = np.interp(FEKOpos, pointsInDomain[index], Erz) + 1j*np.interp(FEKOpos, pointsInDomain[index], Eiz)
+                    
+                    sim_Es = np.transpose(np.vstack((Ex, Ey, Ez)))
+                    
+                    #===========================================================
+                    # plt.title(name+r'-axis, $\lambda/h$='+str(1/hol))
+                    # plt.plot(np.abs(sim_Es[:, 0]-FEKO_Es[:, 0]))
+                    # plt.show()
+                    #===========================================================
+
+                    err += np.linalg.norm(sim_Es-FEKO_Es)
                 NFerrs.append(err)
                 
                 ## then calculate the ErefEref err
@@ -751,9 +796,17 @@ if __name__ == '__main__':
                 ## then the ErefEdut err
                 
             
-            plt.plot(meshSizes, NFerrs, label='SS N-F E')
-            plt.plot(meshSizes, ErefErefErrs, label='ErefEref')
-            plt.plot(meshSizes, ErefEdutErrs, label='ErefEdut')
+            plt.plot(1/meshSizes, NFerrs, label='SS N-F E', marker='o')
+            #plt.plot(1/meshSizes, ErefErefErrs, label='ErefEref')
+            #plt.plot(1/meshSizes, ErefEdutErrs, label='ErefEdut')
+            
+            plt.grid()
+            plt.ylabel(r'Norm of difference')
+            plt.xlabel(r'$\lambda/h$')
+            plt.title(r'Errors vs Mesh Sizes')
+            plt.legend()
+            plt.tight_layout()
+            plt.show()
         else:
             degree = 3
             mesh_setts = {'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])}
@@ -761,7 +814,7 @@ if __name__ == '__main__':
             for hol in meshSizes:
                 runName = f'meshSizeErrRun_ho{hol}'
                 if(os.path.isfile(f'{folder}{runName}_ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
-                    pass ## if it has, dont run again
+                    print(f'{runName} already computed, skipping...') ## if it has, dont run again
                 else:
                     # start with SSNFEprevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
                     refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=hol, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
@@ -773,7 +826,7 @@ if __name__ == '__main__':
                                     mesh_settings=mesh_setts,
                                     prob_settings=prob_setts)
                     postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName='', onlyAPriori=True)
-                    
+                     
                     # then ErefEdut basic case
                     testFullExample(h=hol, degree=3, runName=runName+'ErefEdut', ErefEdut=True,
                                     mesh_settings=mesh_setts,
@@ -790,6 +843,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(2)
     
     plotMeshSizeByErrors()
+    #plotMeshSizeByErrors(True)
     
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
