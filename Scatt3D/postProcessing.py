@@ -109,7 +109,7 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
     if(indices=='defect'):
         error = error + noiseError/5
-        
+    
     zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)/np.sum(cell_volumes)
     
     error = np.sum(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes)

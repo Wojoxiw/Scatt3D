@@ -318,7 +318,7 @@ class MeshInfo():
                     gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n]) ## then the center
                     gmsh.model.occ.translate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
                     
-                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh*2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 1, 0, pi/2)
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, pi/2)
                     gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
@@ -365,7 +365,7 @@ class MeshInfo():
                 box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
                 coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
 
-                boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh*2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                 domainDimTags.append((self.tdim, boundingBox))
 
                 antennaSurfacePts.append([self.feed_offset, self.coax_inr/2+self.coax_outr/2, -self.antenna_height/2-self.coax_outh]) ## the surface of the bottom of the outer cylinder of the coax - the radiating port

@@ -22,6 +22,7 @@ import sys, petsc4py
 petsc4py.init(sys.argv)
 from petsc4py import PETSc
 import scipy
+import h5py
 
 import psutil
 import threading
@@ -733,9 +734,7 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        #meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5, 1/5, 1/5.5]) ## h/lambda
-        meshSizes = [1/1, 1/2, 1/3,  1/4, 1/5] ## h/lambda
-        #meshSizes = [1/1.5, 1/2.5, 1/3.5, 1/4.5, 1/5.5]
+        meshSizes = np.array([1/4, 1/4.5]) ## h/lambda
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -784,27 +783,44 @@ if __name__ == '__main__':
                     
                     #===========================================================
                     # plt.title(name+r'-axis, $\lambda/h$='+str(1/hol))
-                    # plt.plot(np.abs(sim_Es[:, 0]-FEKO_Es[:, 0]))
+                    # plt.plot(np.abs(sim_Es[:, 0]-FEKO_Es[:, 0])/np.abs(FEKO_Es[:, 0]))
                     # plt.show()
                     #===========================================================
 
-                    err += np.linalg.norm(sim_Es-FEKO_Es)
+                    err += np.linalg.norm((sim_Es-FEKO_Es)/np.abs(FEKO_Es))
                 NFerrs.append(err)
                 
                 ## then calculate the ErefEref err
-                #ErefErefErrs.append(postProcessing.reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect'))
+                with h5py.File(f'{folder}{runName}ErefEdutpost-process.h5', 'r') as f: ## read in the reconstruction and other needed data
+                    cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+                    epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+                    epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+                    depsr_rec = np.array(f['Function']['real_f']['25']).squeeze() + 1j*np.array(f['Function']['imag_f']['25']).squeeze() ## lasso solution
+                ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False))
                 ## then the ErefEdut err
+                with h5py.File(f'{folder}{runName}ErefErefpost-process.h5', 'r') as f: ## read in the reconstruction and other needed data
+                    cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+                    epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+                    epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+                    depsr_rec = np.array(f['Function']['real_f']['25']).squeeze() + 1j*np.array(f['Function']['imag_f']['25']).squeeze() ## lasso solution
+                ErefErefErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False))
                 
+            fig, ax1 = plt.subplots()
             
-            plt.plot(1/meshSizes, NFerrs, label='SS N-F E', marker='o')
-            #plt.plot(1/meshSizes, ErefErefErrs, label='ErefEref')
-            #plt.plot(1/meshSizes, ErefEdutErrs, label='ErefEdut')
+            ax1.plot(1/meshSizes, NFerrs, label='Near-field Norm of Relative Error', marker='^', color='tab:blue')
+            ax1.set_ylabel('Norm of difference', color='tab:blue')
+            ax1.tick_params(axis='y', labelcolor='tab:blue')
+            ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
+            
+            ax2 = ax1.twinx()
+            ax2.plot(1/meshSizes, ErefErefErrs, color='tab:red', label='ErefEref', marker='o')
+            ax2.plot(1/meshSizes, ErefEdutErrs, color='tab:red', linestyle='--', label='ErefEdut', marker='o')
+            ax2.set_ylabel('Error Figure', color='tab:red')
+            ax2.tick_params(axis='y', labelcolor='tab:red')
             
             plt.grid()
-            plt.ylabel(r'Norm of difference')
-            plt.xlabel(r'$\lambda/h$')
             plt.title(r'Errors vs Mesh Sizes')
-            plt.legend()
+            fig.legend()
             plt.tight_layout()
             plt.show()
         else:
@@ -814,7 +830,8 @@ if __name__ == '__main__':
             for hol in meshSizes:
                 runName = f'meshSizeErrRun_ho{hol}'
                 if(os.path.isfile(f'{folder}{runName}ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
-                    print(f'{runName} already computed, skipping...') ## if it has, dont run again
+                    if(comm.rank == 0):
+                        print(f'{runName} already computed, skipping...') ## if it has, dont run again
                 else:
                     # start with SSNFEprevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
                     refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=0, object_radius = .33, domain_radius=.9, PML_thickness=0.5, h=hol, domain_geom='sphere', object_geom='sphere', FF_surface = True, order=degree)
@@ -931,7 +948,7 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #runName = 'patchPatternTest' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    #runName = 'patchPatternTest_h03.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
     #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     #testPatchPattern(h=1/1, degree=1, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11

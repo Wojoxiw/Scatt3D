@@ -335,7 +335,7 @@ class Scatt3DProblem():
     def CalculatePML(self, FEMm, k):
         '''
         Set up the PML - stretched coordinates to form a perfectly-matched layer which absorbs incoming (perpendicular) waves
-         Since we calculate at many frequencies, recalculate this for each freq. (should also just work for many frequencies without recalculating, but the calculation is quick)
+         Since we calculate at many frequencies, recalculate this for each freq. (should also work pretty well for many frequencies without recalculating, but the calculation is quick)
         :param k: Frequency used for coordinate stretching.
         '''
         # Set up the PML
@@ -888,7 +888,7 @@ class Scatt3DProblem():
             '''
             S = np.zeros((self.Nf, meshInfo.N_antennas, meshInfo.N_antennas), dtype=complex)
             for nf in range(self.Nf):
-                if( (self.verbosity >= 2.1 and self.comm.rank == self.model_rank) or (self.verbosity > 2.5) ):
+                if( (self.verbosity > 1.9 and self.comm.rank == self.model_rank) or (self.verbosity > 2.5) ):
                     print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
                 sys.stdout.flush()
                 k0 = 2*np.pi*self.fvec[nf]/c0
