@@ -869,8 +869,9 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         x_temp = np.zeros(N, dtype=complex)
         
         timestep = 3
+        ta1=timer()
         if(not returnResults or timestep in returnResults): ## if it is empty, or requested
-            x_temp[idx_ap] = numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap]) #np.linalg.pinv(A_ap, rcond = rcond) @ b
+            x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b # numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             cellData.x.array[:] = x_temp + 0j
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
@@ -879,12 +880,13 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(not onlyAPriori):
             timestep = 4
             if(not returnResults or timestep in returnResults): ## if it is empty, or requested
-                x_temp[idx_non_pml] = numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]) #np.linalg.pinv(A, rcond = rcond) @ b
+                x_temp[idx_non_pml] = np.linalg.pinv(A, rcond = rcond) @ b # numpySVDfindOptimal(A, b, epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 cellData.x.array[:] = x_temp + 0j
                 f.write_function(cellData, 4)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
-        
+        ta2=timer()
+        print(timestep, (ta2-ta1))
         f.close()
         print()
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
@@ -920,7 +922,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
-        
+        ta1=timer()
         tau = 6e4 ## guess for a good tau
         iter_lim = 633
         timestep = 25
@@ -931,6 +933,9 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
+            
+        ta2=timer()
+        print(timestep, (ta2-ta1))
          
         f.close()
         if(not onlyAPriori):

@@ -734,7 +734,7 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = np.array([1/4, 1/4.5]) ## h/lambda
+        meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5]) ## h/lambda
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -807,15 +807,15 @@ if __name__ == '__main__':
                 
             fig, ax1 = plt.subplots()
             
-            ax1.plot(1/meshSizes, NFerrs, label='Near-field Norm of Relative Error', marker='^', color='tab:blue')
-            ax1.set_ylabel('Norm of difference', color='tab:blue')
+            ax1.plot(1/meshSizes, NFerrs, marker='^', color='tab:blue')
+            ax1.set_ylabel('Near-field Norm of Relative Error', color='tab:blue')
             ax1.tick_params(axis='y', labelcolor='tab:blue')
             ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
             
             ax2 = ax1.twinx()
             ax2.plot(1/meshSizes, ErefErefErrs, color='tab:red', label='ErefEref', marker='o')
             ax2.plot(1/meshSizes, ErefEdutErrs, color='tab:red', linestyle='--', label='ErefEdut', marker='o')
-            ax2.set_ylabel('Error Figure', color='tab:red')
+            ax2.set_ylabel('Error Figure-of-Merit', color='tab:red')
             ax2.tick_params(axis='y', labelcolor='tab:red')
             
             plt.grid()
@@ -859,7 +859,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    plotMeshSizeByErrors()
+    #plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -886,22 +886,20 @@ if __name__ == '__main__':
     # runName = 'testRunD3.3'
     # testFullExample(h=1/3, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 26})
+    #                 prob_settings={'Nf': 13})
     #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowContrast'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 26, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
+    #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    #===========================================================================
-    # runName = 'testRunD3LowerContrast'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 26, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    #===========================================================================
+    runName = 'testRunD3LowerContrast'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     
     #===========================================================================
     # runName = 'testRunD3LowerContrastQsView'
@@ -910,7 +908,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     #===========================================================================
     
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
