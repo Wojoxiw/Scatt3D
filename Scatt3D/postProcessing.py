@@ -93,7 +93,7 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
         idx = np.nonzero(np.abs(delta_epsr_actual) != 0)[0] ## should just be the defect cells
         idxNonDef = np.nonzero(np.abs(delta_epsr_actual) == 0)[0]
         noiseVol = np.sum(cell_volumes[idxNonDef])
-        noiseError = np.mean(np.abs(delta_epsr_rec[idxNonDef]/np.mean(np.abs(delta_epsr_rec[idxNonDef]) + 1e-9) - delta_epsr_actual[idxNonDef]/np.mean(np.abs(delta_epsr_actual[idxNonDef]) + 1e-9)) * cell_volumes[idxNonDef])/noiseVol ## add a 'noise' term
+        noiseError = np.mean(np.abs(delta_epsr_rec[idxNonDef]/np.mean(np.abs(delta_epsr_rec[idxNonDef]) + 1e-16) - delta_epsr_actual[idxNonDef]/np.mean(np.abs(delta_epsr_actual[idxNonDef]) + 1e-16)) * cell_volumes[idxNonDef])/noiseVol ## add a 'noise' term
     else:
         idx = np.nonzero(epsr_ref != -999)[0] ## should be all indices... not sure how else to write this
     delta_epsr_actual = delta_epsr_actual[idx]
@@ -104,15 +104,15 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     
     #error = np.mean(np.abs(delta_epsr_rec - delta_epsr_actual) * cell_volumes)/np.sum(cell_volumes)
     #error = np.mean(np.abs(delta_epsr_rec/np.mean(delta_epsr_rec + 1e-9) - delta_epsr_actual/np.mean(delta_epsr_actual + 1e-9)) * cell_volumes)/np.sum(cell_volumes) ## try to account for the reconstruction being innacurate in scale, if still somewhat accurate in shape... otherwise a near-zero reconstruction looks good
-    error = np.mean(np.abs(delta_epsr_rec/np.mean(np.abs(delta_epsr_rec) + 1e-16) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)/np.sum(cell_volumes)
+    #error = np.mean(np.abs(delta_epsr_rec/np.mean(np.abs(delta_epsr_rec) + 1e-16) - delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual)) * cell_volumes/np.sum(cell_volumes))
     #error = np.sum(np.abs(np.real(delta_epsr_rec - delta_epsr_actual))**2 * cell_volumes/np.sum(cell_volumes))**(1/2)
     if(indices=='defect'):
         error = error + noiseError/5
     
-    zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)/np.sum(cell_volumes)
+    #zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)
     
-    error = np.sum(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes)
+    error = np.sum(np.abs(np.abs(delta_epsr_rec - delta_epsr_actual))*cell_volumes)
     zeroError = np.sum(np.abs(delta_epsr_actual)*cell_volumes)
     
     error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
@@ -869,9 +869,11 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         x_temp = np.zeros(N, dtype=complex)
         
         timestep = 3
-        ta1=timer()
         if(not returnResults or timestep in returnResults): ## if it is empty, or requested
+            ta1=timer()
             x_temp[idx_ap] = np.linalg.pinv(A_ap, rcond = rcond) @ b # numpySVDfindOptimal(A_ap, b, epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
+            ta2=timer()
+            print(f'TSVD complete in {ta2-ta1:.2e} seconds.')
             cellData.x.array[:] = x_temp + 0j
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
@@ -885,8 +887,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                 f.write_function(cellData, 4)
                 err = reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml])
                 errs.append(err)
-        ta2=timer()
-        print(timestep, (ta2-ta1))
         f.close()
         print()
         print('Solving with spgl...') ## this method is only implemented for real numbers, to make a large real matrix (hopefully this does not run me out of memory)
@@ -922,21 +922,22 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
-        ta1=timer()
+       
         tau = 6e4 ## guess for a good tau
         iter_lim = 633
         timestep = 25
         if(not returnResults or timestep in returnResults): ## if it is empty, or needed
+            ta1=timer()
             xsol, resid, grad, info = spgl1.spgl1(Ak_ap, bk, tau=tau, **spgl_settings)
+            ta2=timer()
+            print(f'SPGL1 Lasso complete in {ta2-ta1:.2e} seconds.')
             x_temp[idx_ap] = xsol[:A2] + 1j*xsol[A2:]
             cellData.x.array[:] = x_temp + 0j
             f.write_function(cellData, timestep)
             err = reconstructionError(x_temp[idx_ap], epsr_ref[idx_ap], epsr_dut[idx_ap], cell_volumes[idx_ap])
             errs.append(err)
             
-        ta2=timer()
-        print(timestep, (ta2-ta1))
-         
+        
         f.close()
         if(not onlyAPriori):
             iter_lim = 1366

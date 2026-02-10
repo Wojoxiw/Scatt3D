@@ -734,7 +734,7 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5]) ## h/lambda
+        meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -750,6 +750,7 @@ if __name__ == '__main__':
                     PW_dir = [0, 0, 1]
                     PML_radius = 1.4*lambdat
                     domain_radius = 0.9*lambdat
+                    sphere_radius = 0.32*lambdat ## slightly lower, to avoid boundary clipping
                     numpts = 1001
                     posvec = np.linspace(-PML_radius*.99, PML_radius*.99, numpts)
                     points = np.zeros((3, numpts))
@@ -759,6 +760,10 @@ if __name__ == '__main__':
                     
                     FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
                     FEKOpos = FEKOdat[:, index]
+                    ## only calculate within sphere
+                    FEKOdat = FEKOdat[np.nonzero(np.abs(FEKOpos)<sphere_radius)[0], :]
+                    FEKOpos = FEKOdat[:, index]
+                    
                     FEKO_E_i = np.transpose(np.outer(PW_pol, np.exp(1j*k*np.dot(PW_dir, np.transpose(FEKOdat[:, 0:3])))))
                     
                     FEKO_Es = np.zeros((np.shape(FEKOdat)[0], 3), dtype=complex)
@@ -859,7 +864,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    #plotMeshSizeByErrors()
+    plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -896,10 +901,12 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    runName = 'testRunD3LowerContrast'
-    testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    #===========================================================================
+    # runName = 'testRunD3LowerContrast'
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowerContrastQsView'
@@ -908,7 +915,7 @@ if __name__ == '__main__':
     #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     #===========================================================================
     
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
