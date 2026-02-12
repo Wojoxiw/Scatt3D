@@ -90,8 +90,9 @@ if __name__ == '__main__':
         prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity = verbosity, MPInum = MPInum, name = runName, computeBoth=True, Nf=1, fem_degree=degree, E_ref_anim=True)
         prevRuns.memTimeAppend(prob)
         
-        rmeshInfo = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', justInterpolationSubmesh=True, reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree)
-        prob.makeOptVectors(reconstructionMeshInfo = rmeshInfo)
+        recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, viewGMSH = False, verbosity = verbosity, h=h, object_geom='sphere', domain_radius=0.8, domain_height=0.46, dome_height=0.22, PML_thickness=0.1, antenna_bounding_box_offset=0.05, object_radius=0.2, N_antennas=3, order=degree, justInterpolationSubmesh=True, interpolationSubmeshSize=1/10)
+        prob.switchToRecMesh(recMesh)
+        prob.makeOptVectors(reconstructionMesh=True)
         
     def testFullExample(h = 1/15, degree = 1, dutOnRefMesh=True, antennaType='waveguide', ErefEdut=False, runName=runName, recMesh=True, mesh_settings={}, prob_settings={}): ## Testing toward a full example. Default settings are to reconstruct with ErefEref, and S-parameters for both cases from the DUT sim.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
