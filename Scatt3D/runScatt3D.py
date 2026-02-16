@@ -735,13 +735,14 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda
-        meshSizes = np.array([1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/3.4, 1/3.6]) ## h/lambda
+        #meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda
+        meshSizes = np.array([1/1]) ## h/lambda
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
             ErefEdutErrs = []
             for hol in meshSizes: ## first, load in the data
+                print(hol)
                 runName = f'meshSizeErrRun_ho{hol}'
                 err = 0 ## first calculate the near-field error
                 for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
