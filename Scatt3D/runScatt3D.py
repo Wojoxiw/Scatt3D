@@ -735,8 +735,9 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        #meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda
-        meshSizes = np.array([1/1]) ## h/lambda
+        meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda - for plotting
+        #meshSizes = np.array([1/4, 1/4.5]) ## h/lambda - for plotting
+        #meshSizes = np.array([1/1]) ## h/lambda - new ones to compute
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -758,14 +759,19 @@ if __name__ == '__main__':
                     posvec = np.linspace(-PML_radius*.99, PML_radius*.99, numpts)
                     points = np.zeros((3, numpts))
                     points[index] = posvec
-                    pointsInDomain = points[:, np.nonzero(np.abs(posvec)<domain_radius)[0]] ## only calculate within the domain
-                    E_load = np.load(f'{folder}{runName}_SimulatedEs_{name}-axis.npz')['E_values'][np.nonzero(np.abs(posvec)<domain_radius)[0]] ## only use points in the domain
+                    radiusUse = sphere_radius*0.99
+                    idxUse = np.nonzero(np.abs(posvec)<radiusUse)[0] ## only use the points within some radius
+                    pointsInDomain = points[:, idxUse] 
+                    E_load = np.load(f'{folder}{runName}_SimulatedEs_{name}-axis.npz')['E_values'][idxUse] ## only use points in the domain
                     
                     FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
                     FEKOpos = FEKOdat[:, index]
                     ## only calculate within sphere
-                    FEKOdat = FEKOdat[np.nonzero(np.abs(FEKOpos)<sphere_radius)[0], :]
+                    FEKOdat = FEKOdat[np.nonzero(np.abs(FEKOpos)<radiusUse)[0], :]
                     FEKOpos = FEKOdat[:, index]
+                    
+                    if(name=='z'): ## different plane-wave directions, so switch
+                        FEKOpos = -FEKOpos
                     
                     FEKO_E_i = np.transpose(np.outer(PW_pol, np.exp(1j*k*np.dot(PW_dir, np.transpose(FEKOdat[:, 0:3])))))
                     
@@ -791,31 +797,35 @@ if __name__ == '__main__':
                     
                     #===========================================================
                     # plt.title(name+r'-axis, $\lambda/h$='+str(1/hol))
-                    # plt.plot(np.abs(sim_Es[:, 0]-FEKO_Es[:, 0])/np.abs(FEKO_Es[:, 0]))
+                    # plt.plot(np.real(sim_Es[:, 0]), label='sim')
+                    # plt.plot(np.real(FEKO_Es[:, 0]), label='FEKO')
+                    # #plt.plot(np.abs(sim_Es[:, 0]-FEKO_Es[:, 0])/np.abs(FEKO_Es[:, 0]))
+                    # plt.legend()
                     # plt.show()
                     #===========================================================
 
                     err += np.linalg.norm((sim_Es-FEKO_Es)/np.abs(FEKO_Es))
                 NFerrs.append(err)
                 
+                solNum = 3 ## 3 for TSVD, 25 for lasso solution
                 ## then calculate the ErefEref err
                 with h5py.File(f'{folder}{runName}ErefEdutpost-process.h5', 'r') as f: ## read in the reconstruction and other needed data
                     cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
                     epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
                     epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
-                    depsr_rec = np.array(f['Function']['real_f']['25']).squeeze() + 1j*np.array(f['Function']['imag_f']['25']).squeeze() ## lasso solution
+                    depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze()
                 ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False))
                 ## then the ErefEdut err
                 with h5py.File(f'{folder}{runName}ErefErefpost-process.h5', 'r') as f: ## read in the reconstruction and other needed data
                     cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
                     epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
                     epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
-                    depsr_rec = np.array(f['Function']['real_f']['25']).squeeze() + 1j*np.array(f['Function']['imag_f']['25']).squeeze() ## lasso solution
+                    depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze() 
                 ErefErefErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False))
                 
             fig, ax1 = plt.subplots()
             
-            ax1.plot(1/meshSizes, NFerrs, marker='^', color='tab:blue')
+            ax1.plot(1/meshSizes, np.log10(NFerrs), marker='^', color='tab:blue')
             ax1.set_ylabel('Near-field Norm of Relative Error', color='tab:blue')
             ax1.tick_params(axis='y', labelcolor='tab:blue')
             ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
@@ -867,7 +877,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    plotMeshSizeByErrors()
+    #plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -887,38 +897,34 @@ if __name__ == '__main__':
     # runName = 'testRunComplex2Obj'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
     #                 mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs': [2.9*(1 - 0.01j), 3.2*(1 - 0.01j), 3.1*(1 - 0.01j)]})
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs': [2.9*(1 - 0.01j), 3.2*(1 - 0.01j), 3.1*(1 - 0.01j)]})
     #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3.3'
     # testFullExample(h=1/3, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 13})
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10))
     #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3LowContrast'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    #===========================================================================
-    # runName = 'testRunD3LowerContrast'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    #===========================================================================
+    runName = 'forPaper_D3LowerContrast'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
-    #===========================================================================
-    # runName = 'testRunD3LowerContrastQsView'
-    # testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    #===========================================================================
-    
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
+    runName = 'forPaper_D3LowerContrastQsView'
+    testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
