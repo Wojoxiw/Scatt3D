@@ -736,9 +736,9 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda - for plotting
+        #meshSizes = np.array([1/1, 1/1.1, 1/1.2, 1/1.3, 1/1.4, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.4, 1/3.5, 1/3.6, 1/4, 1/4.5]) ## h/lambda - for plotting
         #meshSizes = np.array([1/4, 1/4.5]) ## h/lambda - for plotting
-        #meshSizes = np.array([1/1]) ## h/lambda - new ones to compute
+        meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5]) ## h/lambda - new ones to compute
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -881,7 +881,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    #plotMeshSizeByErrors()
+    plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -918,19 +918,21 @@ if __name__ == '__main__':
     #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
     #===========================================================================
     
-    runName = 'forPaper_D3.3_ErefEref'
-    testFullExample(h=1/3.5, degree=3, runName=runName, ErefEdut=False,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
+    # runName = 'forPaper_D3.3_ErefEref'
+    # testFullExample(h=1/3.5, degree=3, runName=runName, ErefEdut=False,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
     
-    runName = 'forPaper_D3.3_ErefEdut'
-    testFullExample(h=1/3.5, degree=3, runName=runName, ErefEdut=True,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
-    
-    
+    #===========================================================================
+    # runName = 'forPaper_D3.3_ErefEdut'
+    # testFullExample(h=1/3.5, degree=3, runName=runName, ErefEdut=True,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
     
     
     #===========================================================================
