@@ -125,6 +125,7 @@ if __name__ == '__main__':
             prob.switchToRecMesh(recMesh)
             prob.makeOptVectors(reconstructionMesh=True)
         prevRuns.memTimeAppend(prob)
+        return prob
     
     def testRunDifferentDUTAntennas(h = 1/15, degree = 1): ## Testing what happens when different antennas are used in the ref (simulation) as in the DUT case (unsuccessful reconstruction)
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
@@ -857,15 +858,18 @@ if __name__ == '__main__':
                     prob.calcNearField(showPlots=False) ## saves the data to a file
                     
                     # then ErefEref basic case
-                    testFullExample(h=hol, degree=3, runName=runName+'ErefEref', ErefEdut=False,
-                                    mesh_settings=mesh_setts,
-                                    prob_settings=prob_setts)
+                    prob = testFullExample(h=hol, degree=3, runName=runName+'ErefEref', ErefEdut=False,
+                                           mesh_settings=mesh_setts,
+                                           prob_settings=prob_setts)
                     postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName='', onlyAPriori=True)
                      
-                    # then ErefEdut basic case
-                    testFullExample(h=hol, degree=3, runName=runName+'ErefEdut', ErefEdut=True,
-                                    mesh_settings=mesh_setts,
-                                    prob_settings=prob_setts)
+                    # then ErefEdut basic case (just use the pre-calculated data)
+                    rec_mesh_setts = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_setts ## uses settings given before those specified here ## settings for the meshMaker
+                    recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_setts)
+                    prob.switchToRecMesh(recMesh)
+                    prob.ErefEdut = True
+                    prob.name = runName+'ErefEdut'
+                    prob.makeOptVectors(reconstructionMesh=True)
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
@@ -908,23 +912,49 @@ if __name__ == '__main__':
     #===========================================================================
     
     #===========================================================================
+    # runName = 'forPaper_D3.3'
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
+    #===========================================================================
+    
+    runName = 'forPaper_D3.3_ErefEref'
+    testFullExample(h=1/3.5, degree=3, runName=runName, ErefEdut=False,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    
+    runName = 'forPaper_D3.3_ErefEdut'
+    testFullExample(h=1/3.5, degree=3, runName=runName, ErefEdut=True,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10)})
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    
+    
+    
+    
+    #===========================================================================
     # runName = 'testRunD3LowContrast'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.3*(1 - 0.01j)]})
     #===========================================================================
     
-    runName = 'forPaper_D3LowerContrast'
-    testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
+    # runName = 'forPaper_D3LowerContrast'
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
     
-    runName = 'forPaper_D3LowerContrastQsView'
-    testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
+    #===========================================================================
+    # runName = 'forPaper_D3LowerContrastQsView'
+    # testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)#, frequenciesToUse=[2, 4, 6, 8, 12, 14, 16, 18, 20, 22], returnResults=[3, 25])
+    #===========================================================================
     
     #runName = 'testRunLargeAsPossible2'
     #testFullExample(h=1/3, degree=3, runName=runName, mesh_settings = {'domain_radius': 9, })
