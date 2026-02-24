@@ -881,7 +881,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    plotMeshSizeByErrors()
+    #plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -897,12 +897,11 @@ if __name__ == '__main__':
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
     
-    #===========================================================================
-    # runName = 'testRunComplex2Obj'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs': [2.9*(1 - 0.01j), 3.2*(1 - 0.01j), 3.1*(1 - 0.01j)]})
-    #===========================================================================
+    runName = 'testRunComplex2Obj'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs': [2.9*(1 - 0.01j), 3.2*(1 - 0.01j), 3.1*(1 - 0.01j)]})
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
     # runName = 'testRunD3.3'
