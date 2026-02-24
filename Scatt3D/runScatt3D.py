@@ -845,7 +845,7 @@ if __name__ == '__main__':
         else:
             degree = 3
             mesh_setts = {'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])}
-            prob_setts = {'Nf': 13, 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]}
+            prob_setts = {'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]}
             for hol in meshSizes:
                 runName = f'meshSizeErrRun_ho{hol}'
                 if(os.path.isfile(f'{folder}{runName}ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
