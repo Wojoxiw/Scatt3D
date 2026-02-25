@@ -745,7 +745,7 @@ if __name__ == '__main__':
             ErefEdutErrs = []
             for hol in meshSizes: ## first, load in the data
                 print(hol)
-                runName = f'meshSizeErrRun_ho{hol}'
+                runName = f'meshSizeErrRun_ho{hol:.3f}'
                 err = 0 ## first calculate the near-field error
                 for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
                     freq = 10e9
@@ -847,7 +847,7 @@ if __name__ == '__main__':
             mesh_setts = {'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])}
             prob_setts = {'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]}
             for hol in meshSizes:
-                runName = f'meshSizeErrRun_ho{hol}'
+                runName = f'meshSizeErrRun_ho{hol:.3f}'
                 if(os.path.isfile(f'{folder}{runName}ErefEdutpost-process.xdmf')): ## check if this mesh size has already been run
                     if(comm.rank == 0):
                         print(f'{runName} already computed, skipping...') ## if it has, dont run again
@@ -868,8 +868,7 @@ if __name__ == '__main__':
                     recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_setts)
                     prob.switchToRecMesh(recMesh)
                     prob.ErefEdut = True
-                    prob.name = runName+'ErefEdut'
-                    prob.makeOptVectors(reconstructionMesh=True)
+                    prob.makeOptVectors(reconstructionMesh=True, saveName=runName+'ErefEdut')
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
@@ -881,7 +880,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    #plotMeshSizeByErrors()
+    plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -897,11 +896,13 @@ if __name__ == '__main__':
     #testFullExample(h=1/3.5, degree=3, runName=runName, mesh_settings={'N_antennas': 9, 'viewGMSH': False}, prob_settings={'Nf': 11})
     
     
-    runName = 'testRunComplex2Obj'
-    testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs': [2.9*(1 - 0.01j), 3.2*(1 - 0.01j), 3.1*(1 - 0.01j)]})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
+    # runName = 'testRunComplex2Obj'
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={ 'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'complex2', 'defect_geom': 'complex2', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs': [2.9*(1 - 0.01j), 3.2*(1 - 0.01j), 3.1*(1 - 0.01j)]})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
     
     #===========================================================================
     # runName = 'testRunD3.3'

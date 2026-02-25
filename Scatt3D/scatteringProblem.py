@@ -969,23 +969,26 @@ class Scatt3DProblem():
             sys.stdout.flush()
            
     #@profile
-    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False):
+    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False, saveName=''):
         '''
         Computes the optimization vectors from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
         :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
         :param skipQs: Skip writing the actual optimization vectors
         :param reconstructionMesh: If True, the problem should be made with the interpolation mesh, so the dofs_map should be interpolated in. Data is loaded from the actual mesh and run.
+        :param extraText: Name to use for saved files (for use when computing both ErefEref and ErefEdut)
         '''
+        if(saveName==''): ## not sure how to better set this as the default
+            saveName=self.name
         ## First, save mesh to xdmf
         if(DUTMesh):
             FEMm = self.FEMmesh_DUT
             meshInfo = FEMm.meshInfo
-            xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'DUTmesh.xdmf', file_mode='w')
+            xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+saveName+'DUTmesh.xdmf', file_mode='w')
         else:
             FEMm = self.FEMmesh_ref
             meshInfo = FEMm.meshInfo
-            xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+self.name+'output-qs.xdmf', file_mode='w')
+            xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+saveName+'output-qs.xdmf', file_mode='w')
         xdmf.write_mesh(meshInfo.mesh)
         
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
@@ -999,7 +1002,7 @@ class Scatt3DProblem():
                         for m in range(meshInfo.N_antennas):
                             for n in range(meshInfo.N_antennas):
                                 b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                np.savez(self.dataFolder+self.name+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
+                np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):

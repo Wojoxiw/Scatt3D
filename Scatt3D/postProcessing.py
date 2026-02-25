@@ -1096,7 +1096,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     mems = comm.gather(mem_usage, root=0)
     if( comm.rank == 0 ):
         totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-        print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
+        print(f'Post-processing complete, current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
         if(not not returnResults): ## on the cluster this seems to get stuck here without this
             return errs
     if(not not returnResults):
