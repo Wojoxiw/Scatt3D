@@ -724,7 +724,7 @@ if __name__ == '__main__':
             
             plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=f'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2)
         
-        fekof = 'TestStuff/FEKO patch S11 new.dat'
+        fekof = 'TestStuff/FEKO patch S11 lambdaover50.dat'
         fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
         plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
         plt.grid()
@@ -744,7 +744,7 @@ if __name__ == '__main__':
             ErefErefErrs = []
             ErefEdutErrs = []
             for hol in meshSizes: ## first, load in the data
-                print(hol)
+                print('\033[31m' + f'hol={hol:.3f}' + '\033[0m')
                 runName = f'meshSizeErrRun_ho{hol:.3f}'
                 err = 0 ## first calculate the near-field error
                 for index, name in [(0, 'x'), (1, 'y'), (2, 'z')]: ## scattering along the x-, y-, and z- axes
@@ -809,20 +809,27 @@ if __name__ == '__main__':
                 NFerrs.append(err)
                 
                 solNum = 3 ## 3 for TSVD, 25 for lasso solution
+                indices = ''
+                solutionName= '_Ssfrom4.5' #'_Sdutfrom4.5' ## this is changed when using different S-parameters for the solution
                 ## then calculate the ErefEref err
-                with h5py.File(f'{folder}{runName}ErefEdutpost-process.h5', 'r') as f: ## read in the reconstruction and other needed data
+                if(not os.path.exists(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5')): ## if it doesn't exist, first compute this solution
+                    postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}meshSizeErrRun_ho{1/4.5:.3f}ErefEdut')
+                with h5py.File(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
                     cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
                     epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
                     epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
                     depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze()
-                ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False))
+                    
+                ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=False))
                 ## then the ErefEdut err
-                with h5py.File(f'{folder}{runName}ErefErefpost-process.h5', 'r') as f: ## read in the reconstruction and other needed data
+                if(not os.path.exists(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5')): ## if it doesn't exist, first compute this solution
+                    postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}meshSizeErrRun_ho{1/4.5:.3f}ErefEref')
+                with h5py.File(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
                     cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
                     epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
                     epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
                     depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze() 
-                ErefErefErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=False))
+                ErefErefErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=False))
                 
             fig, ax1 = plt.subplots()
             
@@ -880,7 +887,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    plotMeshSizeByErrors()
+    #plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
@@ -934,7 +941,6 @@ if __name__ == '__main__':
     # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #===========================================================================
     
-    
     #===========================================================================
     # runName = 'testRunD3LowContrast'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
@@ -949,6 +955,12 @@ if __name__ == '__main__':
     #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #===========================================================================
+    
+    runName = 'forPaper_D3LowerContrast+waveguides'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'waveguide', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrastQsView'

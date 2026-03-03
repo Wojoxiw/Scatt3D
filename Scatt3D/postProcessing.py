@@ -112,7 +112,7 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     
     #zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)
     
-    error = np.sum(np.abs(np.abs(delta_epsr_rec - delta_epsr_actual))*cell_volumes)
+    error = np.sum(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes)
     zeroError = np.sum(np.abs(delta_epsr_actual)*cell_volumes)
     
     error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
@@ -447,7 +447,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
-    :param SparamName: Filename for S parameters (dut). If this isn't blank, S-params will be taken from this simulation, everything else from the ref. simulation.
+    :param SparamName: Filename for S parameters. If this isn't blank, S-params will be taken from this simulation, everything else from the regular problem.
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
@@ -476,9 +476,9 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         S_dut = data['S_dut']
         
         if(SparamName!=''): ## the other variables should be the same between runs
-            data2 = np.load(problemName+'output.npz')
+            data2 = np.load(SparamName+'output.npz')
             b = data2['b']
-            S_ref = data2['S_ref']
+            #S_ref = data2['S_ref']
             S_dut = data2['S_dut']
         
         #epsr_mat = data['epsr_mat']
@@ -618,7 +618,12 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                             else:
                                 Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
                                 A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                
+                            ## also assemble this part of b, since I may be using different S-parameters than used when saving qs
+                            b[indexCount] = S_dut[nf, m, n] - S_ref[nf, n, m]
+                            
                             indexCount +=1
+                            
             del Apart ## maybe this will help with clearing memory
         gc.collect()
         

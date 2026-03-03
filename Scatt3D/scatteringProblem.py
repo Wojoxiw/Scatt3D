@@ -971,7 +971,7 @@ class Scatt3DProblem():
     #@profile
     def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False, saveName=''):
         '''
-        Computes the optimization vectors from the E-fields and saves to .xdmf - this is done on the reference mesh.
+        Computes the optimization vectors (rows of the A-matrix) from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
         :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
         :param skipQs: Skip writing the actual optimization vectors
@@ -1313,7 +1313,7 @@ class Scatt3DProblem():
                                 ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '--')
                                 ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')
                                 
-                            fekof = 'TestStuff/FEKO patch gain new.dat'
+                            fekof = 'TestStuff/FEKO patch gain lambdaover50.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
                             ax1.plot(fekoData[0], 20*np.log10(fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2])))), linewidth = linewidth, color = 'tab:purple', linestyle = '--')
                             ax1.plot(fekoData[0], 20*np.log10(fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2])))), label = r'FEKO', linewidth = linewidth, color = 'tab:purple', linestyle = '-')
@@ -1447,7 +1447,7 @@ class Scatt3DProblem():
             points[index] = posvec
             
             if(FEKOcomp):
-                FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
+                FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis lambdaover50.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
                 FEKOpos = FEKOdat[:, index]
                 
                 FEKO_E_i = np.transpose(np.outer(self.PW_pol, np.exp(1j*k*np.dot(self.PW_dir, np.transpose(FEKOdat[:, 0:3])))))
