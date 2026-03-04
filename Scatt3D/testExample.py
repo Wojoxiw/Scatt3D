@@ -19,8 +19,8 @@ from memory_profiler import memory_usage
 from timeit import default_timer as timer
 import time
 import sys
-import ctypes.util
-import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
+#import ctypes.util
+#import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
 import resource
 
 import meshMaker

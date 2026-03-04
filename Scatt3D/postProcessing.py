@@ -13,11 +13,8 @@ import sys
 from scipy.constants import c as c0, mu_0 as mu0, epsilon_0 as eps0, pi
 from matplotlib import pyplot as plt
 import h5py
-import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
-import ctypes.util
 import spgl1
 import gc
-import cvxpy as cp
 import resource
 import psutil, threading, os, time
 from timeit import default_timer as timer
@@ -41,6 +38,7 @@ if not hasattr(np.lib, "isreal"): ## spgl1 calls np.lib.isreal, which apparently
 
 
 def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e-4, tau=5e4, mu=1e0, verbose=False, solve_settings={}): ## put this in a function to allow gc?
+    import cvxpy as cp
     if(solver=='CLARABEL'): ## some settings for this that maybe make a marginal difference in solve time
         solve_settings = {'max_step_fraction': 0.95, 'tol_ktratio': 1e-5, 'tol_gap_abs': 1e-6, **solve_settings}
     N_x = np.shape(A)[1]
@@ -324,6 +322,8 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
     :param b_np: numpy vector b
     :param checkVsNp: If True, print some comparisons
     '''
+    import PyScalapack ## https://github.com/USTC-TNS/TNSP/tree/main/PyScalapack
+    import ctypes.util
     A_np = np.array(A_np, order = 'F') ## put into fortran-major ordering
     b_np = np.array(b_np, order = 'F')
     if(comm.rank == 0): ## setup, starting from master rank
@@ -478,7 +478,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         if(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
             b = data2['b']
-            #S_ref = data2['S_ref']
+            S_ref = data2['S_ref']
             S_dut = data2['S_dut']
         
         #epsr_mat = data['epsr_mat']
