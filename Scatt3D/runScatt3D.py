@@ -102,8 +102,8 @@ if __name__ == '__main__':
         if(mesh_settings['antenna_type'] == 'patch'): ## set the dielectrics for the antennas
             epsrs=[]
             for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
-                epsrs.append(4.2*(1 - .11/4.4j)) ## susbtrate - patch
-                epsrs.append(4.2*(1 - .11/4.4j)) ## substrate under patch
+                epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+                epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
                 epsrs.append(2.1*(1 - 0.01j))
             prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
         
@@ -956,11 +956,19 @@ if __name__ == '__main__':
     # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     #===========================================================================
     
-    runName = 'forPaper_D3LowerContrast_patchepsr4.2' ## I manually edited the patch eprs in testFullExample for this
+    runName = 'forPaper_D3LowerContrast_patch5percentsmaller'
     testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_5percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    
+    #===========================================================================
+    # runName = 'forPaper_D3LowerContrast_patchepsr4.2' ## I manually edited the patch eprs in testFullExample for this
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrast+waveguides'

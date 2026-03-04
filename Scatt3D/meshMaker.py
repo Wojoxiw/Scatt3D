@@ -179,7 +179,7 @@ class MeshInfo():
         self.antenna_width = antenna_width * self.lambda0
         self.antenna_height = antenna_height * self.lambda0
         self.antenna_depth = antenna_depth * self.lambda0
-        if(self.antenna_type == 'patch' or self.antenna_type == 'patchtest'): ## specify the dimensions here, for a patch active near 10 GHz. Taken from FEKO sim.
+        if(self.antenna_type == 'patch' or self.antenna_type == 'patchtest' or self.antenna_type == 'patch_5percentsmaller'): ## specify the dimensions here, for a patch active near 10 GHz. Taken from FEKO sim.
             self.antenna_height = 1.55e-3 ## the height
             self.patch_length = 5.900e-3
             self.patch_width = 10.04e-3
@@ -188,6 +188,12 @@ class MeshInfo():
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = 2.252e-3
             self.kc = 0 ## cutoff wavenumber
+            if(self.antenna_type == 'patch_5percentsmaller'): ## make the patch smaller, and nothing else
+                self.antenna_type='patch'
+                ratio = 0.95
+                self.patch_length = 5.900e-3*ratio
+                self.patch_width = 10.04e-3*ratio
+                
         elif(self.antenna_type == 'waveguide'):
             self.kc = pi/self.antenna_width ## cutoff wavenumber... maybe correct
         else:
