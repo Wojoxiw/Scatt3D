@@ -833,20 +833,25 @@ if __name__ == '__main__':
                 
             fig, ax1 = plt.subplots()
             
-            ax1.plot(1/meshSizes, np.log10(NFerrs), marker='^', color='tab:blue')
-            ax1.set_ylabel('Near-field Norm of Relative Error', color='tab:blue')
-            ax1.tick_params(axis='y', labelcolor='tab:blue')
-            ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
+            ax1.plot(1/meshSizes, ErefErefErrs, color='tab:red', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{ref}$', marker='o')
+            ax1.plot(1/meshSizes, ErefEdutErrs, color='tab:red', linestyle='--', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{test}$', marker='o')
+            ax1.set_ylabel('Error Figure-of-Merit', color='tab:red')
+            ax1.tick_params(axis='y', labelcolor='tab:red')
             
-            ax2 = ax1.twinx()
-            ax2.plot(1/meshSizes, ErefErefErrs, color='tab:red', label='ErefEref', marker='o')
-            ax2.plot(1/meshSizes, ErefEdutErrs, color='tab:red', linestyle='--', label='ErefEdut', marker='o')
-            ax2.set_ylabel('Error Figure-of-Merit', color='tab:red')
-            ax2.tick_params(axis='y', labelcolor='tab:red')
+            plt.axhline(y=5, color = 'gray', linestyle = '--', alpha = 1, linewidth = 2)
+            
+            #===================================================================
+            # ax2 = ax1.twinx()
+            # ax2.plot(1/meshSizes, np.log10(NFerrs), marker='^', color='tab:blue')
+            # ax2.set_ylabel('Near-field Norm of Relative Error', color='tab:blue')
+            # ax2.tick_params(axis='y', labelcolor='tab:blue')
+            # ax2.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
+            #===================================================================
+            
             
             plt.grid()
             plt.title(r'Errors vs Mesh Sizes')
-            fig.legend()
+            fig.legend(fontsize=14)
             plt.tight_layout()
             plt.show()
         else:
@@ -950,15 +955,17 @@ if __name__ == '__main__':
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrast'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    # #testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 #mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    #                 #prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    # postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch5percentsmaller', returnResults=[3])
+    # postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     #===========================================================================
     
-    runName = 'forPaper_D3LowerContrast_patch5percentsmaller'
+    runName = 'forPaper_D3LowerContrast_patch2percentsmaller'
     testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_5percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_2percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
