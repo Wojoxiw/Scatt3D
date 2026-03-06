@@ -189,8 +189,8 @@ class MeshInfo():
             self.feed_offset = 2.252e-3
             self.kc = 0 ## cutoff wavenumber
             if(self.antenna_type.endswith('percentsmaller')): ## make the patch smaller, and nothing else
-                self.antenna_type='patch'
                 smaller = float(self.antenna_type[len('patch_'):-len('percentsmaller')])
+                self.antenna_type='patch'
                 ratio = 1-smaller/100
                 self.patch_length = 5.900e-3*ratio
                 self.patch_width = 10.04e-3*ratio
