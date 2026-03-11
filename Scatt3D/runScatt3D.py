@@ -99,7 +99,7 @@ if __name__ == '__main__':
         mesh_settings = {'h': h, 'N_antennas': 9, 'order': degree, 'object_offset': np.array([.15, .1, 0]), 'viewGMSH': False, 'defect_offset': np.array([-.04, .17, .01]), 'defect_radius': 0.175, 'defect_height': 0.3, 'antenna_type': antennaType} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'dutOnRefMesh': dutOnRefMesh, 'ErefEdut': ErefEdut, 'verbosity': verbosity, 'Nf': 11, 'dataFolder': folder, 'computeBoth': True, 'makeOptVects': not recMesh} | prob_settings
         
-        if(mesh_settings['antenna_type'] == 'patch'): ## set the dielectrics for the antennas
+        if(mesh_settings['antenna_type'].startswith('patch')): ## set the dielectrics for the antennas
             epsrs=[]
             for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
                 epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
@@ -118,13 +118,15 @@ if __name__ == '__main__':
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dutMesh, dutOnRefMesh=False, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
         else:
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
-            
+        #prob.makeOptVectors(skipQs=True)
+        
         if(recMesh): ## make the opt vects on the rec mesh... try h=1/10
             rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
             recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
             prob.switchToRecMesh(recMesh)
             prob.makeOptVectors(reconstructionMesh=True)
         prevRuns.memTimeAppend(prob)
+        
         return prob
     
     def testRunDifferentDUTAntennas(h = 1/15, degree = 1): ## Testing what happens when different antennas are used in the ref (simulation) as in the DUT case (unsuccessful reconstruction)
@@ -971,11 +973,12 @@ if __name__ == '__main__':
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     #===========================================================================
     
-    runName = 'forPaper_D3LowerContrast_patch-2percentsmaller'
-    testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_-2percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    runName = 'forPaper_D3LowerContrast_patch5percentsmaller'
+    testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_5percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrast_patchepsr4.2' ## I manually edited the patch eprs in testFullExample for this
