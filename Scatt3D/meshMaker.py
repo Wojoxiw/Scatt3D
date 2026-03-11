@@ -192,7 +192,6 @@ class MeshInfo():
                 smaller = float(self.antenna_type[len('patch_'):-len('percentsmaller')])
                 self.antenna_type='patch'
                 ratio = 1-smaller/100
-                print(ratio)
                 self.patch_length = 5.900e-3*ratio
                 self.patch_width = 10.04e-3*ratio
                 

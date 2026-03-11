@@ -716,17 +716,21 @@ if __name__ == '__main__':
             plt.show()
             
     def patchSsPlot(hols): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
+        colors = ['tab:blue', 'tab:orange']
+        markers = ['o', 'v']
+        i=0
         for ho in hols:
             name = f'patchPatternTest_ho{ho:.1f}'
             data = np.load(folder+name+'output.npz')
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
             
-            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=f'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2)
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=f'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+            i = i+1
         
         fekof = 'TestStuff/FEKO patch S11 lambdaover50.dat'
         fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO', color='tab:red', marker='+', markevery=8, markersize=10)
         plt.grid()
         plt.ylabel(r'$|$S$_{11}|$ [dB]')
         plt.xlabel(r'Frequency [GHz]')
@@ -765,7 +769,7 @@ if __name__ == '__main__':
                     pointsInDomain = points[:, idxUse] 
                     E_load = np.load(f'{folder}{runName}_SimulatedEs_{name}-axis.npz')['E_values'][idxUse] ## only use points in the domain
                     
-                    FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
+                    FEKOdat = np.loadtxt('TestStuff/FEKO_Sphere_NF_'+name+'-axis lambdaover50.efe', skiprows=16) #[Xpos, Ypos, Zpos, Exreal, Exim, Eyreal, Eyim, Ezreal, Ezim]
                     FEKOpos = FEKOdat[:, index]
                     ## only calculate within sphere
                     FEKOdat = FEKOdat[np.nonzero(np.abs(FEKOpos)<radiusUse)[0], :]
@@ -835,7 +839,7 @@ if __name__ == '__main__':
             
             ax1.plot(1/meshSizes, ErefErefErrs, color='tab:red', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{ref}$', marker='o')
             ax1.plot(1/meshSizes, ErefEdutErrs, color='tab:red', linestyle='--', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{test}$', marker='o')
-            ax1.set_ylabel(r'Error Figure-of-Merit $F$', color='tab:red')
+            ax1.set_ylabel(r'Figure-of-Merit $F$', color='tab:red')
             ax1.tick_params(axis='y', labelcolor='tab:red')
             #plt.axhline(y=5, color = 'gray', linestyle = '--', alpha = 1, linewidth = 2)
             
@@ -958,15 +962,18 @@ if __name__ == '__main__':
     #                 #mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 #prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
-    # postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom0.5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch0.5percentsmaller', returnResults=[3])
+    # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom0.1percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch0.1percentsmaller', returnResults=[3])
+    # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom0.2percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch0.2percentsmaller', returnResults=[3])
+    # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom-0.1percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch-0.1percentsmaller', returnResults=[3])
+    # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom0.5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch0.5percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom2percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch2percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch5percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     #===========================================================================
     
-    runName = 'forPaper_D3LowerContrast_patch-0.1percentsmaller'
+    runName = 'forPaper_D3LowerContrast_patch-2percentsmaller'
     testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_-0.1percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    mesh_settings={'viewGMSH': True, 'N_antennas': 9, 'antenna_type': 'patch_-2percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     

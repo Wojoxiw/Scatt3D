@@ -1306,17 +1306,17 @@ class Scatt3DProblem():
                             #ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = ':')
                             #ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
                             
-                            for ho, color in [(3.5, 'tab:blue'), (8.0, 'tab:red')]: #(1.0, 'tab:orange') ## just plot the following cases
+                            for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13), (8.0, 'tab:orange', 'v', 14)]: #(1.0, 'tab:orange') ## just plot the following cases
                                 data = np.load(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{1/ho:.2e}.npz')
                                 FFs = data['farfields']
                                 mag = np.abs(FFs[b,:,0])**2 + np.abs(FFs[b,:,1])**2  
-                                ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '--')
-                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')
+                                ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '--')#, marker=marker, markevery=mev, markersize=7)
+                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')#, marker=marker, markevery=mev, markersize=7)
                                 
                             fekof = 'TestStuff/FEKO patch gain lambdaover50.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-                            ax1.plot(fekoData[0], 20*np.log10(fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2])))), linewidth = linewidth, color = 'tab:purple', linestyle = '--')
-                            ax1.plot(fekoData[0], 20*np.log10(fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2])))), label = r'FEKO', linewidth = linewidth, color = 'tab:purple', linestyle = '-')
+                            ax1.plot(fekoData[0], 20*np.log10(fekoData[2]/np.max(np.hstack((fekoData[1],fekoData[2])))), linewidth = linewidth, color = 'tab:red', linestyle = '--')#, marker='+', markevery=8, markersize=10)
+                            ax1.plot(fekoData[0], 20*np.log10(fekoData[1]/np.max(np.hstack((fekoData[1],fekoData[2])))), label = r'FEKO', linewidth = linewidth, color = 'tab:red', linestyle = '-')#, marker='+', markevery=8, markersize=10)
                         else: ## don't normalize, compare FFs
                             ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = '-')
                             ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
@@ -1326,8 +1326,8 @@ class Scatt3DProblem():
                             ax1.plot(fekoData[0], fekoData[2], label = r'FEKO ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = '--')
                             ax1.plot(fekoData[0], fekoData[1], label = r'FEKO ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '--')
                     else:
-                        ax1.plot(angles[:nvals, 0], mag[:nvals], label = r'Simulated (H-plane/$\phi=90^\circ$)', linewidth = linewidth, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
-                        ax1.plot(angles[nvals:, 0], mag[nvals:], label = r'Simulated (E-plane/$\phi=0^\circ$)', linewidth = linewidth, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
+                        ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), label = r'Simulated (H-plane/$\phi=90^\circ$)', linewidth = linewidth, color = 'blue', linestyle = '-') ## -180 so 0 is the forward direction
+                        ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), label = r'Simulated (E-plane/$\phi=0^\circ$)', linewidth = linewidth, color = 'red', linestyle = '-') ## -90 so 0 is the forward direction
                     
                     plt.xlabel('Theta [degrees]')
                     
@@ -1585,7 +1585,7 @@ class Scatt3DProblem():
                 ax3.plot(posvec, np.imag(E_values[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color='tab:blue')
                 
                 ## also plot the result with other mesh sizes?
-                for ho, color in [(1/8, 'tab:red')]: #(1/2, 'tab:orange')
+                for ho, color in [(1/8, 'tab:orange')]: #(1/2, 'tab:orange')
                     E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
                     ax3.plot(posvec, np.real(E_load[:, 0]), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=linewidth, linestyle = 'solid', color=color)
                     ax3.plot(posvec, np.imag(E_load[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color=color)
@@ -1602,8 +1602,8 @@ class Scatt3DProblem():
                 ## plot real/imags
                 ax3.plot(posvecMie, np.real(E[:, 0]), label='mie theory', linestyle = 'solid', linewidth=linewidth, color='tab:green')
                 ax3.plot(posvecMie, np.imag(E[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:green')
-                ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:purple')
-                ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO', linestyle = 'solid', linewidth=linewidth, color='tab:purple')
+                ax3.plot(FEKOpos, np.imag(FEKO_Es[:, 0]), label=None, linestyle = '--', linewidth=linewidth, color='tab:red')
+                ax3.plot(FEKOpos, np.real(FEKO_Es[:, 0]), label='FEKO', linestyle = 'solid', linewidth=linewidth, color='tab:red')
                 
                 #ax3.plot(posvec, np.real(E_i), label='Ei, x-pol real', linestyle = '--')
                 #ax3.plot(posvec, np.imag(E_i), label='Ei, x-pol imag', linestyle = '--')
