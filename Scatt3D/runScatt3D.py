@@ -973,9 +973,9 @@ if __name__ == '__main__':
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     #===========================================================================
     
-    runName = 'forPaper_D3LowerContrast_patch5percentsmaller'
+    runName = 'forPaper_D3LowerContrast_patch2percentsmaller'
     testFullExample(h=1/3.5, degree=3, runName=runName, recMesh=False,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_5percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch_2percentsmaller', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
                     prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
