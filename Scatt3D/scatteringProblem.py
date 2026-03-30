@@ -502,7 +502,7 @@ class Scatt3DProblem():
                     Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
                     Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
                     return Ep
-                elif(meshInfo.antenna_type == 'patch'): ## the regular patches, rotated and placed facing radially inward
+                elif(meshInfo.antenna_type == 'patch' or meshInfo.antenna_type == '6GHz measurement'): ## the regular patches, rotated and placed facing radially inward
                     for p in range(meshInfo.N_antennas): ## for each antenna, translate + rotate back to the original coordinates it was defined in
                         totalRot = np.dot(meshMaker.Rmaty(-pi/2), np.dot(meshMaker.Rmatz(-pi/2), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
                         y = np.dot(totalRot, np.transpose(x.T - meshInfo.pos_antennas[p])) ## the new (original) coordinate system
@@ -517,7 +517,7 @@ class Scatt3DProblem():
                         Ep_loc[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
                         Ep = Ep + Ep_loc
                     return Ep
-                if(meshInfo.antenna_type == 'waveguide'):
+                elif(meshInfo.antenna_type == 'waveguide'):
                     for p in range(meshInfo.N_antennas):
                         center = meshInfo.pos_antennas[p]
                         Rmat = lambda phi: np.array([[np.cos(phi), -np.sin(phi), 0],
@@ -540,7 +540,11 @@ class Scatt3DProblem():
                         
                         Ep_global = np.dot(Rmat(meshInfo.rot_antennas[p]), Ep_loc) ## need to rotate back to original coordinates
                         Ep = Ep + Ep_global
-                return Ep
+                    return Ep
+                else:
+                    print('Antenna excitation but no valid antenna type chosen.')
+                    exit()
+            
         def planeWave(x, k):
             '''
             Set up the excitation for a background plane-wave. Uses the problem's PW parameters. Needs the frequency, so I do it inside the freq. loop

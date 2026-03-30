@@ -17,7 +17,7 @@ module save ## to make this default so it autoloads. Currently not doing this...
 
 
 Once stuff is installed, must make sure the env is activated (and test the 'textExample.py' script for ImportErrors) before running jobscript:
-module load foss/2024.05 ## I guess a new version was released, which gives an error (would need to reinstall to use it) - so use this ver.
+module load foss/2025b
 . ./spack/share/spack/setup-env.sh ## when in the folder containing the spack folder
 spack env activate Scatt3D
 spack load py-pip
@@ -46,7 +46,7 @@ Some info:
 ## queue jobs sequentially with sbatch -d afterok:firstjobid run_script.sh
 
 
-# Actual installation (starting with deleting a previous one). Could also be a /home/alepal/.spack to remove?
+# Installation (starting with deleting a previous one). Could also be a /home/alepal/.spack to remove?
 ##Installing PETSc with HPDDM:
 module load foss/2024.05
 # spacktest:
@@ -143,7 +143,7 @@ pip install miepython PyScalapack
 
 
 ##
-OLD STUFF BELOW - DEPRECATED
+OLD STUFF BELOW
 ##
 Old way to install: use mamba/conda to install. This is easy and faster, but cannot use MPI across nodes. Also current way to install on local computer
 Can install mamba from https://github.com/conda-forge/miniforge#mambaforge, otherwise just use conda
@@ -179,7 +179,7 @@ time mpirun -n $MPInum python runScatt3D.py ## run the main process, and time it
 cp -rp data3D $SLURM_SUBMIT_DIR/ ## copy the data folder over also
 ## NODE LOCAL DISK
 
-## OLD INSTALLATION METHOD on cluster
+## INSTALLATION METHOD on cluster
 module load foss/2025b
 rm -rf spack
 rm -rf .spack
@@ -187,7 +187,7 @@ git clone https://github.com/spack/spack.git
 . ./spack/share/spack/setup-env.sh
 spack env create Scatt3D
 spack env activate Scatt3D
-spack add fenics-dolfinx+adios2@main ^petsc+complex+mumps py-fenics-dolfinx@main libpressio cflags="-O3" fflags="-O3"
+spack add fenics-dolfinx+adios2 ^petsc+complex+mumps ^adios2@2.11.0 py-fenics-dolfinx+petsc4py py-adios4dolfinx libpressio cflags="-O3" fflags="-O3" ## specify adios2 version, otherwise old version causes problems
 spack add py-gmsh py-scipy py-memory-profiler py-h5py py-matplotlib
 spack compiler find
 spack external find openmpi
@@ -199,5 +199,4 @@ spack env activate Scatt3D
 ## Then install miepython (not sure if this can be done with the previous steps)
 spack install py-pip
 spack load py-pip ## I suspect this causes an error to show up about multiple MPI libraries - it does not seem to matter
-pip install miepython cvxpy cvxopt
-
+pip install miepython cvxpy cvxopt spgl1

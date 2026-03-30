@@ -174,7 +174,7 @@ class MeshInfo():
         if(antenna_radius == 0): ## if not given a radius, put them near the edge of the domain
             self.antenna_radius = self.domain_radius - antenna_height * self.lambda0
         else:
-            self.antenna_radius = antenna_radius * self.lambda0
+            self.antenna_radius = antenna_radius
         self.antenna_z_offset = antenna_z_offset * self.lambda0
         self.antenna_width = antenna_width * self.lambda0
         self.antenna_height = antenna_height * self.lambda0
@@ -194,7 +194,21 @@ class MeshInfo():
                 ratio = 1-smaller/100
                 self.patch_length = 5.900e-3*ratio
                 self.patch_width = 10.04e-3*ratio
-                
+        elif(self.antenna_type == '6GHz measurement'):
+            self.antenna_height = 1.55e-3 ## the height
+            self.patch_length = 10.9e-3
+            self.patch_width = 17.3e-3
+            self.antenna_width = 19.0e-3 ## the width
+            self.antenna_depth = 21.4e-3 ## the length (in x)
+            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
+            self.feed_offset = -4.72e-3 ## negative so it is placed upward along the z-axis
+            self.kc = 0 ## cutoff wavenumber
+            
+            ##the 3-D printed holder sections, which stick out partially in front of the patch
+            self.patchholder_t = 3e-3
+            self.patchholder_corner_ext = 5e-3
+            self.patchholder_cablehole_r = 5e-3
+            
         elif(self.antenna_type == 'waveguide'):
             self.kc = pi/self.antenna_width ## cutoff wavenumber... maybe correct
         else:
@@ -206,7 +220,10 @@ class MeshInfo():
         else:
             self.bb = antenna_bounding_box_offset*self.lambda0
         
-        self.phi_antennas = np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## placement angles
+        if(self.antenna_type == '6GHz measurement'): ## use specific angles
+            self.phi_antennas = np.array([0, 20, 80, 180])*pi/180
+        else:
+            self.phi_antennas = np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## placement angles
         self.pos_antennas = np.array([[self.antenna_radius*np.cos(phi), self.antenna_radius*np.sin(phi), self.antenna_z_offset] for phi in self.phi_antennas]) ## placement positions
         self.rot_antennas = self.phi_antennas + np.pi/2 ## rotation so that they face the center
         
@@ -221,7 +238,7 @@ class MeshInfo():
             self.object_scale = object_radius * self.lambda0
         elif(object_geom == 'complex1'):
             self.object_scale = object_radius * self.lambda0
-        elif(object_geom == '' or object_geom is None):
+        elif(object_geom == '' or object_geom == '6GHz measurement' or object_geom is None):
             self.object_scale = 0
         else:
             print('Nonvalid object geom, exiting...')
@@ -245,7 +262,7 @@ class MeshInfo():
         elif(defect_geom == 'complex1'):
             self.defect_radius = defect_radius * self.lambda0
             self.defect_height = defect_height * self.lambda0
-        elif(defect_geom == '' or defect_geom is None):
+        elif(defect_geom == '' or defect_geom.startswith('6GHz measurement') or defect_geom is None):
             pass ## no defect
         else:
             print('Nonvalid defect geom, exiting...')
@@ -305,6 +322,61 @@ class MeshInfo():
                     antennaSurfacePts.append(x_antenna[n]) ## (0, 0, 0) - the antenna surface
                     for i in range(5):
                         PECSurfacePts.append(x_pec[n, i])
+            elif(self.antenna_type == '6GHz measurement'): # start with 1 patch antenna near the centre, then copy it to make the others. z-polarized (z-offset feed)
+                x_antenna = np.zeros((self.N_antennas, 3))
+                x_pec = np.zeros((self.N_antennas, 9, 3)) ### for each antenna, and PEC surface (of which there are 10), a position of that surface
+                for n in range(self.N_antennas): ## make each antenna, and prepare its surfaces to either be PEC or be the excitation surface
+                    box = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2, self.antenna_depth, self.antenna_width, self.antenna_height) ## box for antenna surface + dielectric + GP at (0, 0, 0)
+                    patch = gmsh.model.occ.addBox(-self.patch_length/2, -self.patch_width/2, -self.antenna_height/2, self.patch_length, self.patch_width, self.antenna_height) ## box for the patch. I was unable to modify the box surface to split into the patch and non-patch sections, easily
+                    box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, patch)], removeTool=False)[0][0][1]
+                    
+                    coax_outer = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh, self.coax_outr)
+                    coax_inner = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh+self.antenna_height, self.coax_inr)
+                    coax_under = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh*2,0,0,self.coax_outh, self.coax_outr)
+                    ## subtract the outer coax from the box, then the inner coax from the outer
+                    box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
+                    coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                    
+                    gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 1, 0, pi/2) ## rotate to be z-polarized
+                    gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 0, 1, pi/2) ## rotate to face y-hat
+                    gmsh.model.occ.rotate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n]) ## then the center
+                    gmsh.model.occ.translate([(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh*2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 1, 0, pi/2)
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, pi/2)
+                    gmsh.model.occ.rotate([(self.tdim, boundingBox)], 0, 0, 0, 0, 0, 1, self.rot_antennas[n])
+                    gmsh.model.occ.translate([(self.tdim, boundingBox)], self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    domainDimTags.append((self.tdim, boundingBox))
+                    
+                    antennaMatDimTags.append((3, box)) ## these 3 should be dielectric
+                    antennaMatDimTags.append((3, patch))
+                    antennaMatDimTags.append((3, coax_outer))
+                    
+                    antennas_DimTags.append((self.tdim, coax_inner)) ## remove these 2 volumes
+                    antennas_DimTags.append((self.tdim, coax_under))
+                    
+                    totalRot = np.dot(Rmatz(self.rot_antennas[n]), np.dot(Rmatz(pi/2), Rmaty(pi/2)))
+                    
+                    x_antenna[n] = [self.feed_offset, self.coax_inr/2+self.coax_outr/2, -self.antenna_height/2-self.coax_outh] ## the surface of the bottom of the outer cylinder of the coax - the radiating port
+                    
+                    x_pec[n, 0] = [0, 0, self.antenna_height/2] ## centre of the patch
+                    x_pec[n, 1] = [-self.feed_offset, 0, -self.antenna_height/2] ## bottom side of the patch
+                    x_pec[n, 2] = [-self.antenna_depth/2.1, 0, -self.antenna_height/2] ## bottom side of the box - rest of the GP
+                    
+                    x_pec[n, 3] = [self.feed_offset, 0, self.antenna_height/2] ## top circle of the inner coax
+                    x_pec[n, 4] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh/2] ## outer coax cylinder
+                    x_pec[n, 5] = [self.feed_offset, self.coax_inr, -self.antenna_height/2-self.coax_outh/2] ## inner coax cylinder
+                    x_pec[n, 6] = [self.feed_offset, self.coax_inr, -self.antenna_height/2+self.coax_outh/2] ## inner coax cylinder - part that's inside the substrate
+                    x_pec[n, 7] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh*1.5] ## under coax cylinder
+                    x_pec[n, 8] = [self.feed_offset, 0, -self.antenna_height/2-self.coax_outh*2] ## under coax face
+
+                    ## append the points, corrected for the position+rotation of the antenna
+                    antennaSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_antenna[n])) ## (0, 0, 0) - the antenna surface
+                    for i in range(9):
+                        PECSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
+                        if(i in [5,6]): ## the inner cylinder should have a smaller mesh (I think)
+                            smallMeshSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
             elif(self.antenna_type == 'patch'): # start with 1 patch antenna near the centre, then copy it to make the others. z-polarized (z-offset feed)
                 x_antenna = np.zeros((self.N_antennas, 3))
                 x_pec = np.zeros((self.N_antennas, 9, 3)) ### for each antenna, and PEC surface (of which there are 10), a position of that surface
@@ -416,6 +488,12 @@ class MeshInfo():
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'cubic'):
                 obj = gmsh.model.occ.addBox(-self.object_scale/2,-self.object_scale/2,-self.object_scale/2,self.object_scale,self.object_scale,self.object_scale) ## add it to the origin
+                matDimTags.append((self.tdim, obj))
+            elif(self.object_geom == '6GHz measurement'): ## a rectangular prism with a cylindrical defect - for the measurement
+                self.object_height = 25e-3
+                self.object_width = 100e-3
+                self.object_length = 200e-3
+                obj = gmsh.model.occ.addBox(-self.object_length/2,-self.object_width/2,-self.object_height/2,self.object_length,self.object_width,self.object_height) ## add it to the origin
                 matDimTags.append((self.tdim, obj))
             elif(self.object_geom == 'simple1'): ## a rectangular prism with a cylindrical defect
                 S1height = 0.23

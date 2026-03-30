@@ -443,10 +443,11 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
+def solveFromQs(problemName, SparamMeas='', SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
+    :param SparamMeas: Filename for S parameters. If this isn't blank, S-params will be taken from these meas. files, E-fields from the regular problem. Overrides SparamName.
     :param SparamName: Filename for S parameters. If this isn't blank, S-params will be taken from this simulation, everything else from the regular problem.
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
@@ -463,7 +464,9 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
     global timestep ## for saving data/printing about different reconstruction methods
     timestep = -1
     if(comm.rank == 0):
-        if(SparamName==''):
+        if(SparamMeas!=''):
+            print(f'Postprocessing of {problemName}, {solutionName} starting (using S-parameters from {SparamMeas}):')
+        elif(SparamName==''):
             print(f'Postprocessing of {problemName}, {solutionName} starting:')
         else:
             print(f'Postprocessing of {problemName}, {solutionName} starting (using S-parameters from {SparamName}):')
@@ -475,7 +478,9 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
         S_ref = data['S_ref']
         S_dut = data['S_dut']
         
-        if(SparamName!=''): ## the other variables should be the same between runs
+        if(SparamMeas!=''):
+            pass # this should load Ss from datafiles
+        elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
             b = data2['b']
             S_ref = data2['S_ref']
@@ -516,7 +521,6 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             plt.show()
             return
         
-        Nb = len(b) ## number of rows, or 'data points' to be used
         
         ## mesh stuff on just one process?
         with dolfinx.io.XDMFFile(commself, problemName+'output-qs.xdmf', 'r') as f: ## read the mesh with dolfinx
@@ -598,8 +602,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
                                   
                         idxNC.append(i) ## if the checks are passed, use this index
                         
-            b = b[idxNC]
-            
+            b = np.zeros(len(idxNC), dtype=complex)
             N_non_pml = len(idx_non_pml)
             A = np.zeros((len(idxNC), N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
             indexCount = 0
@@ -627,7 +630,7 @@ def solveFromQs(problemName, SparamName='', solutionName='', antennasToUse=[], f
             del Apart ## maybe this will help with clearing memory
         gc.collect()
         
-        print(f'all data loaded in, {len(idxNC)}/{Nb} rows used')
+        print(f'all data loaded in, {len(idxNC)}/{len(S_ref)} rows used')
         
         if(not reconstructionMeshInfo is None):
             idx_ap = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be just the object in the reconstruction mesh
