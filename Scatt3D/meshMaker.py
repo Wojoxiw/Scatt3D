@@ -778,6 +778,7 @@ class MeshInfo():
             
             
             if(self.justInterpolationSubmesh):
+                print('*')
                 ## Based on gmsh's tutorial 13, this just takes the material and makes a mesh around it
                 elem_types = []
                 elem_tags = []
@@ -804,7 +805,7 @@ class MeshInfo():
                 for t in used_nodes:
                     i = node_map[t]
                     coords.extend(node_coords[3*i:3*i+3])
-        
+                print('**')
                 gmsh.model.add("submesh")
                 
                 v = gmsh.model.addDiscreteEntity(3, 1) ## just volume
@@ -821,7 +822,7 @@ class MeshInfo():
                 includeBoundary = True
                 curveAngle = 180
                 gmsh.model.mesh.classifySurfaces(4 * pi / 180., includeBoundary, False, curveAngle * pi / 180.)
-                
+                print('***')
                 gmsh.model.mesh.createGeometry()
                  
                 s = gmsh.model.getEntities(2)
@@ -833,7 +834,7 @@ class MeshInfo():
                 size = self.interpolationSubmeshSize
                 if(size < 0):
                     size = self.h
-                
+                print('****')
                 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", size) ## just use a uniform mesh size
                 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", size)
                 gmsh.model.mesh.generate(self.tdim)
