@@ -820,23 +820,17 @@ class MeshInfo():
                 includeBoundary = True
                 curveAngle = 180
                 gmsh.model.mesh.classifySurfaces(4 * pi / 180., includeBoundary, False, curveAngle * pi / 180.)
-                print('***')
-                gmsh.model.mesh.createGeometry()
-                print('*')
+                #gmsh.model.mesh.createGeometry() ## gives an error on a new spack installation for some reason. Also not even needed?
                 
                 s = gmsh.model.getEntities(2)
                 l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
-                print('**')
                 vol = gmsh.model.geo.addVolume([l])
-                print('********')
                 mat_markers = [gmsh.model.addPhysicalGroup(3, [vol])] ## need some physical group, even if this gives an error
-                print('****')
                 gmsh.model.geo.synchronize()
                 
                 size = self.interpolationSubmeshSize
                 if(size < 0):
                     size = self.h
-                print('****')
                 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", size) ## just use a uniform mesh size
                 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", size)
                 gmsh.model.mesh.generate(self.tdim)
