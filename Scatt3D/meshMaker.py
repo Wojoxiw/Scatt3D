@@ -778,7 +778,6 @@ class MeshInfo():
             
             
             if(self.justInterpolationSubmesh):
-                print('*')
                 ## Based on gmsh's tutorial 13, this just takes the material and makes a mesh around it
                 elem_types = []
                 elem_tags = []
@@ -805,7 +804,6 @@ class MeshInfo():
                 for t in used_nodes:
                     i = node_map[t]
                     coords.extend(node_coords[3*i:3*i+3])
-                print('**')
                 gmsh.model.add("submesh")
                 
                 v = gmsh.model.addDiscreteEntity(3, 1) ## just volume
@@ -824,11 +822,15 @@ class MeshInfo():
                 gmsh.model.mesh.classifySurfaces(4 * pi / 180., includeBoundary, False, curveAngle * pi / 180.)
                 print('***')
                 gmsh.model.mesh.createGeometry()
-                 
+                print('*')
+                
                 s = gmsh.model.getEntities(2)
                 l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
+                print('**')
                 vol = gmsh.model.geo.addVolume([l])
+                print('********')
                 mat_markers = [gmsh.model.addPhysicalGroup(3, [vol])] ## need some physical group, even if this gives an error
+                print('****')
                 gmsh.model.geo.synchronize()
                 
                 size = self.interpolationSubmeshSize
