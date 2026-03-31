@@ -836,7 +836,7 @@ class MeshInfo():
                 
                 gmsh.option.setNumber("Mesh.CharacteristicLengthMin", size) ## just use a uniform mesh size
                 gmsh.option.setNumber("Mesh.CharacteristicLengthMax", size)
-                gmsh.model.mesh.generate(3)
+                gmsh.model.mesh.generate(self.tdim)
             
             if(viewGMSH):
                 print(f'{mat_markers=}, {antennaMat_markers=}, {defect_markers=}, {domain_marker=}, {pml_marker=}, {pec_surface_marker=}, {farfield_surface_marker=}, {antenna_surface_markers=}')

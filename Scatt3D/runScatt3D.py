@@ -727,7 +727,7 @@ if __name__ == '__main__':
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
             
-            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=f'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
             i = i+1
         
         fekof = 'TestStuff/FEKO patch S11 lambdaover50.dat'
@@ -888,7 +888,7 @@ if __name__ == '__main__':
                     prob.makeOptVectors(reconstructionMesh=True, saveName=runName+'ErefEdut')
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
-    testRun(h=1/2)
+    #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
