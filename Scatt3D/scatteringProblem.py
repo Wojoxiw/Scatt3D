@@ -998,7 +998,7 @@ class Scatt3DProblem():
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
             if( hasattr(self, 'S_ref') and meshInfo.N_antennas>0 ): ## need at least S_ref and 1 antenna - otherwise, do not save
                 if(not hasattr(self, 'S_dut')):
-                    self.S_dut = np.array(0)
+                    self.S_dut = np.zeros_like(self.S_ref)
                     b = np.array(0)
                 else:
                     b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
@@ -1315,7 +1315,7 @@ class Scatt3DProblem():
                                 FFs = data['farfields']
                                 mag = np.abs(FFs[b,:,0])**2 + np.abs(FFs[b,:,1])**2  
                                 ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '--')#, marker=marker, markevery=mev, markersize=7)
-                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=f'sim. ($\lambda/h={ho:.1f}$'+f')')#, marker=marker, markevery=mev, markersize=7)
+                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=fr'sim. ($\lambda/h={ho:.1f}$'+f')')#, marker=marker, markevery=mev, markersize=7)
                                 
                             fekof = 'TestStuff/FEKO patch gain lambdaover50.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
@@ -1353,7 +1353,7 @@ class Scatt3DProblem():
                         ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = linewidth, color = 'blue', linestyle = ':')
                         ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = linewidth, color = 'red', linestyle = ':')
                         print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
-                        plt.title(f'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
+                        plt.title(fr'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
                     else:
                         plt.title(f'Normalized Patch Antenna Gain')
                         plt.ylabel('Gain [dB]')
@@ -1403,7 +1403,7 @@ class Scatt3DProblem():
                     mieBackward[i] = miepython.i_par(m, x, np.cos(0), norm='qsca')
                 
                 for i in range(len(angles)):
-                    plt.plot(self.fvec/1e9, np.abs(farfields[:, i, 0])**2 + np.abs(farfields[:, i, 1])**2, label = r'sim, $\theta=$'+f'{angles[i, 0]:.0f}, $\phi={angles[i, 1]:.0f}$')
+                    plt.plot(self.fvec/1e9, np.abs(farfields[:, i, 0])**2 + np.abs(farfields[:, i, 1])**2, label = r'sim, $\theta=$'+fr'{angles[i, 0]:.0f}, $\phi={angles[i, 1]:.0f}$')
                 
                 plt.xlabel('Frequency [GHz]')
                 plt.ylabel('Intensity')
