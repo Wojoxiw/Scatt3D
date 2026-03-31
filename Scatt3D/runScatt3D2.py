@@ -99,7 +99,7 @@ if __name__ == '__main__':
     measurementScript(h=1/1, degree=1, runName=runName,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': np.linspace(5.4e9, 6.6e9, 3)})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
     
     

@@ -998,7 +998,6 @@ class Scatt3DProblem():
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
             if( hasattr(self, 'S_ref') and meshInfo.N_antennas>0 ): ## need at least S_ref and 1 antenna - otherwise, do not save
                 if(not hasattr(self, 'S_dut')):
-                    self.S_dut = np.zeros_like(self.S_ref)
                     b = np.array(0)
                     np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
             
