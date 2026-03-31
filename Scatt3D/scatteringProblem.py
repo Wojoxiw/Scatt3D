@@ -1000,13 +1000,15 @@ class Scatt3DProblem():
                 if(not hasattr(self, 'S_dut')):
                     self.S_dut = np.zeros_like(self.S_ref)
                     b = np.array(0)
+                    np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
+            
                 else:
                     b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
                     for nf in range(self.Nf):
                         for m in range(meshInfo.N_antennas):
                             for n in range(meshInfo.N_antennas):
                                 b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
+                    np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):
