@@ -888,7 +888,7 @@ if __name__ == '__main__':
                     prob.makeOptVectors(reconstructionMesh=True, saveName=runName+'ErefEdut')
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
-    #testRun(h=1/2)
+    testRun(h=1/2)
     #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
@@ -1033,7 +1033,7 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    testSphereScattering(h=1/3.5, degree=3, showPlots=False)
+    #testSphereScattering(h=1/3.5, degree=3, showPlots=False)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')

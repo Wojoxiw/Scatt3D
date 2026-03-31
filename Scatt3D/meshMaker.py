@@ -863,7 +863,7 @@ class MeshInfo():
         self.farfield_surface_marker = self.comm.bcast(farfield_surface_marker, root=self.model_rank)
         gmsh.model.mesh.setOrder(self.order) ## It seems I get worse results when using setting the order before generating the mesh... for higher degree FEM elements, need to set this to the degree?
         #self.mesh, self.subdomains, self.boundaries = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
-        self.meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet))
+        self.meshData = dolfinx.io.gmsh.model_to_mesh(gmsh.model, comm=self.comm, rank=self.model_rank, gdim=self.tdim, partitioner=dolfinx.mesh.create_cell_partitioner(dolfinx.cpp.mesh.GhostMode.shared_facet, max_facet_to_cell_links=2))
         self.mesh = self.meshData.mesh
         ## self.mesh.facet_tags was previously boundaries, self.mesh.cell_tags was previously subdomains
         gmsh.finalize()
