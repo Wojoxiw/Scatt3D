@@ -825,7 +825,7 @@ class MeshInfo():
                 s = gmsh.model.getEntities(2)
                 l = gmsh.model.geo.addSurfaceLoop([e[1] for e in s])
                 vol = gmsh.model.geo.addVolume([l])
-                mat_markers = [gmsh.model.addPhysicalGroup(3, [vol])] ## need some physical group, even if this gives an error
+                mat_markers = [gmsh.model.addPhysicalGroup(3, [vol])] ## need some physical group, even if this gives a warning
                 gmsh.model.geo.synchronize()
                 
                 size = self.interpolationSubmeshSize

@@ -1018,7 +1018,7 @@ class Scatt3DProblem():
         cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(FEMm.WSpace))*ufl.dx)).array
         
         ## save some problem/mesh data
-        if(reconstructionMesh): ## load in the DUT dofs_map, since getting defect data is the point
+        if(reconstructionMesh and hasattr(self, 'S_dut')): ## load in the DUT dofs_map, since visualizing defect data is part of the point of the dofsmap
             self.readSol(FEMm.epsr, ref=False, freq=0, excitation=0, special='dofsmap')
         else:
             FEMm.epsr.x.array[:] = FEMm.dofs_map
@@ -1031,7 +1031,7 @@ class Scatt3DProblem():
         FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
         #self.epsr.name = 'epsr_ref'
         xdmf.write_function(FEMm.epsr, -2)
-        if(reconstructionMesh): ## load in the DUT dofs_map, since getting defect data is the point
+        if(reconstructionMesh and hasattr(self, 'S_dut')): ## load in the DUT dofs_map, since visualizing defect data is the point of epsr_dut
             self.readSol(FEMm.epsr, ref=False, freq=0, excitation=0, special='epsr')
             #self.epsr.name = 'epsr_dut'
             xdmf.write_function(FEMm.epsr, -1)
