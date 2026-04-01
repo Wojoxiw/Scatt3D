@@ -890,14 +890,14 @@ if __name__ == '__main__':
             
     #testRun(h=1/2)
     #folder = 'data3DLUNARC/'
-    reconstructionErrorTestPlots()
+    #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
     #reconstructionMeshSizeTesting(0)
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    #plotMeshSizeByErrors()
+    plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
     
     
