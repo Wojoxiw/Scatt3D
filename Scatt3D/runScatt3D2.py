@@ -155,8 +155,8 @@ if __name__ == '__main__':
     #===========================================================================
     
     
-    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(5e9, 7e9, 50), name=runName, showPlots=False)
-    testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(5e9, 7e9, 50), name=runName, showPlots=False)
+    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
+    testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     
     #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
