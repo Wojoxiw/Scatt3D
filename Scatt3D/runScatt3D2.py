@@ -72,9 +72,9 @@ if __name__ == '__main__':
         if(mesh_settings['antenna_type'].startswith('patch')): ## set the dielectrics for the antennas
             epsrs=[]
             for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
-                epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
-                epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
-                epsrs.append(2.1*(1 - 0.01j))
+                epsrs.append(4.4*(1 - .11/4.4j)) ## box
+                epsrs.append(4.4*(1 - .11/4.4j)) ## patch
+                epsrs.append(2.1*(1 - 0.01j)) ## coax outer
             prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
         
         refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **mesh_settings)
@@ -92,17 +92,73 @@ if __name__ == '__main__':
         
         return prob
     
+    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', showPlots=True): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+        runName = name
+        prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type='6GHz measurement', object_geom='', defect_geom='', FF_surface = True, order=degree)
+        epsrs=[]
+        epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+        epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
+        epsrs.append(2.1*(1 - 0.01j))
+        epsrs.append(2.7*(1 - 0.01j))
+        #refMesh.plotMeshPartition()
+        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+        if(len(freqs) == 1): ## plot the given frequency, if there is only 1
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
+            prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
+        else: ## save Ss
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
+        prevRuns.memTimeAppend(prob)
+    
+    def patchSsPlot(hols): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
+        colors = ['tab:blue', 'tab:orange']
+        markers = ['o', 'v']
+        i=0
+        
+        #=======================================================================
+        # for ho in hols:
+        #     name = f'6GHzpatchPatternTest_ho{ho:.1f}'
+        #     data = np.load(folder+name+'output.npz')
+        #     S11 = data['S_ref'][:, 0, 0]
+        #     fvec = data['fvec']
+        #     
+        #     plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+        #     i = i+1
+        #=======================================================================
+        
+        measFolder = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Patch Data/'
+        
+        fekof = measFolder+'feko patch S11.dat'
+        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+        plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO', color='tab:purple')#, marker='+', markevery=8, markersize=10)
+        
+        
+        for patch in ['1', '2', '3', '4']:
+            measData = np.transpose(np.loadtxt(measFolder+'Patches S11 before holders/'+patch+'.csv', skiprows = 3))
+            plt.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[1]+1j*measData[2])), label='Meas.'+patch)#, color='tab:green', marker='+', markevery=8, markersize=10)
+        
+        plt.grid()
+        plt.ylabel(r'$|$S$_{11}|$ [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Patch Antenna Reflection Coefficient')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
     
     
+    #===========================================================================
+    # runName = 'measurements_test'
+    # measurementScript(h=1/5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': np.linspace(5.4e9, 6.6e9, 3), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #===========================================================================
     
-    runName = 'measurements_test'
-    measurementScript(h=1/5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': np.linspace(5.4e9, 6.6e9, 3), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
     
+    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(5e9, 7e9, 50), name=runName, showPlots=False)
+    testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(5e9, 7e9, 50), name=runName, showPlots=False)
     
-    
+    #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
     
     if(comm.rank == model_rank):

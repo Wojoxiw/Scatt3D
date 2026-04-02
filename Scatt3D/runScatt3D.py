@@ -742,9 +742,9 @@ if __name__ == '__main__':
         plt.show()
         
     def plotMeshSizeByErrors(plotting=False): ## plots the mesh size vs sphere-scattering near-field error, and reconstruction accuracy for the basic case (ErefEref and ErefEdut)
-        #meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5]) ## h/lambda - for plotting
+        meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5, 1/5]) ## h/lambda - for plotting
         #meshSizes = np.array([1/4, 1/4.5]) ## h/lambda - for plotting
-        meshSizes = np.array([1/5.5]) ## h/lambda - new ones to compute
+        #meshSizes = np.array([1/5.5]) ## h/lambda - new ones to compute
         if(plotting): ## make the plots, assuming data already made
             NFerrs = []
             ErefErefErrs = []
@@ -816,10 +816,10 @@ if __name__ == '__main__':
                 
                 solNum = 3 ## 3 for TSVD, 25 for lasso solution
                 indices = ''
-                solutionName= '_Ssfrom4.5' #'_Sdutfrom4.5' ## this is changed when using different S-parameters for the solution
+                solutionName= '_Ssfrom5' #'_Sdutfrom4.5' ## this is changed when using different S-parameters for the solution
                 ## then calculate the ErefEref err
                 if(not os.path.exists(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5')): ## if it doesn't exist, first compute this solution
-                    postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}meshSizeErrRun_ho{1/4.5:.3f}ErefEdut')
+                    postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}meshSizeErrRun_ho{1/5:.3f}ErefEdut')
                 with h5py.File(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
                     cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
                     epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
@@ -829,7 +829,7 @@ if __name__ == '__main__':
                 ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=False))
                 ## then the ErefEdut err
                 if(not os.path.exists(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5')): ## if it doesn't exist, first compute this solution
-                    postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}meshSizeErrRun_ho{1/4.5:.3f}ErefEref')
+                    postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}meshSizeErrRun_ho{1/5:.3f}ErefEref')
                 with h5py.File(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
                     cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
                     epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
@@ -889,7 +889,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    #folder = 'data3DLUNARC/'
+    folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -897,8 +897,8 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(1)
     #reconstructionMeshSizeTesting(2)
     
-    plotMeshSizeByErrors()
-    #plotMeshSizeByErrors(True)
+    #plotMeshSizeByErrors()
+    plotMeshSizeByErrors(True)
     
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
