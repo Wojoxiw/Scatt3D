@@ -143,7 +143,7 @@ if __name__ == '__main__':
         plt.tight_layout()
         plt.show()
     
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     
     #===========================================================================
     # runName = 'measurements_test'
@@ -154,8 +154,8 @@ if __name__ == '__main__':
     #===========================================================================
     
     
-    testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{1/8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
-    testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_ho{1/3.5:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
+    testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
+    testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     
     #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
