@@ -16,7 +16,7 @@ module load foss
 module save ## to make this default so it autoloads. Currently not doing this... just in case?
 
 
-Once stuff is installed, must make sure the env is activated (and test the 'textExample.py' script for ImportErrors) before running jobscript:
+Once stuff is installed via spack, must make sure the env is activated (and test the 'textExample.py' script for ImportErrors) before running jobscript:
 module load foss/2025b
 . ./spack/share/spack/setup-env.sh ## when in the folder containing the spack folder
 spack env activate Scatt3D

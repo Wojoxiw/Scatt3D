@@ -115,16 +115,14 @@ if __name__ == '__main__':
         markers = ['o', 'v']
         i=0
         
-        #=======================================================================
-        # for ho in hols:
-        #     name = f'6GHzpatchPatternTest_ho{ho:.1f}'
-        #     data = np.load(folder+name+'output.npz')
-        #     S11 = data['S_ref'][:, 0, 0]
-        #     fvec = data['fvec']
-        #     
-        #     plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
-        #     i = i+1
-        #=======================================================================
+        for ho in hols:
+            name = f'6GHzpatchPatternTest_ho{ho:.1f}'
+            data = np.load(folder+name+'output.npz')
+            S11 = data['S_ref'][:, 0, 0]
+            fvec = data['fvec']
+             
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+            i = i+1
         
         measFolder = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Patch Data/'
         
@@ -145,6 +143,7 @@ if __name__ == '__main__':
         plt.tight_layout()
         plt.show()
     
+    folder = 'data3DLUNARC/'
     
     #===========================================================================
     # runName = 'measurements_test'
@@ -155,8 +154,8 @@ if __name__ == '__main__':
     #===========================================================================
     
     
-    testPatchPattern(h=1/8, degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
-    testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
+    testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{1/8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
+    testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_ho{1/3.5:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     
     #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
