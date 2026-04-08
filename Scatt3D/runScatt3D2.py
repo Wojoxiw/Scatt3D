@@ -87,6 +87,7 @@ if __name__ == '__main__':
         rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
         prob.switchToRecMesh(recMesh)
+        prob.makeOptVectors(reconstructionMesh=False, saveName='regMesh') ## to check if everything is correct
         prob.makeOptVectors(reconstructionMesh=True)
         prevRuns.memTimeAppend(prob)
         return prob
