@@ -221,7 +221,7 @@ class MeshInfo():
             self.bb = antenna_bounding_box_offset*self.lambda0
             
         if(antenna_radius<0): ## if not given a radius, put them near the edge of the domain
-            self.antenna_radius = self.domain_radius - self.bb * self.lambda0*2
+            self.antenna_radius = self.domain_radius - antenna_height * self.lambda0#- self.bb * self.lambda0*2
         else:
             self.antenna_radius = antenna_radius
         
