@@ -857,6 +857,7 @@ if __name__ == '__main__':
             plt.grid()
             plt.title(r'Error vs Mesh Size')
             fig.legend(fontsize=14)
+            plt.gca().set_ylim(bottom=0)
             plt.tight_layout()
             plt.show()
         else:
@@ -889,7 +890,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -898,7 +899,7 @@ if __name__ == '__main__':
     #reconstructionMeshSizeTesting(2)
     
     #plotMeshSizeByErrors()
-    plotMeshSizeByErrors(True)
+    #plotMeshSizeByErrors(True)
     
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
@@ -968,6 +969,15 @@ if __name__ == '__main__':
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch5percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     #===========================================================================
+    
+    runName = 'forPaper_D3LowerContrast_40freqs'
+    testFullExample(h=1/3.5, degree=3, runName=runName,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+                    prob_settings={'freqs': np.linspace(9e9, 11e9, 40), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom2percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch2percentsmaller', returnResults=[3])
+    #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch5percentsmaller', returnResults=[3])
+    #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrast_patch2percentsmaller'
