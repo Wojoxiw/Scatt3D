@@ -443,10 +443,11 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def solveFromQs(problemName, SparamMeas='', SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
+def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
+    :param extraProbs: Extra filenames - the A-matrices from these will be stacked under the main problem. Data is assumed to have the same format, and have been saved onto the same mesh, unless reconstructionMeshInfo is used.
     :param SparamMeas: Filename for S parameters. If this isn't blank, S-params will be taken from these meas. files, E-fields from the regular problem. Overrides SparamName.
     :param SparamName: Filename for S parameters. If this isn't blank, S-params will be taken from this simulation, everything else from the regular problem.
     :param solutionName: Name to be appended to the solution files - default is nothing
@@ -476,7 +477,8 @@ def solveFromQs(problemName, SparamMeas='', SparamName='', solutionName='', ante
         b = data['b']
         fvec = data['fvec']
         S_ref = data['S_ref']
-        S_dut = data['S_dut']
+        if(hasattr(data, 'S_dut')):
+            S_dut = data['S_dut']
         
         if(SparamMeas!=''):
             pass # this should load Ss from datafiles
@@ -535,87 +537,103 @@ def solveFromQs(problemName, SparamMeas='', SparamName='', solutionName='', ante
         ## load in the problem data
         print('data loaded in')
         
-        with h5py.File(problemName+'output-qs.h5', 'r') as f: ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
-            dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
-            cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idxOrig]
-            epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idxOrig]
-            epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idxOrig]
+        f = h5py.File(problemName+'output-qs.h5', 'r') ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
+        dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
+        cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()[idxOrig]
+        epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()[idxOrig]
+        epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()[idxOrig]
+        f.close()
+        
+        if(not reconstructionMeshInfo is None): ## instead use the reconstruction mesh, and interpolate the original epsrs
+            rec_WSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, ("DG", 0))
+            rec_cellData = dolfinx.fem.Function(rec_WSpace)  ## need to interpolate onto the ref mesh
+            mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
+            num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+            cells = np.arange(num_cells_on_proc, dtype=np.int32)
+            interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             
-            if(not reconstructionMeshInfo is None): ## instead use the reconstruction mesh, and interpolate the original epsrs
-                rec_WSpace = dolfinx.fem.functionspace(reconstructionMeshInfo.mesh, ("DG", 0))
-                rec_cellData = dolfinx.fem.Function(rec_WSpace)  ## need to interpolate onto the ref mesh
-                mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
-                num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
-                cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, WSpace, cells, padding=1e-10) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
-                
-                cellData.x.array[:] = dofs_map
-                rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
-                cellData.x.scatter_forward()
-                dofs_map = rec_cellData.x.array[:].copy()
-                
-                cellData.x.array[:] = epsr_ref
-                rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
-                cellData.x.scatter_forward()
-                epsr_ref = rec_cellData.x.array[:].copy()
-                
-                cellData.x.array[:] = epsr_dut
-                rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
-                cellData.x.scatter_forward()
-                epsr_dut = rec_cellData.x.array[:].copy()
-                
-                cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
-                cellData = dolfinx.fem.Function(rec_WSpace)
-                idx_non_pml = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be no PML in the reconstruction mesh
-            else:
-                idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
+            cellData.x.array[:] = dofs_map
+            rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
+            cellData.x.scatter_forward()
+            dofs_map = rec_cellData.x.array[:].copy()
             
-            N = len(cell_volumes)
+            cellData.x.array[:] = epsr_ref
+            rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
+            cellData.x.scatter_forward()
+            epsr_ref = rec_cellData.x.array[:].copy()
             
+            cellData.x.array[:] = epsr_dut
+            rec_cellData.interpolate_nonmatching(cellData, cells, interpolation_data=interpolation_data)
+            cellData.x.scatter_forward()
+            epsr_dut = rec_cellData.x.array[:].copy()
             
-            
-            #===================================================================
-            # midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
-            # dist = np.linalg.norm(midpoints, axis=1)
-            # idx_non_pml = np.nonzero(dist < antenna_radius*0.7)[0] ## alternative reconstruction cells - those within a sphere of the centre
-            #===================================================================
-            
-            ## choose which row/non-cell indices to use for the reconstruction - i.e. which frequencies/antennas
-            idxNC = []
-            for nf in range(Nf): ## frequency
-                if(not (nf in frequenciesToUse or len(frequenciesToUse)==0)): ## if frequency excluded
-                    continue ## skip to next index
-                for m in range(N_antennas): ## transmitting index
-                    if(False): ## disabled for now... reconstruction seems to improve with more data
-                        refl = np.abs(S_ref[nf, m, m]) ## should be close enough between ref and dut cases
-                        if(refl>0.8): ## check for a low reflection coefficient - if it is too high, perhaps the antenna doesn't support this frequency and the data should be skipped
-                            continue
-                    for n in range(N_antennas): ## receiving index
-                        if( not ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ): ## if antenna excluded
+            cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
+            cellData = dolfinx.fem.Function(rec_WSpace)
+            idx_non_pml = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be no PML in the reconstruction mesh
+        else:
+            idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
+        
+        N = len(cell_volumes)
+        
+        
+        
+        #===================================================================
+        # midpoints = dolfinx.mesh.compute_midpoints(mesh, mesh.topology.dim, np.arange(N, dtype=np.int32)) ## midpoints of every cell
+        # dist = np.linalg.norm(midpoints, axis=1)
+        # idx_non_pml = np.nonzero(dist < antenna_radius*0.7)[0] ## alternative reconstruction cells - those within a sphere of the centre
+        #===================================================================
+        
+        ## choose which row/non-cell indices to use for the reconstruction - i.e. which frequencies/antennas
+        idxNC = []
+        for nf in range(Nf): ## frequency
+            if(not (nf in frequenciesToUse or len(frequenciesToUse)==0)): ## if frequency excluded
+                continue ## skip to next index
+            for m in range(N_antennas): ## transmitting index
+                if(False): ## disabled for now... reconstruction seems to improve with more data
+                    refl = np.abs(S_ref[nf, m, m]) ## should be close enough between ref and dut cases
+                    if(refl>0.8): ## check for a low reflection coefficient - if it is too high, perhaps the antenna doesn't support this frequency and the data should be skipped
+                        continue
+                for n in range(N_antennas): ## receiving index
+                    if( not ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ): ## if antenna excluded
+                        continue ## skip to next index
+                    i = nf*N_antennas*N_antennas + m*N_antennas + n
+                    
+                    if(onlyNAntennas > 0): ## use only transmission to the N antennas that are most spread out (as if we only had N antennas to measure with) This includes the antenna itself - if N is 1, then there is only reflection
+                        dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas - rounds down
+                        if( np.abs(n-m)%dist != 0 ):
                             continue ## skip to next index
-                        i = nf*N_antennas*N_antennas + m*N_antennas + n
-                        
-                        if(onlyNAntennas > 0): ## use only transmission to the N antennas that are most spread out (as if we only had N antennas to measure with) This includes the antenna itself - if N is 1, then there is only reflection
-                            dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas - rounds down
-                            if( np.abs(n-m)%dist != 0 ):
-                                continue ## skip to next index
-                                  
-                        idxNC.append(i) ## if the checks are passed, use this index
-                        
-            b = np.zeros(len(idxNC), dtype=complex)
-            N_non_pml = len(idx_non_pml)
-            A = np.zeros((len(idxNC), N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
-            indexCount = 0
+                              
+                    idxNC.append(i) ## if the checks are passed, use this index
+                    
+        b = np.zeros(len(idxNC), dtype=complex)
+        N_non_pml = len(idx_non_pml)
+        A = np.zeros((len(idxNC)*(1 + len(extraProbs), N_non_pml)), dtype=complex) ## the matrix of scaled E-field stuff
+        indexCount = 0
+        for Afile in [problemName]+extraProbs: ## load in each file's part of the A-matrix
+            if(not reconstructionMeshInfo is None): ## this part of A may come from a different mesh
+                with dolfinx.io.XDMFFile(commself, Afile+'output-qs.xdmf', 'r') as f: ## read the mesh with dolfinx
+                    Amesh = f.read_mesh() ## for the part of the A-matrix being read now
+                    AWSpace = dolfinx.fem.functionspace(Amesh, ('DG', 0))
+                    AcellData = dolfinx.fem.Function(AWSpace)
+                    mesh_cell_map = mesh.topology.index_map(Amesh.topology.dim)
+                    num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
+                    cells = np.arange(num_cells_on_proc, dtype=np.int32)
+                    interpolation_data = dolfinx.fem.create_interpolation_data(WSpace, AWSpace, cells, padding=1e-10)
+                
+                    idxOrig = Amesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
+            f = h5py.File(problemName+'output-qs.h5', 'r') ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
+            if(indexCount==0): ## only set this once
+                dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
+            
             for nf in range(Nf):
                 for m in range(N_antennas): ## transmitting index
                     for n in range(N_antennas): ## receiving index
                         i = nf*N_antennas*N_antennas + m*N_antennas + n
                         if(i in idxNC):
                             if(not reconstructionMeshInfo is None): ## use the reconstruction mesh instead
-                                Apart = dolfinx.fem.Function(WSpace)
-                                Apart.x.array[:] = np.array(f['Function']['real_f'][str(i)]).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()[idxOrig]
+                                AcellData.x.array[:] = np.array(f['Function']['real_f'][str(i)]).squeeze()[idxOrig] + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()[idxOrig]
                                 ## create interpolation from the saved mesh to this one
-                                cellData.interpolate_nonmatching(Apart, cells, interpolation_data=interpolation_data)
+                                cellData.interpolate_nonmatching(AcellData, cells, interpolation_data=interpolation_data)
                                 cellData.x.scatter_forward()
                                 A[indexCount,:] = cellData.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
                             else:
@@ -626,8 +644,8 @@ def solveFromQs(problemName, SparamMeas='', SparamName='', solutionName='', ante
                             b[indexCount] = S_dut[nf, m, n] - S_ref[nf, n, m]
                             
                             indexCount +=1
-                            
-            del Apart ## maybe this will help with clearing memory
+            f.close()
+        del Apart ## maybe this will help with clearing memory
         gc.collect()
         
         print(f'all data loaded in, {len(idxNC)}/{len(S_ref)} rows used')

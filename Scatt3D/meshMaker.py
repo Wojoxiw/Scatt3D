@@ -53,12 +53,14 @@ class MeshInfo():
                  antenna_depth = 1/10,
                  antenna_type = 'waveguide',
                  N_antennas = 10,
+                 phi_antennas = 0,
                  antenna_radius = -1,
                  antenna_z_offset = 0,
                  antenna_bounding_box_offset = 0,
                  object_radius = 1.06,
                  object_height = 1.25,
                  object_offset = np.array([0, 0, 0]),
+                 object_angles = np.array([0, 0, 0]),
                  material_epsrs = [3],
                  defect_epsrs = [],
                  defect_radius = 0,
@@ -92,12 +94,14 @@ class MeshInfo():
         :param antenna_depth: Depth of antenna box
         :param antenna_type: If 'waveguide', use the above geometry. If 'patch', testing patch antenna
         :param N_antennas:
+        :param phi_antennas: Global rotation about the z-axis for all antennas - for rotation stage measurements. Given in degrees.
         :param antenna_radius: Radius at which antennas are placed
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
         :param antenna_bounding_box_offset: How far the bb extends from the antenna. If 0, takes h/2
         :param object_scale: If object is a sphere (or cylinder), the radius. Even if not, ideally this should be approximately the size of the object
         :param object_height: If object is a cylinder, the height
         :param object_offset: The object is shifted this far (in wavelengths)
+        :param object_angles: [x, y, z] angles to rotate about these axes
         :param material_epsrs: Relative permittivities for the object - used to scale mesh size by local wavelength. If only one is given, use that one for all objects
         :param defect_epsrs: As above, but for defects (should just use the same as material - this is only used for mesh-size scaling). If not given, use the last 'object_epsr' for all.
         :param defect_radius: If defect is a sphere (or cylinder), the radius. If not given, uses half the object radius
@@ -222,9 +226,9 @@ class MeshInfo():
             self.antenna_radius = antenna_radius
         
         if(self.antenna_type == '6GHz measurement'): ## use specific angles
-            self.phi_antennas = np.array([0, 20, 80, 180])*pi/180
+            self.phi_antennas = phi_antennas*pi/180 + np.array([0, 20, 80, 180])*pi/180
         else:
-            self.phi_antennas = np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## evenly-spaced placement angles
+            self.phi_antennas = phi_antennas*pi/180 + np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## evenly-spaced placement angles
         self.pos_antennas = np.array([[self.antenna_radius*np.cos(phi), self.antenna_radius*np.sin(phi), self.antenna_z_offset] for phi in self.phi_antennas]) ## placement positions
         self.rot_antennas = self.phi_antennas + np.pi/2 ## rotation so that they face the center
         
@@ -255,6 +259,7 @@ class MeshInfo():
         if(defect_radius == 0):
             defect_radius = object_radius/2
         
+        self.object_angles = object_angles ## [x, y, z] rotations
         self.defect_angles = defect_angles ## [x, y, z] rotations
         self.defect_offset = defect_offset * self.lambda0
         if(defect_geom == 'cylinder' or defect_geom == 'simple1' or defect_geom == 'complex2'):
@@ -298,7 +303,7 @@ class MeshInfo():
             PECSurfaceFaces = [] ## to use faces as detectors. This will catch every surfaces that touches - way too much
             antennaSurfacePts = []; ## points that are on only the antenna surface
             smallMeshSurfacePts = []; ## points on surfaces that I want to have a small mesh size (currently the patch's inner cylinder)
-            antennas_DimTags = []; matDimTags = []; antennaMatDimTags = []; defectDimTags = []; domainDimTags = []
+            antennas_DimTags = []; antennaMatDimTags = []; matDimTags = []; defectDimTags = []; domainDimTags = []
             ## Make the antennas
             if(self.antenna_type == 'waveguide'):
                 x_antenna = np.zeros((self.N_antennas, 3))
@@ -560,10 +565,6 @@ class MeshInfo():
                 if(self.defect_geom == 'cylinder'):
                     defectDimTags = []
                     defect1 = gmsh.model.occ.addCylinder(0,0,-self.defect_height/2,0,0,self.defect_height, self.defect_radius) ## cylinder centered on the origin
-                    ## apply some rotations around the origin, and each axis
-                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 1, 0, 0, self.defect_angles[0])
-                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 1, 0, self.defect_angles[1])
-                    gmsh.model.occ.rotate([(self.tdim, defect1)], 0, 0, 0, 0, 0, 1, self.defect_angles[2])
                     defectDimTags.append((self.tdim, defect1))
                     
                     ## also a second cylinder
@@ -596,6 +597,15 @@ class MeshInfo():
                     defectDimTags.append((self.tdim, defect3))
                     defectDimTags.append((self.tdim, defect2))
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
+            
+            ## apply some rotations around the origin, and each axis. First, object, the defect angles
+            gmsh.model.occ.rotate(matDimTags+defectDimTags, 0, 0, 0, 1, 0, 0, self.object_angles[0])
+            gmsh.model.occ.rotate(matDimTags+defectDimTags, 0, 0, 0, 0, 1, 0, self.object_angles[1])
+            gmsh.model.occ.rotate(matDimTags+defectDimTags, 0, 0, 0, 0, 0, 1, self.object_angles[2])
+            
+            gmsh.model.occ.rotate(defectDimTags, 0, 0, 0, 1, 0, 0, self.defect_angles[0])
+            gmsh.model.occ.rotate(defectDimTags, 0, 0, 0, 0, 1, 0, self.defect_angles[1])
+            gmsh.model.occ.rotate(defectDimTags, 0, 0, 0, 0, 0, 1, self.defect_angles[2])
             
             ## Make the domain and the PML
             if(self.domain_geom == 'domedCyl'):

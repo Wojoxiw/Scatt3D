@@ -63,7 +63,7 @@ if __name__ == '__main__':
         print(f'runScatt3D starting with {MPInum} MPI process(es) (main process on {MPI.Get_processor_name()=}):')
     sys.stdout.flush()
             
-    def measurementScript(h = 1/3.5, degree = 3, runName=runName, mesh_settings={}, prob_settings={}):
+    def measurementScript(h = 1/3.5, degree = 3, runName=runName, angles = np.linspace(0, 340, 18), mesh_settings={}, prob_settings={}):
         ## For measurements with patch antennas of a rectangular block. Four antennas, which are rotated by 30 degree steps to cover 360 degrees.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         mesh_settings = {'h': h, 'N_antennas': 4, 'order': degree, 'antenna_type': '6GHz measurement'} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
@@ -76,19 +76,19 @@ if __name__ == '__main__':
                 epsrs.append(4.4*(1 - .11/4.4j)) ## patch
                 epsrs.append(2.1*(1 - 0.01j)) ## coax outer
             prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
-        
-        refMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **mesh_settings)
-        #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
-        #refMesh.plotMeshPartition()
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName, fem_degree=degree, **prob_settings)
-        #prob.makeOptVectors(skipQs=True)
-        
-        ## make the opt vects on the rec mesh... try h=1/10
         rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
-        prob.switchToRecMesh(recMesh)
-        prob.makeOptVectors(reconstructionMesh=False, saveName='regMesh') ## to check if everything is correct
-        prob.makeOptVectors(reconstructionMesh=True)
+        for angle in angles: ## 20 degree spacing. Should rotate in opposite direction to measurements, since this rotates the antennas while measurements rotate the object. (this way the E-fields in the object are all aligned)
+            refMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', reference = True, verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
+            #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
+            #refMesh.plotMeshPartition()
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName+f'_angle{angle}', fem_degree=degree, **prob_settings)
+            #prob.makeOptVectors(skipQs=True)
+            prob.makeOptVectors(reconstructionMesh=False, saveName=prob.name+'_regMesh') ## to check if everything is correct
+            ## make the opt vects on the rec mesh
+            prob.switchToRecMesh(recMesh)
+            prob.makeOptVectors(reconstructionMesh=True)
+            
         prevRuns.memTimeAppend(prob)
         return prob
     
@@ -171,20 +171,23 @@ if __name__ == '__main__':
         plt.legend()
         plt.tight_layout()
         plt.show()
+    ###
+    ###
+    folder = 'data3DLUNARC/'
     
-    #folder = 'data3DLUNARC/'
+    runName = f'measurements'
+    angles = np.linspace(0, 340, 18)
+    measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
+                    mesh_settings={'viewGMSH': True, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+                    prob_settings={'freqs': np.linspace(5.7e9, 7e9, 20), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
-    runName = 'measurements_test'
-    measurementScript(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': np.linspace(5.4e9, 6.6e9, 3), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
-    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True)
+    postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True)
     
     
     #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     #testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     
-    #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
+    patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
     
     if(comm.rank == model_rank):
