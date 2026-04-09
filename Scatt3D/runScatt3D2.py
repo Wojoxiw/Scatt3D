@@ -173,21 +173,21 @@ if __name__ == '__main__':
         plt.show()
     ###
     ###
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     
-    runName = f'measurements'
+    runName = f'measurements_4.5_'
     angles = np.linspace(0, 340, 18)
-    measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
+    measurementScript(h=1/4.5, degree=3, runName=runName, angles=angles,
                     mesh_settings={'viewGMSH': True, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': np.linspace(5.7e9, 7e9, 20), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
-    postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True)
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True)
     
     
     #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     #testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
     
-    patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
+    #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
     
     if(comm.rank == model_rank):
