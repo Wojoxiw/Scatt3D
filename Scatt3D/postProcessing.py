@@ -484,7 +484,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
             pass # this should load Ss from datafiles
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
-            #S_ref = data2['S_ref']
+            S_ref = data2['S_ref']
             S_dut = data2['S_dut']
         
         #epsr_mat = data['epsr_mat']
