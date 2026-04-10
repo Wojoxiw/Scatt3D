@@ -484,8 +484,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
             pass # this should load Ss from datafiles
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
-            b = data2['b']
-            S_ref = data2['S_ref']
+            #S_ref = data2['S_ref']
             S_dut = data2['S_dut']
         
         #epsr_mat = data['epsr_mat']
@@ -607,7 +606,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
                     
         b = np.zeros(len(idxNC), dtype=complex)
         N_non_pml = len(idx_non_pml)
-        A = np.zeros((len(idxNC)*(1 + len(extraProbs), N_non_pml)), dtype=complex) ## the matrix of scaled E-field stuff
+        A = np.zeros((len(idxNC)*(1 + len(extraProbs)), N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
         indexCount = 0
         for Afile in [problemName]+extraProbs: ## load in each file's part of the A-matrix
             if(not reconstructionMeshInfo is None): ## this part of A may come from a different mesh
