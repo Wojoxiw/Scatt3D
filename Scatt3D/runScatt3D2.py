@@ -67,7 +67,7 @@ if __name__ == '__main__':
         ## For measurements with patch antennas of a rectangular block. Four antennas, which are rotated by 30 degree steps to cover 360 degrees.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         mesh_settings = {'h': h, 'N_antennas': 4, 'order': degree, 'antenna_type': '6GHz measurement'} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
-        prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'ErefEdut': False, 'verbosity': verbosity, 'dataFolder': folder, 'computeBoth': False, 'makeOptVects': True} | prob_settings
+        prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'ErefEdut': False, 'verbosity': verbosity, 'dataFolder': folder, 'computeBoth': False, 'makeOptVects': False} | prob_settings
         
         if(mesh_settings['antenna_type'].startswith('patch')): ## set the dielectrics for the antennas
             epsrs=[]
@@ -175,9 +175,9 @@ if __name__ == '__main__':
     ###
     #folder = 'data3DLUNARC/'
     
-    runName = f'measurements_4.5_'
+    runName = f'measurements_init_'
     angles = np.linspace(0, 340, 18)
-    measurementScript(h=1/4.5, degree=3, runName=runName, angles=angles,
+    measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': np.linspace(5.7e9, 7e9, 20), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     

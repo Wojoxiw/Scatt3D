@@ -8,7 +8,7 @@
 
 #SBATCH -o jobresults/%j.out ## result filename, %j becomes the job number
 #SBATCH -e jobresults/%j.err ## errors filename - should be empty unless an error occurs
-#SBATCH -J 40freqs ##puts a job name, to identify it
+#SBATCH -J measInit ##puts a job name, to identify it
 
 cat $0 ## unix command - outputs this script to the top of the job's output file
 echo ## newline
@@ -19,4 +19,4 @@ date ## prints current date/time
 echo ## newline
 ## if not using node-local disk, just run it and hopefully this is fine
 #time mpirun -n 1 python runScatt3D2.py 'dummy' ## run the main process, and time it
-time mpirun --bind-to core python runScatt3D.py 'dummy'
+time mpirun --bind-to core python runScatt3D2.py 'dummy'

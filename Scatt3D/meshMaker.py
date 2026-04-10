@@ -348,7 +348,6 @@ class MeshInfo():
                     box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
                     coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
                     
-                    
                     ## then make the PLA mounting structure, as it touches the patch
                     ## top block with part cut out 
                     topCorners = gmsh.model.occ.addBox(self.antenna_depth/2-patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, patchholder_t, self.antenna_width+patchholder_t*2, self.antenna_height+patchholder_t*2)
@@ -357,7 +356,7 @@ class MeshInfo():
                     bottomCorners = gmsh.model.occ.addBox(-self.antenna_depth/2-patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, patchholder_t*2, self.antenna_width+patchholder_t*2, self.antenna_height+patchholder_t*2)
                     bottomCutout = gmsh.model.occ.addBox(-self.antenna_depth/2-patchholder_t, -patchHolder_cut_l/2, self.antenna_height/2, patchholder_t*2, patchHolder_cut_l, patchholder_t)
                     ## back part
-                    backPart = gmsh.model.occ.addBox(-self.antenna_depth/2-patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, self.antenna_depth+patchholder_t, self.antenna_width+patchholder_t*2, patchholder_t)
+                    backPart = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2-patchholder_t, self.antenna_depth, self.antenna_width, patchholder_t)
                     circleCut = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-patchholder_t,0,0,patchholder_t, patchHolder_circleCut_r)
                     ## remove the cable-hole circle, other cutouts, and the patch itself
                     patchholder = gmsh.model.occ.fuse([(self.tdim, topCorners)], [(self.tdim, backPart),(self.tdim, bottomCorners)])[0][0]
