@@ -22,6 +22,7 @@ import resource
 import meshMaker
 import h5py
 import adios4dolfinx
+import shutil
 eta0 = np.sqrt(mu0/eps0)
 interpolationPadding=1e-10 ## for interpolating between meshes, Newton iterations? Not entirely sure how this corresponds to, i.e. physical distance error tolerance, but I got errors so I'm using a much larger number. This does not help.
 
@@ -469,6 +470,18 @@ class Scatt3DProblem():
             interpolation_data = dolfinx.fem.create_interpolation_data(FEMm.WSpace, WSpace, cells, padding=interpolationPadding) ## based on https://github.com/FEniCS/dolfinx/blob/main/python/test/unit/fem/test_interpolation.py
             fun.interpolate_nonmatching(WFun, cells, interpolation_data=interpolation_data)
             fun.x.scatter_forward()
+            
+    def deleteSol(self, ref=0):
+        '''
+        Deletes saved E-fields, since they take up a lot of space
+        :param ref: If 1, deletes ref fields. If 2, deletes dut fields. If 0, deletes both.
+        '''
+        if(self.comm.rank == self.model_rank): ## presumably it's fine to just delete with 1 process
+            if(ref==0 or ref==1):
+                shutil.rmtree(self.dataFolder+self.name+'Ref.Solutions')
+            if(ref==0 or ref==2):
+                shutil.rmtree(self.dataFolder+self.name+'Dut.Solutions')
+            
             
     #@profile
     def ComputeSolutions(self, computeRef = True):

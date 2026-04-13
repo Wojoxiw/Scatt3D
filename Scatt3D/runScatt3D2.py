@@ -79,6 +79,12 @@ if __name__ == '__main__':
         rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
         for angle in angles: ## 20 degree spacing. Should rotate in opposite direction to measurements, since this rotates the antennas while measurements rotate the object. (this way the E-fields in the object are all aligned)
+            if(os.path.isdir(folder+runName+f'_angle{angle}'+'output-qs.xdmf')): ## check if the angle has already been run
+                if(comm.rank == model_rank):
+                    print(f'Already computed run with {angle=}, skipping...')
+            else:
+                if(comm.rank == model_rank):
+                    print(f'Computing run with {angle=}:')
             refMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', reference = True, verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
             #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
             #refMesh.plotMeshPartition()
@@ -88,6 +94,7 @@ if __name__ == '__main__':
             ## make the opt vects on the rec mesh
             prob.switchToRecMesh(recMesh)
             prob.makeOptVectors(reconstructionMesh=True)
+            prob.deleteSol() ## remove saved E-fields afterward, since this generates too much data to store on the cluster easily
             
         prevRuns.memTimeAppend(prob)
         return prob
@@ -176,7 +183,7 @@ if __name__ == '__main__':
     #folder = 'data3DLUNARC/'
     
     runName = f'measurements_init_'
-    angles = np.linspace(0, 340, 18)
+    angles = np.arange(120, 360, 20)
     measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': np.linspace(5.7e9, 7e9, 20), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
