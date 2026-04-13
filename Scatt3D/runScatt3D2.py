@@ -82,6 +82,7 @@ if __name__ == '__main__':
             if(os.path.isdir(folder+runName+f'_angle{angle}'+'output-qs.xdmf')): ## check if the angle has already been run
                 if(comm.rank == model_rank):
                     print(f'Already computed run with {angle=}, skipping...')
+                continue
             else:
                 if(comm.rank == model_rank):
                     print(f'Computing run with {angle=}:')
@@ -172,7 +173,7 @@ if __name__ == '__main__':
             plt.plot(measData[0]/1e9, np.unwrap(np.angle(measData[1]+1j*measData[2])), label='Meas.'+patch)#, color='tab:green', marker='+', markevery=8, markersize=10)
         
         plt.grid()
-        plt.ylabel(r'$Angle($S$_{11}$) [rad.]')
+        plt.ylabel(r'Angle(S$_{11}$) [rad.]')
         plt.xlabel(r'Frequency [GHz]')
         plt.title(r'Patch Antenna Reflection Coefficient')
         plt.legend()
