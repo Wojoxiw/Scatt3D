@@ -477,10 +477,10 @@ class Scatt3DProblem():
         :param ref: If 1, deletes ref fields. If 2, deletes dut fields. If 0, deletes both.
         '''
         if(self.comm.rank == self.model_rank): ## presumably it's fine to just delete with 1 process
-            if(ref==0 or ref==1 and hasattr(self, self.dataFolder+self.name+'Ref.Solutions')):
-                shutil.rmtree(self.dataFolder+self.name+'Ref.Solutions')
-            if(ref==0 or ref==2 and hasattr(self, self.dataFolder+self.name+'Dut.Solutions')):
-                shutil.rmtree(self.dataFolder+self.name+'Dut.Solutions')
+            if(ref==0 or ref==1):
+                shutil.rmtree(self.dataFolder+self.name+'Ref.Solutions', ignore_errors=True) ## ignore errors if one of these doesn't exist
+            if(ref==0 or ref==2):
+                shutil.rmtree(self.dataFolder+self.name+'Dut.Solutions', ignore_errors=True)
             
             
     #@profile
