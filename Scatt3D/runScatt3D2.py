@@ -151,45 +151,69 @@ if __name__ == '__main__':
         plt.legend()
         plt.tight_layout()
         
-        plt.figure()
-        i=0
-        
-        for ho in hols:
-            name = f'6GHzpatchPatternTest_ho{ho:.1f}'
-            data = np.load(folder+name+'output.npz')
-            S11 = data['S_ref'][:, 0, 0]
-            fvec = data['fvec']
-             
-            plt.plot(fvec/1e9, np.unwrap(np.angle(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
-            i = i+1
-        
-        fekof = measFolder+'feko patch S11.dat'
-        fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-        plt.plot(fekoData[0]/1e9, np.unwrap(np.angle(fekoData[1]+1j*fekoData[2])), label='FEKO', color='tab:purple')#, marker='+', markevery=8, markersize=10)
-        
-        
         for patch in ['1', '2', '3', '4']:
-            measData = np.transpose(np.loadtxt(measFolder+'Patches S11 before holders/'+patch+'.csv', skiprows = 3))
-            plt.plot(measData[0]/1e9, np.unwrap(np.angle(measData[1]+1j*measData[2])), label='Meas.'+patch)#, color='tab:green', marker='+', markevery=8, markersize=10)
         
-        plt.grid()
-        plt.ylabel(r'Angle(S$_{11}$) [rad.]')
-        plt.xlabel(r'Frequency [GHz]')
-        plt.title(r'Patch Antenna Reflection Coefficient')
-        plt.legend()
-        plt.tight_layout()
+            fig, (ax1, ax2) = plt.subplots(2, 1)
+            i=0
+            
+            for ho in hols:
+                name = f'6GHzpatchPatternTest_ho{ho:.1f}'
+                data = np.load(folder+name+'output.npz')
+                S11 = data['S_ref'][:, 0, 0]
+                fvec = data['fvec']
+                 
+                ax1.plot(fvec/1e9, np.unwrap(np.angle(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+                ax2.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+                i = i+1
+            
+            fekof = measFolder+'feko patch S11.dat'
+            fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+            ax1.plot(fekoData[0]/1e9, np.unwrap(np.angle(fekoData[1]+1j*fekoData[2])), label='FEKO', color='tab:purple')#, marker='+', markevery=8, markersize=10)
+            ax2.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO', color='tab:purple')
+            
+            if(patch != '1'):
+                measData = np.transpose(np.loadtxt(measFolder+'Patch S11s in holders/6GHzPatch'+patch+'a_InSetup.csv', dtype=complex, skiprows = 3, delimiter=','))
+                ax1.plot(measData[0]/1e9, np.unwrap(np.angle(measData[int(patch)])), label='Meas.'+patch+'a')
+                ax2.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[int(patch)])), label='Meas.'+patch+'a')#, color='tab:green', marker='+', markevery=8, markersize=10)
+            measData = np.transpose(np.loadtxt(measFolder+'Patch S11s in holders/6GHzPatch'+patch+'b_InSetup.csv', dtype=complex, skiprows = 3, delimiter=','))
+            ax1.plot(measData[0]/1e9, np.unwrap(np.angle(measData[int(patch)])), linestyle=':', label='Meas.'+patch+'b')#, color='tab:green', marker='+', markevery=8, markersize=10)
+            ax2.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[int(patch)])), linestyle=':', label='Meas.'+patch+'b')
+        
+            plt.grid()
+            ax1.set_ylabel(r'Angle(S$_{11}$) [rad.]')
+            ax2.set_ylabel(r'Mag(S$_{11}$) [dB]')
+            plt.xlabel(r'Frequency [GHz]')
+            plt.title(r'Patch Antenna Reflection Coefficient')
+            plt.legend()
+            plt.tight_layout()
         plt.show()
     ###
     ###
-    folder = 'data3DLUNARC/'
     
+    #folder = 'data3DLUNARC/'
+     
     runName = f'measurements_init_'
-    angles = np.arange(120, 360, 20, dtype=float)
-    measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': np.linspace(5.7e9, 7e9, 20), 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    angles = np.arange(0, 360, 20, dtype=float)
+    freqs = np.linspace(5.7e9, 7e9, 20)
     
-    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True)
+    actuallyMeasuredFreqs = np.array([5.70272727e+09, 5.76818182e+09, 5.83363636e+09, 5.90727273e+09,
+     5.97272727e+09, 6.03818182e+09, 6.11181818e+09, 6.17727273e+09,
+     6.25090909e+09, 6.31636364e+09, 6.38181818e+09, 6.45545454e+09,
+     6.52090909e+09, 6.58636364e+09, 6.66000000e+09, 6.72545454e+09,
+     6.79090909e+09, 6.86454546e+09, 6.93000000e+09, 7.00363636e+09])
+    
+    #===========================================================================
+    # measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    #===========================================================================
+    
+    #===========================================================================
+    # measFolder = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 1 (16-4-2026)/'
+    # Sref = postProcessing.compileMeasuredSs(f'{measFolder}solidPOMblock', angles, freqs)  
+    # 
+    # postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True)
+    #===========================================================================
     
     
     #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)

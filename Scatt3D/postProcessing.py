@@ -443,6 +443,34 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
+def compileMeasuredSs(Sfolder, angles, freqs):
+    '''
+    Takes a folder of S-parameters as measured in my setup, returns a numpy array with the formatting expected of solveFromQs
+    :param Sfolder: Measured S-parameter folder
+    :param angles: The measured angles
+    :param freqs: Frequencies to use, since I measured more than needed
+    '''
+    for angle in angles:
+        fname = f'{Sfolder}/angle{angle:.2f}.csv'
+        Sdata = np.transpose(np.loadtxt(fname, dtype=complex, delimiter=',', skiprows=3))
+        if(angle==angles[0]): # start the array
+            S = np.zeros(16*len(angles)*len(Sdata), dtype=complex) ## 16 S-parameters, for each frequency and angle
+            measFreqs = np.real(Sdata[0])
+            #freqIdx = np.isin(np.round(measFreqs, -3), np.round(freqs, -3), assume_unique=True) ## indices of measured frequencies that match the simulated ones. Round to the nearest kHz
+            #print(measFreqs[freqIdx])
+            
+            ##since apparently the measurement script did not actually ensure I measured the right frequencies, find the nearest frequency for each point
+            idxs=[]
+            for freq in freqs:
+                idxs.append(np.argmin(np.abs(measFreqs-freq)))
+                
+            print(measFreqs[idxs])
+            exit()
+        
+        
+        
+    return S
+
 def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
     '''
     Try various solution methods... keeping everything on one process
