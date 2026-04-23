@@ -445,38 +445,41 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
 
 def compileMeasuredSs(Sfolder, angles, freqs):
     '''
-    Takes a folder of S-parameters as measured in my setup, returns a numpy array with the formatting expected of solveFromQs
+    Takes a folder of S-parameters as measured in my setup, returns a list of numpy arrays with the formatting expected of solveFromQs
     :param Sfolder: Measured S-parameter folder
     :param angles: The measured angles
     :param freqs: Frequencies to use, since I measured more than needed
     '''
-    for angle in angles:
+    Ssextra=[]
+    #angles=np.flip(angles) ## in case the measurement turns about the negative of the expected axis. It did not.
+    for k in range(len(angles)):
+        angle = angles[k]
         fname = f'{Sfolder}/angle{angle:.2f}.csv'
         Sdata = np.transpose(np.loadtxt(fname, dtype=complex, delimiter=',', skiprows=3))
         if(angle==angles[0]): # start the array
-            S = np.zeros(16*len(angles)*len(Sdata), dtype=complex) ## 16 S-parameters, for each frequency and angle
+            S = np.zeros((len(freqs),4,4), dtype=complex) ## 16 S-parameters, for each frequency and angle
             measFreqs = np.real(Sdata[0])
-            #freqIdx = np.isin(np.round(measFreqs, -3), np.round(freqs, -3), assume_unique=True) ## indices of measured frequencies that match the simulated ones. Round to the nearest kHz
-            #print(measFreqs[freqIdx])
+            freqIdx = np.isin(np.round(measFreqs, -1), np.round(freqs, -1), assume_unique=True) ## indices of measured frequencies that match the simulated ones. Round a little bit.
+            print('Using frequencies:', measFreqs[freqIdx])
+            Sdata = Sdata[:, freqIdx]
             
-            ##since apparently the measurement script did not actually ensure I measured the right frequencies, find the nearest frequency for each point
-            idxs=[]
-            for freq in freqs:
-                idxs.append(np.argmin(np.abs(measFreqs-freq)))
-                
-            print(measFreqs[idxs])
-            exit()
-        
-        
-        
-    return S
+        for l in range(len(freqs)):
+            for j in range(4): ## each antenna
+                for i in range(4): ## each antenna
+                    S[l][i][j] = Sdata[i+j*4, l]
+        if(angle==angles[0]): # first one is the basic S
+            S_first = S
+        else:
+            Ssextra.append(S)
+    
+    return S_first, Ssextra
 
-def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
+def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
     :param extraProbs: Extra filenames - the A-matrices from these will be stacked under the main problem. Data is assumed to have the same format, and have been saved onto the same mesh, unless reconstructionMeshInfo is used.
-    :param SparamMeas: Filename for S parameters. If this isn't blank, S-params will be taken from these meas. files, E-fields from the regular problem. Overrides SparamName.
+    :param SparamMeas: Foldername for measured S parameters, first Sref, then Sdut, then the freqs, then angles. If this isn't blank, S-params will be taken from these meas. files, E-fields from the regular problem. Overrides SparamName.
     :param SparamName: Filename for S parameters. If this isn't blank, S-params will be taken from this simulation, everything else from the regular problem.
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
@@ -493,8 +496,8 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
     global timestep ## for saving data/printing about different reconstruction methods
     timestep = -1
     if(comm.rank == 0):
-        if(SparamMeas!=''):
-            print(f'Postprocessing of {problemName}, {solutionName} starting (using S-parameters from {SparamMeas}):')
+        if(SparamMeas!=[]):
+            print(f'Postprocessing of {problemName}, {solutionName} starting (using S-parameters from {SparamMeas[1]}):')
         elif(SparamName==''):
             print(f'Postprocessing of {problemName}, {solutionName} starting:')
         else:
@@ -508,8 +511,11 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
         if(hasattr(data, 'S_dut')):
             S_dut = data['S_dut']
         
-        if(SparamMeas!=''):
-            pass # this should load Ss from datafiles
+        if(SparamMeas!=[]):
+            freqs = SparamMeas[2]
+            angles = SparamMeas[3]
+            S_ref, extraS_refs = compileMeasuredSs(SparamMeas[0], freqs, angles)
+            S_dut, extraS_duts = compileMeasuredSs(SparamMeas[1], freqs, angles)
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
             S_ref = data2['S_ref']
@@ -631,12 +637,18 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
                             continue ## skip to next index
                               
                     idxNC.append(i) ## if the checks are passed, use this index
-                    
-        b = np.zeros(len(idxNC), dtype=complex)
-        N_non_pml = len(idx_non_pml)
-        A = np.zeros((len(idxNC)*(1 + len(extraProbs)), N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
+        
+        Nmeas = int(len(idxNC)*(1 + len(extraProbs))) ## number of S-parameter measurements
+        b = np.zeros(Nmeas, dtype=complex)
+        N_non_pml = len(idx_non_pml) ## number of mesh cells to compute on
+        A = np.zeros((Nmeas, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
         indexCount = 0
-        for Afile in [problemName]+extraProbs: ## load in each file's part of the A-matrix
+        S_duts = [S_dut]+extraS_duts
+        S_refs = [S_dut]+extraS_refs
+        for a in range(len([problemName]+extraProbs)): ## load in each file's part of the A-matrix
+            Afile = ([problemName]+extraProbs)[a]
+            S_dut = S_duts[a]
+            S_ref = S_refs[a]
             if(not reconstructionMeshInfo is None): ## this part of A may come from a different mesh
                 with dolfinx.io.XDMFFile(commself, Afile+'output-qs.xdmf', 'r') as f: ## read the mesh with dolfinx
                     Amesh = f.read_mesh() ## for the part of the A-matrix being read now
@@ -1046,7 +1058,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas='', SparamName='', soluti
         totalMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
         print(f'Current max. memory usage: {totalMem:.2e} GB, {mem_usage:.2e} for the master process')
         
-        if(False):
+        if(True):
             print('solving with cvxpy...')
             t_cvx = timer()
     

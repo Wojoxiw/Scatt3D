@@ -913,8 +913,8 @@ class Scatt3DProblem():
                 Zrel.value = 1/self.antenna_mat_epsrs[-1]*k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
-                for n in range(antCount):
-                    for m in range(antCount):
+                for n in range(excitationCount):
+                    for m in range(excitationCount):
                         a[m].value = 0.0
                     a[n].value = 1.0
                     top8 = timer() ## solve starting time
@@ -952,9 +952,9 @@ class Scatt3DProblem():
                         mems = self.comm.gather(mem_usage, root=self.model_rank)
                         if( self.verbosity >= 1 and self.comm.rank == self.model_rank  and (nf==0 and n==0)):
                             firstMem = sum(mems) ## keep the total usage. Only the master rank should be used, so this should be fine
-                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*antCount-1):.2f} hours')
+                            print(f'Rank {self.comm.rank}: 1st solution computed in {timer() - top8:.2e} s ({firstMem:.2e} GB memory) -- estimated time remaining: {(timer() - top8)/3600*(self.Nf*excitationCount-1):.2f} hours')
                         elif(self.verbosity > 2):
-                            print(f'Rank {self.comm.rank}: Solution {nf*antCount + n + 1}/{antCount*nf} computed in {timer() - top8:.2e} s ({mem_usage:.2e} GB memory in this process)')
+                            print(f'Rank {self.comm.rank}: Solution {nf*excitationCount + n + 1}/{excitationCount*nf} computed in {timer() - top8:.2e} s ({mem_usage:.2e} GB memory in this process)')
                         sys.stdout.flush()
             return S
         
@@ -1069,16 +1069,16 @@ class Scatt3DProblem():
             xdmf.write_function(FEMm.epsr, -1)
                                     
         if(not DUTMesh and not skipQs): ## Do the interpolation to find qs, then save them
-            antCount = max(meshInfo.N_antennas, 1) # if no antennas, still save something
+            excitationCount = max(meshInfo.N_antennas, 1) # if no antennas, still save something
             Em_ref = dolfinx.fem.Function(FEMm.VSpace)
             En = dolfinx.fem.Function(FEMm.VSpace)
             for nf in range(self.Nf):
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 if( (self.verbosity > 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                     print(f'Rank {self.comm.rank}: Frequency {nf+1} / {self.Nf}')
-                for m in range(antCount): 
+                for m in range(excitationCount): 
                     self.readSol(Em_ref, ref=True, freq=nf, excitation=m)
-                    for n in range(antCount):
+                    for n in range(excitationCount):
                         if(self.ErefEdut): ## Eref*Edut should provide a superior reconstruction with fully simulated data
                             self.readSol(En, ref=False, freq=nf, excitation=n)
                         else:
@@ -1094,7 +1094,7 @@ class Scatt3DProblem():
                         pml_dofs = dolfinx.fem.locate_dofs_topological(FEMm.WSpace, entity_dim=self.tdim, entities=pml_cells)
                         q.x.array[pml_dofs] = 0#np.nan ## set q in the PML region to 0 (for plotting purposes, since we shouldn't ever use it anyway)
                         
-                        xdmf.write_function(q, nf*antCount*antCount + m*antCount + n)
+                        xdmf.write_function(q, nf*excitationCount*excitationCount + m*excitationCount + n)
         xdmf.close()
                 
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):

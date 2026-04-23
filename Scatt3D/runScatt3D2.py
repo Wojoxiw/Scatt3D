@@ -63,7 +63,7 @@ if __name__ == '__main__':
         print(f'runScatt3D starting with {MPInum} MPI process(es) (main process on {MPI.Get_processor_name()=}):')
     sys.stdout.flush()
             
-    def measurementScript(h = 1/3.5, degree = 3, runName=runName, angles = np.linspace(0, 340, 18), mesh_settings={}, prob_settings={}):
+    def measurementScript(h = 1/3.5, degree = 3, runName=runName, angles = np.arange(0, 360, 20, dtype=float), mesh_settings={}, prob_settings={}):
         ## For measurements with patch antennas of a rectangular block. Four antennas, which are rotated by 30 degree steps to cover 360 degrees.
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         mesh_settings = {'h': h, 'N_antennas': 4, 'order': degree, 'antenna_type': '6GHz measurement'} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
@@ -74,9 +74,10 @@ if __name__ == '__main__':
             for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
                 epsrs.append(4.4*(1 - .11/4.4j)) ## box
                 epsrs.append(4.4*(1 - .11/4.4j)) ## patch
-                epsrs.append(2.1*(1 - 0.01j)) ## coax outer
+                epsrs.append(2.1*(1 - 0.01j)) ## coax dielectric
+                epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder
             prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
-        rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
+        rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings | {'viewGMSH': False} ## uses settings given before those specified here ## settings for the meshMaker
         recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
         for angle in angles: ## 20 degree spacing. Should rotate in opposite direction to measurements, since this rotates the antennas while measurements rotate the object. (this way the E-fields in the object are all aligned)
             if(os.path.isfile(folder+runName+f'_angle{angle}'+'output-qs.xdmf')): ## check if the angle has already been run
@@ -103,7 +104,7 @@ if __name__ == '__main__':
     def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', showPlots=True): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type='6GHz measurement', object_geom='', defect_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type='6GHz measurement', object_geom='', defect_geom='', FF_surface = True, order=degree)
         epsrs=[]
         epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
         epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
@@ -187,31 +188,77 @@ if __name__ == '__main__':
             plt.legend()
             plt.tight_layout()
         plt.show()
+        
+    def measCompareSs(sim, meas):
+        '''
+        Compares measured S-parameters to simulated ones
+        
+        :param sim: Filename of simulated data
+        :param meas: Filename of measured data
+        '''
+        
+        colors = ['tab:blue', 'tab:orange']
+        markers = ['o', 'v']
+        
+        data = np.load(sim)
+        simSs = data['S_ref']
+        simFs = data['fvec']
+        measSs = np.transpose(np.loadtxt(meas, dtype=complex, delimiter=',', skiprows=3))
+        measFs = np.real(measSs[0])
+        
+        
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        
+        ax1.plot(simFs/1e9, np.unwrap(np.angle(simSs[:, 1, 1])), label=f'Simulated S11', linewidth=2)
+        ax1.plot(measFs/1e9, np.unwrap(np.angle(measSs[6])), label='Meas. S11', linewidth=2)
+        
+        ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSs[:, 1, 1])), label=f'Simulated S11', linewidth=2)
+        ax2.plot(measFs/1e9, 20*np.log10(np.abs(measSs[6])), label='Meas. S11', linewidth=2)
+        
+        plt.grid()
+        ax1.set_ylabel(r'Angle(S$_{11}$) [rad.]')
+        ax2.set_ylabel(r'Mag(S$_{11}$) [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Patch Antenna Reflection Coefficient')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+        
+        for i in range(4):
+            for j in range(4):
+                plt.plot(simFs/1e9, 20*np.log10(np.abs(simSs[:, i, j])), label=f'Simulated S11', linewidth=2)
+        plt.show()
+        
     ###
     ###
     
-    #folder = 'data3DLUNARC/'
-     
-    runName = f'measurements_init_actuallMeasuredFreqs_'
+    folder = 'data3DLUNARC/'
+    
+    #runName = f'measurements_init_'
+    #runName = f'measurements_init_actuallMeasuredFreqs_'
+    runName = f'measurements_corrected_'
     angles = np.arange(0, 360, 20, dtype=float)
-    freqs = np.linspace(5.7e9, 7e9, 20)
-    
-    actuallyMeasuredFreqs = np.array([5.70272727e+09, 5.76818182e+09, 5.83363636e+09, 5.90727273e+09,
-     5.97272727e+09, 6.03818182e+09, 6.11181818e+09, 6.17727273e+09,
-     6.25090909e+09, 6.31636364e+09, 6.38181818e+09, 6.45545454e+09,
-     6.52090909e+09, 6.58636364e+09, 6.66000000e+09, 6.72545454e+09,
-     6.79090909e+09, 6.86454546e+09, 6.93000000e+09, 7.00363636e+09])
+    freqs = np.linspace(5.6e9, 7e9, 20)
     
     measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': actuallyMeasuredFreqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
-    #===========================================================================
-    # measFolder = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 1 (16-4-2026)/'
-    # Sref = postProcessing.compileMeasuredSs(f'{measFolder}solidPOMblock', angles, freqs)  
-    # 
-    # postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True)
-    #===========================================================================
+    measFolder = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 1 (16-4-2026)/'
+    Sref = f'{measFolder}solidPOMblock'
+    Stest = f'{measFolder}solidPOMblock+hole_near_A1_filledwithPLA'
+    #Stest = f'{measFolder}solidPOMblock+hole_near_A1_filledwithPOM'
+    #Stest = f'{measFolder}solidPOMblock+hole_near_A1'
+    
+    Ssangle = angles[1]
+    measfname = f'{Sref}/angle{Ssangle:.2f}.csv'
+    simfname = f'{folder}{runName}_angle{Ssangle:.1f}output.npz'
+    #measCompareSs(simfname, measfname)
+    
+    angles = np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
+    frequenciesToUse=[i for i in np.arange(20) if i%2==0]
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', SparamMeas=[Sref, Stest, angles, freqs], extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True, frequenciesToUse=frequenciesToUse, returnResults=[3])
     
     
     #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)

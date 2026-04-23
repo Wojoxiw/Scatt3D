@@ -201,7 +201,7 @@ class MeshInfo():
             self.antenna_width = 19.0e-3 ## the width
             self.antenna_depth = 21.4e-3 ## the length (in x)
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
-            self.feed_offset = 4.72e-3 ## it is placed upward along the z-axis
+            self.feed_offset = -4.72e-3 ## it is placed upward along the z-axis
             self.kc = 0 ## cutoff wavenumber
             
             ##the 3-D printed holder sections, which stick out partially in front of the patch
@@ -350,11 +350,11 @@ class MeshInfo():
                     
                     ## then make the PLA mounting structure, as it touches the patch
                     ## top block with part cut out 
-                    topCorners = gmsh.model.occ.addBox(self.antenna_depth/2-patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, patchholder_t, self.antenna_width+patchholder_t*2, self.antenna_height+patchholder_t*2)
-                    topCutout = gmsh.model.occ.addBox(self.antenna_depth/2-patchholder_t, -patchHolder_cut_l/2, -self.antenna_height/2-patchholder_t, patchholder_t, patchHolder_cut_l, self.antenna_height+patchholder_t*2)
+                    topCorners = gmsh.model.occ.addBox(-self.antenna_depth/2+patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, -patchholder_t, self.antenna_width+patchholder_t*2, self.antenna_height+patchholder_t*2)
+                    topCutout = gmsh.model.occ.addBox(-self.antenna_depth/2+patchholder_t, -patchHolder_cut_l/2, -self.antenna_height/2-patchholder_t, -patchholder_t, patchHolder_cut_l, self.antenna_height+patchholder_t*2)
                     ## bottom block with part cut out
-                    bottomCorners = gmsh.model.occ.addBox(-self.antenna_depth/2-patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, patchholder_t*2, self.antenna_width+patchholder_t*2, self.antenna_height+patchholder_t*2)
-                    bottomCutout = gmsh.model.occ.addBox(-self.antenna_depth/2-patchholder_t, -patchHolder_cut_l/2, self.antenna_height/2, patchholder_t*2, patchHolder_cut_l, patchholder_t)
+                    bottomCorners = gmsh.model.occ.addBox(self.antenna_depth/2+patchholder_t, -self.antenna_width/2-patchholder_t, -self.antenna_height/2-patchholder_t, -patchholder_t*2, self.antenna_width+patchholder_t*2, self.antenna_height+patchholder_t*2)
+                    bottomCutout = gmsh.model.occ.addBox(self.antenna_depth/2+patchholder_t, -patchHolder_cut_l/2, self.antenna_height/2, -patchholder_t*2, patchHolder_cut_l, patchholder_t)
                     ## back part
                     backPart = gmsh.model.occ.addBox(-self.antenna_depth/2, -self.antenna_width/2, -self.antenna_height/2-patchholder_t, self.antenna_depth, self.antenna_width, patchholder_t)
                     circleCut = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-patchholder_t,0,0,patchholder_t, patchHolder_circleCut_r)
@@ -388,12 +388,12 @@ class MeshInfo():
                     
                     x_pec[n, 0] = [0, 0, self.antenna_height/2] ## centre of the patch
                     x_pec[n, 1] = [0, 0, -self.antenna_height/2] ## bottom side of the patch
-                    x_pec[n, 2] = [-self.antenna_depth/2.1, 0, -self.antenna_height/2] ## bottom side of the box - behind patchholder
-                    x_pec[n, 9] = [self.feed_offset - patchHolder_circleCut_r*1.1, 0, -self.antenna_height/2] ## bottom side of the patch - outside circular cutout
-                    x_pec[n, 10] = [-self.patch_length/1.95, 0, -self.antenna_height/2] ## bottom side of the box - outside patch
-                    x_pec[n, 11] = [self.antenna_depth/2.1, self.antenna_width/2.1, -self.antenna_height/2] ## top-left corner
-                    x_pec[n, 12] = [self.antenna_depth/2.1, -self.antenna_width/2.1, -self.antenna_height/2] ## top-right corner
-                    x_pec[n, 13] = [self.antenna_depth/2.1, 0, -self.antenna_height/2] ## top-center piece
+                    x_pec[n, 2] = [self.antenna_depth/2.1, 0, -self.antenna_height/2] ## bottom side of the box - behind patchholder
+                    x_pec[n, 9] = [-self.antenna_depth/2.1, 0, -self.antenna_height/2] ## bottom side of the patch - outside circular cutout
+                    x_pec[n, 10] = [self.patch_length/1.95, 0, -self.antenna_height/2] ## bottom side of the box - outside patch
+                    x_pec[n, 11] = [-self.antenna_depth/2.01, self.antenna_width/2.01, -self.antenna_height/2] ## top-left corner
+                    x_pec[n, 12] = [-self.antenna_depth/2.01, -self.antenna_width/2.01, -self.antenna_height/2] ## top-right corner
+                    x_pec[n, 13] = [self.patch_length/2.01, 0, -self.antenna_height/2] ## bottom side of the box - under patch
                     
                     x_pec[n, 3] = [self.feed_offset, 0, self.antenna_height/2] ## top circle of the inner coax
                     x_pec[n, 4] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh/2] ## outer coax cylinder
