@@ -626,7 +626,7 @@ class Scatt3DProblem():
         # areaPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(areaCalc))
         # print(f'{areaPart=}')
         #=======================================================================
-        antCount = max(meshInfo.N_antennas, 1) # if no antennas, still run it
+        excitationCount = max(meshInfo.N_antennas, 1) # if no antennas, still run it
         
         Eb = dolfinx.fem.Function(FEMm.VSpace) ## background/plane wave excitation
         
@@ -638,7 +638,7 @@ class Scatt3DProblem():
         nvec = ufl.FacetNormal(meshInfo.mesh)
         Zrel = dolfinx.fem.Constant(meshInfo.mesh, 1j)
         k00 = dolfinx.fem.Constant(meshInfo.mesh, 1j)
-        a = [dolfinx.fem.Constant(meshInfo.mesh, 1.0 + 0j) for n in range(antCount)]
+        a = [dolfinx.fem.Constant(meshInfo.mesh, 1.0 + 0j) for n in range(excitationCount)]
         F_antennas_str = '0' ## seems to give an error when evaluating an empty string
         for n in range(meshInfo.N_antennas):
             F_antennas_str += f"""+ 1j*k00/Zrel*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}] - 1j*k00/Zrel*2*a[{n}]*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}]"""
