@@ -76,7 +76,7 @@ def cvxpySolve(A, b, problemType, solver='CLARABEL', cell_volumes=None, sigma=1e
         print('\033[31m' + 'Warning: solver failed' + '\033[0m', error)
         return np.zeros(N_x)
     
-def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='defect', printIt=True):
+def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indices='', printIt=True):
     '''
     Find the 'error' figure of merit in reconstructed delta eps_r
     :param delta_epsr_rec: The reconstructed delta eps_r
@@ -508,9 +508,11 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
         b = data['b']
         fvec = data['fvec']
         S_ref = data['S_ref']
-        if(hasattr(data, 'S_dut')):
+        if('S_dut' in data.files):
             S_dut = data['S_dut']
         
+        extraS_refs=[]
+        extraS_duts=[]
         if(SparamMeas!=[]):
             freqs = SparamMeas[2]
             angles = SparamMeas[3]
@@ -644,7 +646,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
         A = np.zeros((Nmeas, N_non_pml), dtype=complex) ## the matrix of scaled E-field stuff
         indexCount = 0
         S_duts = [S_dut]+extraS_duts
-        S_refs = [S_dut]+extraS_refs
+        S_refs = [S_ref]+extraS_refs
         for a in range(len([problemName]+extraProbs)): ## load in each file's part of the A-matrix
             Afile = ([problemName]+extraProbs)[a]
             S_dut = S_duts[a]

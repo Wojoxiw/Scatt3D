@@ -42,6 +42,7 @@ if __name__ == '__main__':
     t1 = timer()
     
     if(len(sys.argv) == 1): ## assume computing on local computer, not cluster. In jobscript for cluster, give a dummy argument
+        folder = 'data3DLUNARC/'
         filename = 'localCompTimesMems.npz'
         matplotlib.use("QtAgg") ## so that plots actually appear
         plt.rc('axes', titlesize=16)     # fontsize of the axes title
@@ -54,9 +55,9 @@ if __name__ == '__main__':
         plt.rc('text.latex', preamble=r'\usepackage{amsmath} \usepackage{bm}') ## load in some packages so I can bold stuff
     else:
         filename = 'prevRuns.npz'
+        folder = 'data3D/'
         
     runName = 'testRun' # testing - the default name
-    folder = 'data3D/'
     if(verbosity>2):
         print(f"{comm.rank=} {comm.size=}, {MPI.COMM_SELF.rank=} {MPI.COMM_SELF.size=}, {MPI.Get_processor_name()=}")
     if(comm.rank == model_rank):
@@ -69,14 +70,13 @@ if __name__ == '__main__':
         mesh_settings = {'h': h, 'N_antennas': 4, 'order': degree, 'antenna_type': '6GHz measurement'} | mesh_settings ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'E_dut_anim': False, 'E_anim_allAnts': False, 'ErefEdut': False, 'verbosity': verbosity, 'dataFolder': folder, 'computeBoth': False, 'makeOptVects': False} | prob_settings
         
-        if(mesh_settings['antenna_type'].startswith('patch')): ## set the dielectrics for the antennas
-            epsrs=[]
-            for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
-                epsrs.append(4.4*(1 - .11/4.4j)) ## box
-                epsrs.append(4.4*(1 - .11/4.4j)) ## patch
-                epsrs.append(2.1*(1 - 0.01j)) ## coax dielectric
-                epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder
-            prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
+        epsrs=[]
+        for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
+            epsrs.append(4.4*(1 - .11/4.4j)) ## box
+            epsrs.append(4.4*(1 - .11/4.4j)) ## patch
+            epsrs.append(2.1*(1 - 0.01j)) ## coax dielectric
+            epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder
+        prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
         rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings | {'viewGMSH': False} ## uses settings given before those specified here ## settings for the meshMaker
         recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
         for angle in angles: ## 20 degree spacing. Should rotate in opposite direction to measurements, since this rotates the antennas while measurements rotate the object. (this way the E-fields in the object are all aligned)
@@ -233,7 +233,7 @@ if __name__ == '__main__':
     ###
     ###
     
-    folder = 'data3DLUNARC/'
+    #folder = 'data3D/' ## if running something locally
     
     #runName = f'measurements_init_'
     #runName = f'measurements_init_actuallMeasuredFreqs_'
@@ -256,7 +256,7 @@ if __name__ == '__main__':
     simfname = f'{folder}{runName}_angle{Ssangle:.1f}output.npz'
     #measCompareSs(simfname, measfname)
     
-    angles = np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
+    angles = [0.0, 40.0, 80.0, 120.0]#np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
     frequenciesToUse=[i for i in np.arange(20) if i%2==0]
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', SparamMeas=[Sref, Stest, angles, freqs], extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True, frequenciesToUse=frequenciesToUse, returnResults=[3])
     
