@@ -158,13 +158,9 @@ class FEMmesh():
         for k in range(len(self.mat_dofsList)):
             self.epsr.x.array[self.mat_dofsList[k]] = material_epsrs[k]
             self.mur.x.array[self.mat_dofsList[k]] = material_murs[k]
-        print(self.antenna_mat_dofsList)
-        print(antenna_mat_epsrs)
         for k in range(len(self.antenna_mat_dofsList)):
-            print(k, material_epsrs[k])
             self.epsr.x.array[self.antenna_mat_dofsList[k]] = antenna_mat_epsrs[k]
             self.mur.x.array[self.antenna_mat_dofsList[k]] = antenna_mat_murs[k]
-        exit()
         for k in range(len(self.defect_dofsList)):
             self.epsr.x.array[self.defect_dofsList[k]] = material_epsrs[-1] ## for now, just take the last material's values
             self.mur.x.array[self.defect_dofsList[k]] = material_murs[-1]
