@@ -435,6 +435,58 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     
             return x0.data[:, 0]
         
+def measCompareSs(sim, meass, preCompiled=False, names=[]):
+    '''
+    Compares measured S-parameters to simulated ones
+    
+    :param sim: Filename of simulated data
+    :param meass: List of measured data, compiled
+    :param preCompiled: If True, sending in compiled meass. If false, just sending in the Sfolder
+    :param names: Names of the meass, to label plots with. If empty, (should not be preCompiled), takes from meass
+    '''
+    
+    colors = ['tab:blue', 'tab:orange']
+    markers = ['o', 'v']
+    
+    data = np.load(sim)
+    simSs = data['S_ref']
+    simFs = data['fvec']
+    if(names==[]):
+        for op in range(len(meass)):
+            names.append(meass[op][114:])
+    
+    for Sname in ['S11', 'S12', 'S22', 'S33', 'S44']:
+        Sidx1 = int(Sname[-2:-1])-1
+        Sidx2 = int(Sname[-1:])-1
+        fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
+        
+        ax1.plot(simFs/1e9, np.unwrap(np.angle(simSs[:, Sidx1, Sidx2])), label=f'Simulated {Sname}', linewidth=2)
+        ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSs[:, Sidx1, Sidx2])), label=f'Simulated {Sname}', linewidth=2)
+        
+        for op in range(len(meass)):
+            meas = meass[op]
+            if not preCompiled:
+                meas = compileMeasuredSs(meas, np.zeros(1, dtype=float), freqs=simFs, Srefsim=simSs)
+            a, b = meas
+            meas = [a]+b ## convert from the format given from compilation
+            measSs = meas[0] ## just take angle 0
+            ax1.plot(simFs/1e9, np.unwrap(np.angle(measSs[:, Sidx1, Sidx2])), label=f'{names[op]} {Sname}', linewidth=2)
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(measSs[:, Sidx1, Sidx2])), label=f'{names[op]} {Sname}', linewidth=2)
+        
+        plt.grid()
+        ax1.set_ylabel(r'Angle(S$_{11}$) [rad.]')
+        ax2.set_ylabel(r'Mag(S$_{11}$) [dB]')
+        plt.xlabel(r'Frequency [GHz]')
+        plt.title(r'Patch Antenna Reflection Coefficient')
+        plt.legend()
+        plt.tight_layout()
+        plt.show()
+    
+    for i in range(4):
+        for j in range(4):
+            plt.plot(simFs/1e9, 20*np.log10(np.abs(simSs[:, i, j])), label=f'Simulated S11', linewidth=2)
+    plt.show()
+        
 def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitude and/or absolute phase noise to the scattering parameters, to see how it affects the reconstruction. If not random, just offset all parameters
     amp = 1+amp ## so it's relative amplitude
     if(random): ## normal distribution
@@ -443,14 +495,17 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def compileMeasuredSs(Sfolder, angles, freqs):
+def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
     '''
-    Takes a folder of S-parameters as measured in my setup, returns a list of numpy arrays with the formatting expected of solveFromQs
+    Takes a folder of S-parameters as measured in my setup, returns a list of numpy arrays with the formatting expected of solveFromQs.
+    Also tries to correct for phase-differences between the simulations and the measurement
     :param Sfolder: Measured S-parameter folder
     :param angles: The measured angles
     :param freqs: Frequencies to use, since I measured more than needed
+    :param Srefsim: Reference simulation to use for finding phase corrections. This just tries to correct for different physical length/reference plane from calibration
     '''
     Ssextra=[]
+    
     #angles=np.flip(angles) ## in case the measurement turns about the negative of the expected axis. It did not.
     for k in range(len(angles)):
         angle = angles[k]
@@ -459,14 +514,28 @@ def compileMeasuredSs(Sfolder, angles, freqs):
         if(angle==angles[0]): # start the array
             S = np.zeros((len(freqs),4,4), dtype=complex) ## 16 S-parameters, for each frequency and angle
             measFreqs = np.real(Sdata[0])
-            freqIdx = np.isin(np.round(measFreqs, -1), np.round(freqs, -1), assume_unique=True) ## indices of measured frequencies that match the simulated ones. Round a little bit.
-            print('Using frequencies:', measFreqs[freqIdx])
-            Sdata = Sdata[:, freqIdx]
+            ##since apparently the measurement script did not actually ensure I measured the right frequencies, find the nearest frequency for each point
+            idxs=[]
+            for freq in freqs:
+                idxs.append(np.argmin(np.abs(measFreqs-freq)))
+            print(f'Max. frequency mismatch: {np.max(np.abs(freqs-measFreqs[idxs]))/1e6} MHz')
+        Sdata = Sdata[1:, idxs]
             
         for l in range(len(freqs)):
             for j in range(4): ## each antenna
                 for i in range(4): ## each antenna
                     S[l][i][j] = Sdata[i+j*4, l]
+                            
+        if(angle==angles[0]): ## try correcting phase
+            phaseCorrections=np.zeros(4) ## 1 for each antenna
+            for i in range(4):
+                phaseCorrections[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1])) / 4
+                ## divided by 2 since reflection should hit the end and then go back, then another 2 to average between last and first frequency-points
+        for l in range(len(freqs)):
+            for j in range(4): ## each antenna
+                for i in range(4): ## each antenna
+                    S[l][i][j] = S[l, i, j] *np.exp(1j*phaseCorrections[i])*np.exp(1j*phaseCorrections[j])
+                    
         if(angle==angles[0]): # first one is the basic S
             S_first = S
         else:
@@ -474,7 +543,7 @@ def compileMeasuredSs(Sfolder, angles, freqs):
     
     return S_first, Ssextra
 
-def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False):
+def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=0.7):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
@@ -489,6 +558,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
     :param returnResults: List of timesteps to compute + return the error from - if empty, this is ignored
     :param reconstructionMeshInfo: If not None, should be a MeshInfo of the reconstruction mesh. Then, saved data will be interpolated onto this mesh for the reconstruction.
     :param plotSs: If True, just plots some Ss
+    :param maxRefl: Maximum reflection coefficient of data to use
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -516,8 +586,8 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
         if(SparamMeas!=[]):
             freqs = SparamMeas[2]
             angles = SparamMeas[3]
-            S_ref, extraS_refs = compileMeasuredSs(SparamMeas[0], freqs, angles)
-            S_dut, extraS_duts = compileMeasuredSs(SparamMeas[1], freqs, angles)
+            S_ref, extraS_refs = compileMeasuredSs(SparamMeas[0], freqs, angles, S_ref)
+            S_dut, extraS_duts = compileMeasuredSs(SparamMeas[1], freqs, angles, S_ref)
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
             S_ref = data2['S_ref']
@@ -624,9 +694,9 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
             if(not (nf in frequenciesToUse or len(frequenciesToUse)==0)): ## if frequency excluded
                 continue ## skip to next index
             for m in range(N_antennas): ## transmitting index
-                if(False): ## disabled for now... reconstruction seems to improve with more data
+                if(maxRefl>0):
                     refl = np.abs(S_ref[nf, m, m]) ## should be close enough between ref and dut cases
-                    if(refl>0.8): ## check for a low reflection coefficient - if it is too high, perhaps the antenna doesn't support this frequency and the data should be skipped
+                    if(refl>maxRefl): ## check for a low reflection coefficient - if it is too high, perhaps the antenna doesn't support this frequency and the data should be skipped
                         continue
                 for n in range(N_antennas): ## receiving index
                     if( not ( (m in antennasToUse and n in antennasToUse) or len(antennasToUse)==0 ) ): ## if antenna excluded

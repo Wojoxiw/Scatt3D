@@ -658,7 +658,7 @@ class Scatt3DProblem():
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
         
         petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
-        #petsc_options = {"ksp_type": "preonly", "pc_type": "cholesky", "pc_factor_mat_solver_type": "mumps"} ## uses less memory than the LU solver. Also faster? Supposed to only work for positive-definite matrices, while this one is indefinite, but the norm is tiny and the solution seems reasonable. Maybe sometimes gives NaNs when using many MPI processes
+        #petsc_options = {"ksp_type": "preonly", "pc_type": "cholesky", "pc_factor_mat_solver_type": "mumps"} ## uses less memory than the LU solver. Also faster? Supposed to only work for positive-definite matrices, while this one is indefinite, but the norm is tiny and the solution seems reasonable. Maybe sometimes gives NaNs when using many MPI processes... but I sometimes get those with LU solver too
         self.solve_type = 'direct'
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)

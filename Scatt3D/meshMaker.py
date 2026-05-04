@@ -269,7 +269,7 @@ class MeshInfo():
             self.defect_radius = defect_radius * self.lambda0
             self.defect_height = defect_height * self.lambda0
         elif(defect_geom == '' or defect_geom.startswith('6GHz measurement') or defect_geom is None):
-            pass ## no defect
+            pass ## no defect, or specific settings
         else:
             print('Nonvalid defect geom, exiting...')
             exit()
@@ -360,11 +360,11 @@ class MeshInfo():
                     circleCut = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-patchholder_t,0,0,patchholder_t, patchHolder_circleCut_r)
                     ## remove the cable-hole circle, other cutouts, and the patch itself
                     patchholder = gmsh.model.occ.fuse([(self.tdim, topCorners)], [(self.tdim, backPart),(self.tdim, bottomCorners)])[0][0]
-                    patchholder = gmsh.model.occ.cut([patchholder], [(self.tdim, patch), (self.tdim, topCutout), (self.tdim, bottomCutout), (self.tdim, circleCut), (self.tdim, box)], removeTool=False)[0][0][1]
-                    gmsh.model.occ.remove([(self.tdim, topCutout), (self.tdim, bottomCutout), (self.tdim, circleCut)]) ## remove the other cutters
+                    patchholder = gmsh.model.occ.cut([patchholder], [(self.tdim, topCutout), (self.tdim, bottomCutout), (self.tdim, circleCut)])[0][0][1]
+                    patchholder = gmsh.model.occ.cut([(self.tdim, patchholder)], [(self.tdim, patch), (self.tdim, box)], removeTool=False)[0][0][1]
+                    #gmsh.model.occ.remove([(self.tdim, topCutout), (self.tdim, bottomCutout), (self.tdim, circleCut)]) ## remove the other cutters
                     
                     boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh*2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
-                    
                     
                     itemsToRotate = [(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under), (self.tdim, boundingBox), (self.tdim, patchholder)]
                     gmsh.model.occ.rotate(itemsToRotate, 0, 0, 0, 0, 1, 0, pi/2) ## rotate to be z-polarized
@@ -595,6 +595,14 @@ class MeshInfo():
                     defectDimTags.append((self.tdim, defect1))
                     defectDimTags.append((self.tdim, defect3))
                     defectDimTags.append((self.tdim, defect2))
+                elif(self.defect_geom == '6GHz measurement POM cyl'):
+                    ## cut-out cylinder is 6.6cm off-center in x, 1.4cm off-center in y. Hole height of 2.25cm, or 90% of object height, outer diameter of 5cm., inner diameter of 4.8cm (assumes centered cylinder)
+                    inr = 24e-3
+                    outr = 25e-3
+                    defect = gmsh.model.occ.addCylinder(66e-3,14e-3,-self.object_height*0.4,0,0,self.object_height*0.9, outr)
+                    defectInner = gmsh.model.occ.addCylinder(66e-3,14e-3,-self.object_height*0.4,0,0,self.object_height*0.9, inr)
+                    defect = gmsh.model.occ.cut([(self.tdim, defect)], [(self.tdim, defectInner)])[0][0][1]
+                    defectDimTags.append((self.tdim, defect))
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             
             ## apply some rotations around the origin, and each axis. First, object, the defect angles
