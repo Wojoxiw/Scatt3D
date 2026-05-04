@@ -200,7 +200,7 @@ class MeshInfo():
             self.patch_width = 17.3e-3
             self.antenna_width = 19.0e-3 ## the width
             self.antenna_depth = 21.4e-3 ## the length (in x)
-            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
+            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 2.5e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = -4.72e-3 ## it is placed upward along the z-axis
             self.kc = 0 ## cutoff wavenumber
             
@@ -398,7 +398,7 @@ class MeshInfo():
                     x_pec[n, 3] = [self.feed_offset, 0, self.antenna_height/2] ## top circle of the inner coax
                     x_pec[n, 4] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh/2] ## outer coax cylinder
                     x_pec[n, 5] = [self.feed_offset, self.coax_inr, -self.antenna_height/2-self.coax_outh/2] ## inner coax cylinder
-                    x_pec[n, 6] = [self.feed_offset, self.coax_inr, -self.antenna_height/2+self.coax_outh/2] ## inner coax cylinder - part that's inside the substrate
+                    x_pec[n, 6] = [self.feed_offset, self.coax_inr, -self.antenna_height/3] ## inner coax cylinder - part that's inside the substrate
                     x_pec[n, 7] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh*1.5] ## under coax cylinder
                     x_pec[n, 8] = [self.feed_offset, 0, -self.antenna_height/2-self.coax_outh*2] ## under coax face
                     
@@ -453,7 +453,7 @@ class MeshInfo():
                     x_pec[n, 3] = [self.feed_offset, 0, self.antenna_height/2] ## top circle of the inner coax
                     x_pec[n, 4] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh/2] ## outer coax cylinder
                     x_pec[n, 5] = [self.feed_offset, self.coax_inr, -self.antenna_height/2-self.coax_outh/2] ## inner coax cylinder
-                    x_pec[n, 6] = [self.feed_offset, self.coax_inr, -self.antenna_height/2+self.coax_outh/2] ## inner coax cylinder - part that's inside the substrate
+                    x_pec[n, 6] = [self.feed_offset, self.coax_inr, -self.antenna_height/3] ## inner coax cylinder - part that's inside the substrate
                     x_pec[n, 7] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh*1.5] ## under coax cylinder
                     x_pec[n, 8] = [self.feed_offset, 0, -self.antenna_height/2-self.coax_outh*2] ## under coax face
 
@@ -487,7 +487,7 @@ class MeshInfo():
                 PECSurfacePts.append([self.feed_offset, 0, self.antenna_height/2]) ## top circle of the inner coax
                 PECSurfacePts.append([self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh/2]) ## outer coax cylinder
                 PECSurfacePts.append([self.feed_offset, self.coax_inr, -self.antenna_height/2-self.coax_outh/2]) ## inner coax cylinder
-                PECSurfacePts.append([self.feed_offset, self.coax_inr, -self.antenna_height/2+self.coax_outh/2]) ## inner coax cylinder - part that's inside the substrate
+                PECSurfacePts.append([self.feed_offset, self.coax_inr, -self.antenna_height/3]) ## inner coax cylinder - part that's inside the substrate
                 PECSurfacePts.append([self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh*1.5]) ## under coax cylinder
                 PECSurfacePts.append([self.feed_offset, 0, -self.antenna_height/2-self.coax_outh*2]) ## under coax face
                 
