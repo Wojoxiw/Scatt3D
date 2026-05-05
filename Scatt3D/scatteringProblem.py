@@ -919,7 +919,7 @@ class Scatt3DProblem():
                     a[n].value = 1.0
                     top8 = timer() ## solve starting time
                     E_h = problem.solve()
-                    if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results.
+                    if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results. Sometimes another error will give Inf. results
                         if( self.comm.rank == self.model_rank ):
                             print(E_h.x.array)
                             print(np.shape(E_h.x.array))
