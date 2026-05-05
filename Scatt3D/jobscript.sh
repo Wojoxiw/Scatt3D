@@ -3,7 +3,7 @@
 #SBATCH -t 70:55:00 ## job is killed after this time - overestimate
 #SBATCH -A lu2025-2-124 ##from projinfo command
 
-#SBATCH -N 3 ##number of nodes that will be allocated - must use --ntasks-per-node or --cpus-per-task to use more than 1 core per node
+#SBATCH -N 1 ##number of nodes that will be allocated - must use --ntasks-per-node or --cpus-per-task to use more than 1 core per node
 #SBATCH --tasks-per-node=48 ##number of cores used per task? - up to 48 per node for COSMOS. Presumably this is what I want, using MPI
 
 #SBATCH -o jobresults/%j.out ## result filename, %j becomes the job number
