@@ -455,7 +455,7 @@ def measCompareSs(sim, meass, preCompiled=False, names=[]):
         for op in range(len(meass)):
             names.append(meass[op][114:])
     
-    for Sname in ['S11', 'S12', 'S22', 'S33', 'S44']:
+    for Sname in ['S11', 'S12', 'S31', 'S22', 'S33', 'S44']:
         Sidx1 = int(Sname[-2:-1])-1
         Sidx2 = int(Sname[-1:])-1
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
@@ -518,7 +518,9 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
             idxs=[]
             for freq in freqs:
                 idxs.append(np.argmin(np.abs(measFreqs-freq)))
-            print(f'Max. frequency mismatch: {np.max(np.abs(freqs-measFreqs[idxs]))/1e6} MHz')
+            mm = np.max(np.abs(freqs-measFreqs[idxs])) 
+            if(mm > 1):
+                print(f'Max. frequency mismatch: {mm} Hz')
         Sdata = Sdata[1:, idxs]
             
         for l in range(len(freqs)):

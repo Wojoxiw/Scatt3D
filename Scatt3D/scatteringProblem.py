@@ -636,12 +636,12 @@ class Scatt3DProblem():
         curl_E = ufl.curl(E)
         curl_v = ufl.curl(v)
         nvec = ufl.FacetNormal(meshInfo.mesh)
-        Zrel = dolfinx.fem.Constant(meshInfo.mesh, 1j)
+        Zm = dolfinx.fem.Constant(meshInfo.mesh, 1j)
         k00 = dolfinx.fem.Constant(meshInfo.mesh, 1j)
         a = [dolfinx.fem.Constant(meshInfo.mesh, 1.0 + 0j) for n in range(excitationCount)]
         F_antennas_str = '0' ## seems to give an error when evaluating an empty string
         for n in range(meshInfo.N_antennas):
-            F_antennas_str += f"""+ 1j*k00/Zrel*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}] - 1j*k00/Zrel*2*a[{n}]*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}]"""
+            F_antennas_str += f"""+ 1j*k00*eta0/Zm*ufl.inner(ufl.cross(E, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}] - 1j*k00*eta0/ufl.sqrt(Zm)*2*a[{n}]*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(v, nvec))*FEMm.ds_antennas[{n}]"""
         F = ufl.inner(1/FEMm.mur*curl_E, curl_v)*FEMm.dx_dom \
             - ufl.inner(k00**2*FEMm.epsr*E, v)*FEMm.dx_dom \
             + ufl.inner(FEMm.murinv_pml*curl_E, curl_v)*FEMm.dx_pml \
@@ -910,7 +910,10 @@ class Scatt3DProblem():
                 sys.stdout.flush()
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
-                Zrel.value = 1/self.antenna_mat_epsrs[-1]*k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
+                if(meshInfo.antenna_type=='waveguide'):
+                    Zm.value = 1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
+                else: ## assume it in the coaxial cable port
+                    Zm.value = eta0/np.sqrt(2.1*(1 - 0.01j))/(2*pi)*np.log(meshInfo.coax_outr/meshInfo.coax_inr) ## eta0/sqrt(epsr)... etc
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 for n in range(excitationCount):
@@ -926,14 +929,14 @@ class Scatt3DProblem():
                             print('NaN result found - possibly due to exceeding memory limitations. Exiting...')
                         exit()
                     for m in range(meshInfo.N_antennas):
-                        factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zrel*eta0)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
+                        factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zm)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
                         factors = self.comm.gather(factor, root=self.model_rank)
                         if self.comm.rank == self.model_rank:
                             factor = sum(factors)
                         else:
                             factor = None
                         factor = self.comm.bcast(factor, root=self.model_rank)
-                        b = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(E_h, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m] + Zrel/(1j*k0)*ufl.inner(ufl.curl(E_h), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))/factor
+                        b = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(E_h, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m] + Zm/(1j*k0*eta0)*ufl.inner(ufl.curl(E_h), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))/factor
                         bs = self.comm.gather(b, root=self.model_rank)
                         if self.comm.rank == self.model_rank:
                             b = sum(bs)
@@ -1327,7 +1330,8 @@ class Scatt3DProblem():
                             #ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = ':')
                             #ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
                             
-                            for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13), (8.0, 'tab:orange', 'v', 14)]: #(1.0, 'tab:orange') ## just plot the following cases
+                            #for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13), (8.0, 'tab:orange', 'v', 14)]: #(1.0, 'tab:orange') ## just plot the following cases
+                            for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13)]:
                                 data = np.load(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{1/ho:.2e}.npz')
                                 FFs = data['farfields']
                                 mag = np.abs(FFs[b,:,0])**2 + np.abs(FFs[b,:,1])**2  

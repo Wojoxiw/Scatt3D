@@ -723,7 +723,7 @@ if __name__ == '__main__':
         i=0
         for ho in hols:
             name = f'patchPatternTest_ho{ho:.1f}'
-            data = np.load(folder+name+'output.npz')
+            data = np.load(folder+'patchTests.Zm.not.Zreloutput.npz')#name+'output.npz')
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
             
@@ -890,7 +890,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -957,7 +957,7 @@ if __name__ == '__main__':
     # #testFullExample(h=1/3.5, degree=3, runName=runName,
     #                 #mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 #prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], plotSs=False)
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3, 23, 24, 25], plotSs=False)
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom2percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch2percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch5percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
@@ -1045,12 +1045,12 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    #runName = 'patchPatternTest_h03.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    runName = 'patchTests.Zm.not.Zrel_ho6.0'#'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    testPatchPattern(h=1/6, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     #testPatchPattern(h=1/1, degree=1, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
     
-    #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
+    patchSsPlot([3.5, 6]) ## plot S11 comp. with Feko
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)
