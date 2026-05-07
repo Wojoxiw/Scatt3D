@@ -912,7 +912,7 @@ class Scatt3DProblem():
                 k00.value = k0
                 if(meshInfo.antenna_type=='waveguide'):
                     Zm.value = 1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
-                else: ## assume it in the coaxial cable port
+                else: ## assume it is a coaxial cable port
                     Zm.value = eta0/np.sqrt(2.1*(1 - 0.01j))/(2*pi)*np.log(meshInfo.coax_outr/meshInfo.coax_inr) ## eta0/sqrt(epsr)... etc
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
@@ -1015,18 +1015,12 @@ class Scatt3DProblem():
         xdmf.write_mesh(meshInfo.mesh)
         
         if (self.comm.rank == self.model_rank): # Save some other values for postprocessing
-            if( hasattr(self, 'S_ref') and meshInfo.N_antennas>0 ): ## need at least S_ref and 1 antenna - otherwise, do not save
-                if(not hasattr(self, 'S_dut')):
-                    b = np.array(0)
-                    np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
-            
-                else:
-                    b = np.zeros(self.Nf*meshInfo.N_antennas*meshInfo.N_antennas, dtype=complex) ## the array of S-parameters
-                    for nf in range(self.Nf):
-                        for m in range(meshInfo.N_antennas):
-                            for n in range(meshInfo.N_antennas):
-                                b[nf*meshInfo.N_antennas*meshInfo.N_antennas + m*meshInfo.N_antennas + n] = self.S_dut[nf, m, n] - self.S_ref[nf, n, m]
-                    np.savez(self.dataFolder+saveName+'output.npz', b=b, fvec=self.fvec, S_ref=self.S_ref, S_dut=self.S_dut, epsr_mats=self.material_epsrs, epsr_defects=self.defect_epsrs, N_antennas=meshInfo.N_antennas, antenna_radius=meshInfo.antenna_radius, meshSize=meshInfo.h, ndofs=FEMm.ndofs, object_geom=meshInfo.object_geom, defect_geom=meshInfo.defect_geom, object_scale=meshInfo.object_scale, object_offset=meshInfo.object_offset)
+            saveData = {'fvec': self.fvec, 'epsr_mats': self.material_epsrs, 'epsr_defects': self.defect_epsrs, 'N_antennas': meshInfo.N_antennas, 'antenna_radius': meshInfo.antenna_radius, 'meshSize': meshInfo.h, 'ndofs': FEMm.ndofs, 'object_geom': meshInfo.object_geom, 'defect_geom': meshInfo.defect_geom, 'object_scale': meshInfo.object_scale, 'object_offset': meshInfo.object_offset}
+            if( hasattr(self, 'S_ref') ):
+                saveData['S_ref'] = self.S_ref
+            if( hasattr(self, 'S_dut') ):
+                saveData['S_dut'] = self.S_dut
+            np.savez(self.dataFolder+saveName+'output.npz', **saveData)
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):

@@ -592,7 +592,8 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
             S_dut, extraS_duts = compileMeasuredSs(SparamMeas[1], freqs, angles, S_ref)
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
-            S_ref = data2['S_ref']
+            if('S_ref' in data.files):
+                S_ref = data2['S_ref']
             S_dut = data2['S_dut']
         
         #epsr_mat = data['epsr_mat']

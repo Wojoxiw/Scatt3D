@@ -195,7 +195,7 @@ if __name__ == '__main__':
     def testPatchPattern(h = 1/12, degree=1, freqs = np.array([10e9]), name='patchPatternTest', showPlots=True): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_type='patchtest', object_geom='', FF_surface = True, order=degree)
         epsrs=[]
         epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
         epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
@@ -723,7 +723,7 @@ if __name__ == '__main__':
         i=0
         for ho in hols:
             name = f'patchPatternTest_ho{ho:.1f}'
-            data = np.load(folder+'patchTests.Zm.not.Zreloutput.npz')#name+'output.npz')
+            data = np.load(folder+'patchTests.Zm.not.Zrel_ho6.0output.npz')#name+'output.npz')
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
             
@@ -890,7 +890,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    #folder = 'data3DLUNARC/'
+    folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -1045,12 +1045,12 @@ if __name__ == '__main__':
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchTests.Zm.not.Zrel_ho6.0'#'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    testPatchPattern(h=1/6, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
+    runName = 'patchTests.Zm.not.Zrel_ho3.5'#'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 50), name=runName, showPlots=False)
     #testPatchPattern(h=1/1, degree=1, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
     
-    patchSsPlot([3.5, 6]) ## plot S11 comp. with Feko
+    patchSsPlot([6.0]) ## plot S11 comp. with Feko
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)
