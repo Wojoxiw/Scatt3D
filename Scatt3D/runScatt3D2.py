@@ -201,6 +201,7 @@ if __name__ == '__main__':
         plt.show()
         
     def cablePortTest(h, epsr1, epsr2, d, L, freqs=np.linspace(5.4e9, 7.2e9, 1), degree=3, runName='cablePortTest'): ## checks the port by simulating transmission through a coaxial cable in 2 sections and capped with a short. First section by the port has epsr1, length L. Second has epsr2, length d
+        ## theory seems to match the simulated values reasonably well, for h~<1/20
         mesh_settings = {'h': h, 'N_antennas': 1, 'order': degree, 'antenna_type': 'coaxTest', 'object_geom': None, 'domain_geom': None, 'object_height': L, 'defect_height': d} ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'freqs': freqs, 'E_dut_anim': False, 'E_anim_allAnts': False, 'ErefEdut': False, 'verbosity': verbosity, 'antenna_mat_epsrs': [epsr1,epsr2], 'dataFolder': folder, 'computeBoth': False, 'makeOptVects': False}
         
@@ -272,7 +273,7 @@ if __name__ == '__main__':
     
     #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
-    cablePortTest(h=1/25, epsr1=2.1*(1-0.9j), epsr2=2.1*(1-0.9j), d=3e-2, L=1e-2)
+    cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')

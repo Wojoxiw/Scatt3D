@@ -627,7 +627,6 @@ class Scatt3DProblem():
             # ### Visualize Ep
             #===================================================================
             
-            print(np.shape(Ep_unnormalized.x.array))
             normFactorForm = dolfinx.fem.form(ufl.inner(Ep_unnormalized, Ep_unnormalized)*FEMm.ds_antennas[0]) ## should be the same for each antenna
             normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
             normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
@@ -641,15 +640,17 @@ class Scatt3DProblem():
             expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.VSpace.element.interpolation_points)
             Ep.interpolate(expr)
             
-            nvec = ufl.FacetNormal(meshInfo.mesh)
-            testForm = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[0]))
-            
-            normalPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.inner(Ep, nvec), ufl.inner(Ep, nvec))*FEMm.ds_antennas[0]))
-            
-            normFactorForm = dolfinx.fem.form(ufl.inner(Ep, Ep)*FEMm.ds_antennas[0]) ## should be the same for each antenna
-            normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
-            print(testForm, normalPart, testForm+normalPart, normFactorPart)
-            #exit()
+            #===================================================================
+            # nvec = ufl.FacetNormal(meshInfo.mesh)
+            # testForm = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[0]))
+            # 
+            # normalPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.inner(Ep, nvec), ufl.inner(Ep, nvec))*FEMm.ds_antennas[0]))
+            # 
+            # normFactorForm = dolfinx.fem.form(ufl.inner(Ep, Ep)*FEMm.ds_antennas[0]) ## should be the same for each antenna
+            # normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+            # print(testForm, normalPart, testForm+normalPart, normFactorPart)
+            # #exit()
+            #===================================================================
             
         #=======================================================================
         # areaCalc = 1*FEMm.dx_dom ## calculate domain volume
@@ -944,11 +945,11 @@ class Scatt3DProblem():
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
                 if(meshInfo.antenna_type=='waveguide'):
-                    Zm.value = 1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## may need to be checked, now
+                    Zm.value = eta0 #1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## check this before using
                 elif(meshInfo.antenna_type=='coaxTest'):
-                    Zm.value = eta0/np.sqrt(self.antenna_mat_epsrs[0])#/(2*pi)*np.log(meshInfo.coax_outr/meshInfo.coax_inr)
+                    Zm.value = eta0/np.sqrt(self.antenna_mat_epsrs[0])
                 else: ## assume it is a coaxial cable port
-                    Zm.value = eta0/np.sqrt(2.1*(1 - 0.01j))/(2*pi)*np.log(meshInfo.coax_outr/meshInfo.coax_inr) ## eta0/sqrt(epsr)... etc
+                    Zm.value = eta0/np.sqrt(2.1*(1 - 0.01j))
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))
                 for n in range(excitationCount):

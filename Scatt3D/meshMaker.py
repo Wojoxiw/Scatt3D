@@ -412,7 +412,7 @@ class MeshInfo():
                     x_pec[n, 8] = [self.feed_offset, 0, -self.antenna_height/2-self.coax_outh*2] ## under coax face
                     
                     ## append the points, corrected for the position+rotation of the antenna
-                    antennaSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_antenna[n])) ## (0, 0, 0) - the antenna surface
+                    antennaSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_antenna[n])) ## the antenna port surface
                     for i in range(np.shape(x_pec)[1]):
                         PECSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
                         if(i in [5,6]): ## the inner cylinder should have a smaller mesh (I think)
@@ -531,6 +531,8 @@ class MeshInfo():
                 antennaMatDimTags.append((3, coax_two))
                 
                 antennaSurfacePts.append([self.coax_inr+self.coax_outr/2, 0, 0])
+                smallMeshSurfacePts.append([self.coax_inr, 0, self.coax_L/2])
+                smallMeshSurfacePts.append([self.coax_inr, 0, self.coax_L+self.coax_d/2])
                 PECSurfacePts.append([self.coax_inr, 0, self.coax_L/2])
                 PECSurfacePts.append([self.coax_inr, 0, self.coax_L+self.coax_d/2])
                 PECSurfacePts.append([self.coax_outr, 0, self.coax_L/2])
@@ -824,7 +826,7 @@ class MeshInfo():
                 ## then mesh fields for the antenna and PEC surfaces:
                 antennaSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(antennaSurfaceField, "SurfacesList", antenna_surfaces)
-                gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VIn", self.h/5) ## this is potentially the most important surface to resolve well
+                gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VIn", self.h/25) ## this is potentially the most important surface to resolve well
                 gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VOut", self.h)
                 meshFields.append(antennaSurfaceField)
                 
