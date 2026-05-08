@@ -166,6 +166,8 @@ class MeshInfo():
             self.PML_radius = self.domain_radius + PML_thickness * self.lambda0
             if(self.FF_surface):
                 self.FF_surface_radius = self.domain_radius - self.lambda0*.25 #self.h*2 ## just a bit less than the domain's radius
+        elif(self.domain_geom == None):
+            self.domain_radius=0
         else:
             print('Invalid geometry type in MeshInfo, exiting...')
             exit()
@@ -208,9 +210,16 @@ class MeshInfo():
             self.patchholder_t = 3e-3
             self.patchholder_corner_ext = 5e-3
             self.patchholder_cablehole_r = 5e-3
-            
+        elif(self.antenna_type == 'coaxialPortTest'):
+            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3;
+            self.coax_L = 10e-3 ## length of first segment
+            self.coax_d = 5e-3 ## length of second segment
         elif(self.antenna_type == 'waveguide'):
             self.kc = pi/self.antenna_width ## cutoff wavenumber... maybe correct
+        elif(self.antenna_type == 'coaxTest'):
+            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3;
+            self.coax_L = object_height
+            self.coax_d = defect_height
         else:
             print('Nonvalid antenna geom, exiting...')
             exit()
@@ -303,7 +312,7 @@ class MeshInfo():
             PECSurfaceFaces = [] ## to use faces as detectors. This will catch every surfaces that touches - way too much
             antennaSurfacePts = []; ## points that are on only the antenna surface
             smallMeshSurfacePts = []; ## points on surfaces that I want to have a small mesh size (currently the patch's inner cylinder)
-            antennas_DimTags = []; antennaMatDimTags = []; matDimTags = []; defectDimTags = []; domainDimTags = []
+            antennas_DimTags = []; antennaMatDimTags = []; matDimTags = []; defectDimTags = []; domainDimTags = []; pml = [] ## all dimTags, starting empty
             ## Make the antennas
             if(self.antenna_type == 'waveguide'):
                 x_antenna = np.zeros((self.N_antennas, 3))
@@ -509,6 +518,27 @@ class MeshInfo():
                 antennaMatDimTags.append((3, box)) ## these 3 should be dielectric
                 antennaMatDimTags.append((3, patch))
                 antennaMatDimTags.append((3, coax_outer))
+            elif(self.antenna_type=='coaxTest'): ## two lengths of coax - one inner cylinder, two outer segments
+                coax_one = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L, self.coax_outr)
+                coax_inner = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L+self.coax_d, self.coax_inr)
+                coax_two = gmsh.model.occ.addCylinder(0,0,self.coax_L,0,0,self.coax_d, self.coax_outr)
+                
+                coax_one = gmsh.model.occ.cut([(self.tdim, coax_one)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                coax_two = gmsh.model.occ.cut([(self.tdim, coax_two)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                
+                antennas_DimTags.append((3, coax_inner))
+                antennaMatDimTags.append((3, coax_one))
+                antennaMatDimTags.append((3, coax_two))
+                
+                antennaSurfacePts.append([self.coax_inr+self.coax_outr/2, 0, 0])
+                PECSurfacePts.append([self.coax_inr, 0, self.coax_L/2])
+                PECSurfacePts.append([self.coax_inr, 0, self.coax_L+self.coax_d/2])
+                PECSurfacePts.append([self.coax_outr, 0, self.coax_L/2])
+                PECSurfacePts.append([self.coax_outr, 0, self.coax_L+self.coax_d/2])
+                PECSurfacePts.append([self.coax_inr+self.coax_outr/2, 0, self.coax_L+self.coax_d])
+                
+                total = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L+self.coax_d, self.coax_outr)
+                pml.append((3, total)) ## might need a PML due to code structuring
             
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
@@ -559,7 +589,6 @@ class MeshInfo():
                 matDimTags.append(obj) ## the material fills the object
                 
             gmsh.model.occ.translate(matDimTags, self.object_offset[0], self.object_offset[1], self.object_offset[2]) ## add offset
-            defectDimTags = []
             if(not self.reference):
                 if(self.defect_geom == 'cylinder'):
                     defectDimTags = []
@@ -659,26 +688,26 @@ class MeshInfo():
             removeDimTags = [] ## remove these volumes - their surfaces should probably be PEC
             for i in np.arange(len(antennas_DimTags)):
                 removeDimTags = removeDimTags + outDimTagsMap[-(i+1)]
-            nmats = len(matDimTags); nAntmats = len(antennaMatDimTags); nDomain = len(domainDimTags)
+            nmats = len(matDimTags); nAntmats = len(antennaMatDimTags); nDomain = len(domainDimTags); npml = len(pml)
             if(not self.reference):
                 ndefects = len(defectDimTags)
                 mapHere = []
                 for n in np.arange(ndefects):
-                    mapHere = mapHere+outDimTagsMap[1+nmats+nAntmats+nDomain+n]
+                    mapHere = mapHere+outDimTagsMap[npml+nmats+nAntmats+nDomain+n]
                 defectDimTags = [x for x in mapHere if x not in removeDimTags]
             else:
                 defectDimTags = []
             mapHere = []
             for n in np.arange(nAntmats):
-                mapHere = mapHere+outDimTagsMap[1+nmats+nDomain+n]
+                mapHere = mapHere+outDimTagsMap[npml+nmats+nDomain+n]
             antennaMatDimTags = [x for x in mapHere if x not in removeDimTags+defectDimTags]
             mapHere = []
             for n in np.arange(nmats):
-                mapHere = mapHere+outDimTagsMap[1+nDomain+n]
+                mapHere = mapHere+outDimTagsMap[npml+nDomain+n]
             matDimTags = [x for x in mapHere if x not in removeDimTags+defectDimTags+antennaMatDimTags]
             mapHere = []
             for n in np.arange(nDomain):
-                mapHere = mapHere+outDimTagsMap[1+n]
+                mapHere = mapHere+outDimTagsMap[npml+n]
             domainDimTags = [x for x in mapHere if x not in removeDimTags+matDimTags+antennaMatDimTags+defectDimTags]
             domainDimTags = list(dict.fromkeys(domainDimTags)) ## remove any duplicate entries (they will cause an error)
             pmlDimTags = [x for x in outDimTagsMap[0] if x not in domainDimTags+defectDimTags+matDimTags+antennaMatDimTags+removeDimTags]
@@ -743,7 +772,7 @@ class MeshInfo():
             if(len(antenna_surfaces) != len(antennaSurfacePts)):
                 print(f'Error finding antenna surfaces: {len(antenna_surfaces)} found, but {len(antennaSurfacePts)} specified')
                         
-                        
+            
             pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, PEC_surfaces)
             antenna_surface_markers = [gmsh.model.addPhysicalGroup(self.fdim, [s]) for s in antenna_surfaces]
             farfield_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, farfield_surface)

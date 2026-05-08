@@ -385,11 +385,16 @@ class Scatt3DProblem():
             x_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshInfo.domain_radius), x_stretched, x) ## stretch when outside radius of the domain
             y_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshInfo.domain_radius), y_stretched, y) ## stretch when outside radius of the domain
             z_pml = ufl.conditional(ufl.ge(abs(r), FEMm.meshInfo.domain_radius), z_stretched, z) ## stretch when outside radius of the domain
+        elif(FEMm.meshInfo.domain_geom == None):
+            pass ## there is no PML
         else:
             print('nonvalid meshInfo.domain_geom')
             exit()
-        pml_coords = ufl.as_vector((x_pml, y_pml, z_pml))
-        FEMm.epsr_pml, FEMm.murinv_pml = pml_epsr_murinv(pml_coords)
+        if(FEMm.meshInfo.domain_geom == None):
+            FEMm.epsr_pml, FEMm.murinv_pml = pml_epsr_murinv(ufl.SpatialCoordinate(FEMm.meshInfo.mesh))
+        else:
+            pml_coords = ufl.as_vector((x_pml, y_pml, z_pml))
+            FEMm.epsr_pml, FEMm.murinv_pml = pml_epsr_murinv(pml_coords)
     
     def saveSol(self, sol, ref, mesh, freq, excitation):
         '''
@@ -515,6 +520,17 @@ class Scatt3DProblem():
                     Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
                     Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
                     return Ep
+                elif(meshInfo.antenna_type == 'coaxTest'):
+                    centre = np.array([0, 0, 0])## centre of the radiating face
+                    y = (x.T-centre).T ## local position
+                    r = np.sqrt(y[0]**2 + y[1]**2)
+                    rhat = np.array([y[0], y[1], y[0]*0])/r
+                    E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
+                    Ep = Ep + E
+                    Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
+                    Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
+                    Ep[:, np.abs(y[2])  > 1e-10] = 0 ## no field outside the height
+                    return Ep
                 elif(meshInfo.antenna_type == 'patch' or meshInfo.antenna_type == '6GHz measurement'): ## the regular patches, rotated and placed facing radially inward
                     for p in range(meshInfo.N_antennas): ## for each antenna, translate + rotate back to the original coordinates it was defined in
                         totalRot = np.dot(meshMaker.Rmaty(-pi/2), np.dot(meshMaker.Rmatz(-pi/2), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
@@ -573,38 +589,45 @@ class Scatt3DProblem():
                 E_pw[:] = E_pw[:]*np.exp(-1j*np.dot(k_pw, x))
             
             return E_pw
-    
-        #=======================================================================
-        # Ep = dolfinx.fem.Function(FEMm.VSpace)
-        # Ep.interpolate(lambda x: Eport(x))
-        #=======================================================================
-        
-        
-        #=======================================================================
-        # for n in np.arange(meshInfo.N_antennas):
-        #     Ep_unnormalized = dolfinx.fem.Function(FEMm.VSpace)
-        #     Ep_unnormalized.interpolate(lambda x: Eport(x))
-        #     norm = ufl.FacetNormal(FEMm.meshInfo.mesh)
-        #     signfactor = ufl.sign(ufl.inner(norm, ufl.SpatialCoordinate(FEMm.meshInfo.mesh))) # Enforce outward pointing normal
-        #     normFactorForm = dolfinx.fem.form(ufl.dot(Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), Ep_unnormalized - ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
-        #     #normFactorForm = dolfinx.fem.form(ufl.dot(ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm), ufl.dot(Ep_unnormalized, norm)*norm/ufl.inner(norm, norm))*FEMm.ds_antennas[n]) ## should be the same for each antenna
-        #     normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
-        #     normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
-        #     if(self.comm.rank == 0): ## assemble each part as it is made
-        #             normFactor = np.sqrt(sum(normFactorParts)) ## since we are normalizing the abs. squared integrated field, by modifying the field
-        #     else:
-        #         normFactor = None
-        #     normFactor= self.comm.bcast(normFactor, root=self.model_rank)
-        #     print(n, normFactor)
-        # print('done')
-        # exit()
-        #=======================================================================
         
         if(meshInfo.N_antennas > 0): ## only have an antenna field if there are antennas
             ## try normalizing numerically
             Ep = dolfinx.fem.Function(FEMm.VSpace)
             Ep_unnormalized = dolfinx.fem.Function(FEMm.VSpace)
             Ep_unnormalized.interpolate(lambda x: Eport(x))
+            
+            
+            #===================================================================
+            # ### Visualize Ep
+            # xdmf = dolfinx.io.XDMFFile(comm=self.comm, filename=self.dataFolder+'testSave.xdmf', file_mode='w')
+            # xdmf.write_mesh(meshInfo.mesh)
+            # E = dolfinx.fem.Function(FEMm.ScalarSpace)
+            # xpart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
+            # ypart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
+            # zpart = dolfinx.fem.Constant(FEMm.meshInfo.mesh, 0j)
+            # polVec = ufl.as_vector([xpart, ypart, zpart])
+            # for pol in ['z-pol', 'y-pol', 'x-pol']:
+            #     #E.interpolate(functools.partial(q_abs, Es=sol, pol=pol))
+            #     xpart.value = 0
+            #     ypart.value = 0
+            #     zpart.value = 0
+            #     if(pol == 'z-pol'): ## it is not simple to save the vector itself for some reason...
+            #         zpart.value = 1
+            #     elif(pol == 'y-pol'): ## it is not simple to save the vector itself for some reason...
+            #         ypart.value = 1
+            #     elif(pol == 'x-pol'): ## it is not simple to save the vector itself for some reason...
+            #         xpart.value = 1
+            #     expr = dolfinx.fem.Expression(ufl.dot(Ep_unnormalized, polVec), FEMm.ScalarSpace.element.interpolation_points)
+            #     E.interpolate(expr)
+            #     
+            #     E.name = pol
+            #     xdmf.write_function(E, 0)
+            # xdmf.close()
+            # exit()
+            # ### Visualize Ep
+            #===================================================================
+            
+            print(np.shape(Ep_unnormalized.x.array))
             normFactorForm = dolfinx.fem.form(ufl.inner(Ep_unnormalized, Ep_unnormalized)*FEMm.ds_antennas[0]) ## should be the same for each antenna
             normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
             normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
@@ -617,6 +640,16 @@ class Scatt3DProblem():
             
             expr = dolfinx.fem.Expression(Ep_unnormalized/normFactor, FEMm.VSpace.element.interpolation_points)
             Ep.interpolate(expr)
+            
+            nvec = ufl.FacetNormal(meshInfo.mesh)
+            testForm = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[0]))
+            
+            normalPart = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(ufl.inner(ufl.inner(Ep, nvec), ufl.inner(Ep, nvec))*FEMm.ds_antennas[0]))
+            
+            normFactorForm = dolfinx.fem.form(ufl.inner(Ep, Ep)*FEMm.ds_antennas[0]) ## should be the same for each antenna
+            normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
+            print(testForm, normalPart, testForm+normalPart, normFactorPart)
+            #exit()
             
         #=======================================================================
         # areaCalc = 1*FEMm.dx_dom ## calculate domain volume
@@ -911,7 +944,9 @@ class Scatt3DProblem():
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
                 if(meshInfo.antenna_type=='waveguide'):
-                    Zm.value = 1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## this works for the two current antennas implemented
+                    Zm.value = 1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## may need to be checked, now
+                elif(meshInfo.antenna_type=='coaxTest'):
+                    Zm.value = eta0/np.sqrt(self.antenna_mat_epsrs[0])#/(2*pi)*np.log(meshInfo.coax_outr/meshInfo.coax_inr)
                 else: ## assume it is a coaxial cable port
                     Zm.value = eta0/np.sqrt(2.1*(1 - 0.01j))/(2*pi)*np.log(meshInfo.coax_outr/meshInfo.coax_inr) ## eta0/sqrt(epsr)... etc
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
