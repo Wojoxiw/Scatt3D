@@ -528,15 +528,16 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
                 for i in range(4): ## each antenna
                     S[l][i][j] = Sdata[i+j*4, l]
                             
-        if(angle==angles[0]): ## try correcting phase
-            phaseCorrections=np.zeros(4) ## 1 for each antenna
-            for i in range(4):
-                phaseCorrections[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1])) / 4
+        if(angle==angles[0]): ## try correcting phase, constant (to deal with offset) and linear (to deal with potential length-related problems)
+            constantPhaseCorrection=np.zeros(4); linearPhaseCorrection=np.zeros(4) ## 1 for each antenna
+            for i in range(4): ## simply determine these by looking at the reflection coefficient
+                constantPhaseCorrection[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1])) /2/2
                 ## divided by 2 since reflection should hit the end and then go back, then another 2 to average between last and first frequency-points
+                linearPhaseCorrection[i] = ( (np.unwrap(np.angle(S[:, i, i]))[-1] - np.unwrap(np.angle(Srefsim[:, i, i]))[-1]) - constantPhaseCorrection[i]*2 ) / (freqs[-1]) /2/1e9
         for l in range(len(freqs)):
             for j in range(4): ## each antenna
                 for i in range(4): ## each antenna
-                    S[l][i][j] = S[l, i, j] *np.exp(1j*phaseCorrections[i])*np.exp(1j*phaseCorrections[j])
+                    S[l][i][j] = S[l, i, j] *np.exp(1j*(constantPhaseCorrection[i] + (freqs[l])*linearPhaseCorrection[i]))*np.exp(1j*(constantPhaseCorrection[j] + (freqs[l])*linearPhaseCorrection[j]))
                     
         if(angle==angles[0]): # first one is the basic S
             S_first = S
@@ -545,7 +546,7 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
     
     return S_first, Ssextra
 
-def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=0.7):
+def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=0.7, includeRefl=True):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
@@ -561,6 +562,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
     :param reconstructionMeshInfo: If not None, should be a MeshInfo of the reconstruction mesh. Then, saved data will be interpolated onto this mesh for the reconstruction.
     :param plotSs: If True, just plots some Ss
     :param maxRefl: Maximum reflection coefficient of data to use
+    :param includeRefl: If True, will use reflection coefficients (S11, S22, S33, S44)
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -710,7 +712,10 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
                         dist = int(N_antennas/onlyNAntennas)+1 ## index-distance between used antennas - rounds down
                         if( np.abs(n-m)%dist != 0 ):
                             continue ## skip to next index
-                              
+                    
+                    if(m==n and not includeRefl): ## removing reflections
+                        continue
+                    
                     idxNC.append(i) ## if the checks are passed, use this index
         
         Nmeas = int(len(idxNC)*(1 + len(extraProbs))) ## number of S-parameter measurements

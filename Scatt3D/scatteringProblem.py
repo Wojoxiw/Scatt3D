@@ -945,10 +945,10 @@ class Scatt3DProblem():
                 k0 = 2*np.pi*self.fvec[nf]/c0
                 k00.value = k0
                 if(meshInfo.antenna_type=='waveguide'):
-                    Zm.value = eta0 #1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## check this before using
+                    Zm.value = 1/k00.value/np.sqrt(k00.value**2 - meshInfo.kc**2) ## check this before using
                 elif(meshInfo.antenna_type=='coaxTest'):
                     Zm.value = eta0/np.sqrt(self.antenna_mat_epsrs[0])
-                else: ## assume it is a coaxial cable port
+                else: ## assume it is a coaxial cable port with the standard permittivity
                     Zm.value = eta0/np.sqrt(2.1*(1 - 0.01j))
                 self.CalculatePML(FEMm, k0)  ## update PML to this freq.
                 Eb.interpolate(functools.partial(planeWave, k=k0))

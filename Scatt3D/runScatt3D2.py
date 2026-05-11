@@ -229,11 +229,9 @@ if __name__ == '__main__':
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
-    #===========================================================================
-    # measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
-    #===========================================================================
+    measurementScript(h=1/3.5, degree=3, runName=runName, angles=angles,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     #===========================================================================
     # testrunName = f'{runName}dut_POMfill_' ## the test case where there is a hole partially filled with a POM cylinder
@@ -264,7 +262,7 @@ if __name__ == '__main__':
     
     angles = [0.0, 40.0, 80.0, 120.0]#np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
     frequenciesToUse=[]#[i for i in np.arange(20) if i%2==0]
-    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', SparamMeas=[Sref, Stest, angles, freqs], extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True, frequenciesToUse=frequenciesToUse, returnResults=[3])
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', SparamMeas=[Sref, Stest, angles, freqs], includeRefl=False, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True, frequenciesToUse=frequenciesToUse, returnResults=[3])
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}_regMesh', SparamMeas=[Sref, Stest, angles, freqs], extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=False, frequenciesToUse=frequenciesToUse, returnResults=[3, 4])
     
     
@@ -273,7 +271,7 @@ if __name__ == '__main__':
     
     #patchSsPlot([3.5, 8]) ## plot S11 comp. with Feko
     
-    cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
+    #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')
