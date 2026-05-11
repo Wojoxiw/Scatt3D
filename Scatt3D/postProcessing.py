@@ -531,9 +531,9 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
         if(angle==angles[0]): ## try correcting phase, constant (to deal with offset) and linear (to deal with potential length-related problems)
             constantPhaseCorrection=np.zeros(4); linearPhaseCorrection=np.zeros(4) ## 1 for each antenna
             for i in range(4): ## simply determine these by looking at the reflection coefficient
-                constantPhaseCorrection[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1])) /2/2
+                linearPhaseCorrection[i] = ( (np.unwrap(np.angle(Srefsim[:, i, i]))[-1]-np.unwrap(np.angle(Srefsim[:, i, i]))[0]) - (np.unwrap(np.angle(S[:, i, i]))[-1]-np.unwrap(np.angle(S[:, i, i]))[0]) ) / (freqs[-1]-freqs[0]) /2
+                constantPhaseCorrection[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]-linearPhaseCorrection[i]*freqs[0]*2) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1]-linearPhaseCorrection[i]*freqs[-1]*2)) /2/2
                 ## divided by 2 since reflection should hit the end and then go back, then another 2 to average between last and first frequency-points
-                linearPhaseCorrection[i] = ( (np.unwrap(np.angle(S[:, i, i]))[-1] - np.unwrap(np.angle(Srefsim[:, i, i]))[-1]) - constantPhaseCorrection[i]*2 ) / (freqs[-1]) /2/1e9
         for l in range(len(freqs)):
             for j in range(4): ## each antenna
                 for i in range(4): ## each antenna
@@ -717,7 +717,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
                         continue
                     
                     idxNC.append(i) ## if the checks are passed, use this index
-        
+            
         Nmeas = int(len(idxNC)*(1 + len(extraProbs))) ## number of S-parameter measurements
         b = np.zeros(Nmeas, dtype=complex)
         N_non_pml = len(idx_non_pml) ## number of mesh cells to compute on
@@ -767,7 +767,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
         del Apart ## maybe this will help with clearing memory
         gc.collect()
         
-        print(f'all data loaded in, {len(idxNC)}/{len(S_ref)} rows used')
+        print(f'all data loaded in, {len(idxNC)}/{len(S_ref.flatten())} rows used')
         
         if(not reconstructionMeshInfo is None):
             idx_ap = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be just the object in the reconstruction mesh
