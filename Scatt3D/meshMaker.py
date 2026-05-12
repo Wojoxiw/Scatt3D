@@ -162,10 +162,6 @@ class MeshInfo():
                 self.PML_spheroid_extraRadius = self.PML_radius*(-1 + np.sqrt(1-( 1 - 1/(1- (self.PML_height/2/(self.PML_height/2+self.dome_height))**2 ) )))
                 self.PML_a = (self.PML_height/2+self.dome_height)/(self.PML_radius+self.PML_spheroid_extraRadius)
                 
-                print(self.domain_height, self.domain_radius)
-                print(self.domain_a, self.domain_spheroid_extraRadius)
-                exit()
-                
         elif(self.domain_geom == 'sphere'):
             self.domain_radius = domain_radius * self.lambda0
             self.PML_radius = self.domain_radius + PML_thickness * self.lambda0
