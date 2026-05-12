@@ -161,6 +161,11 @@ class MeshInfo():
                 self.domain_a = (self.domain_height/2+self.dome_height)/(self.domain_radius+self.domain_spheroid_extraRadius)
                 self.PML_spheroid_extraRadius = self.PML_radius*(-1 + np.sqrt(1-( 1 - 1/(1- (self.PML_height/2/(self.PML_height/2+self.dome_height))**2 ) )))
                 self.PML_a = (self.PML_height/2+self.dome_height)/(self.PML_radius+self.PML_spheroid_extraRadius)
+                
+                print(self.domain_height, self.domain_radius)
+                print(self.domain_a, self.domain_spheroid_extraRadius)
+                exit()
+                
         elif(self.domain_geom == 'sphere'):
             self.domain_radius = domain_radius * self.lambda0
             self.PML_radius = self.domain_radius + PML_thickness * self.lambda0
@@ -342,7 +347,7 @@ class MeshInfo():
                 patchholder_t = 3e-3
                 patchHolder_cut_l = 11e-3
                 patchHolder_circleCut_r = 7e-3
-                self.bb = self.bb + patchholder_t*2
+                self.bb = self.bb + patchholder_t*2 ## this needs some extra dist
                 x_antenna = np.zeros((self.N_antennas, 3))
                 x_pec = np.zeros((self.N_antennas, 14, 3)) ### for each antenna, and PEC surface, a position of that surface
                 for n in range(self.N_antennas): ## make each antenna, and prepare its surfaces to either be PEC or be the excitation surface
@@ -373,7 +378,7 @@ class MeshInfo():
                     patchholder = gmsh.model.occ.cut([(self.tdim, patchholder)], [(self.tdim, patch), (self.tdim, box)], removeTool=False)[0][0][1]
                     #gmsh.model.occ.remove([(self.tdim, topCutout), (self.tdim, bottomCutout), (self.tdim, circleCut)]) ## remove the other cutters
                     
-                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh*2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                     
                     itemsToRotate = [(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under), (self.tdim, boundingBox), (self.tdim, patchholder)]
                     gmsh.model.occ.rotate(itemsToRotate, 0, 0, 0, 0, 1, 0, pi/2) ## rotate to be z-polarized
@@ -633,6 +638,11 @@ class MeshInfo():
                     defect = gmsh.model.occ.addCylinder(66e-3,14e-3,-self.object_height*0.4,0,0,self.object_height*0.9, outr)
                     defectInner = gmsh.model.occ.addCylinder(66e-3,14e-3,-self.object_height*0.4,0,0,self.object_height*0.9, inr)
                     defect = gmsh.model.occ.cut([(self.tdim, defect)], [(self.tdim, defectInner)])[0][0][1]
+                    defectDimTags.append((self.tdim, defect))
+                elif(self.defect_geom == '6GHz measurement cyl fill'):
+                    ## cut-out cylinder is 6.6cm off-center in x, 1.4cm off-center in y. Hole height of 2.25cm, or 90% of object height, diameter of 5cm.
+                    outr = 25e-3
+                    defect = gmsh.model.occ.addCylinder(66e-3,14e-3,-self.object_height*0.4,0,0,self.object_height*0.9, outr)
                     defectDimTags.append((self.tdim, defect))
                 gmsh.model.occ.translate(defectDimTags, self.object_offset[0]+self.defect_offset[0], self.object_offset[1]+self.defect_offset[1], self.object_offset[2]+self.defect_offset[2]) ## add offset
             

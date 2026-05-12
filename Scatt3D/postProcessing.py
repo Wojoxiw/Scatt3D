@@ -435,33 +435,48 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     
             return x0.data[:, 0]
         
-def measCompareSs(sim, meass, preCompiled=False, names=[]):
+def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False):
     '''
     Compares measured S-parameters to simulated ones
     
-    :param sim: Filename of simulated data
+    :param sims:
+    :param sim: List of filenames of simulated data
     :param meass: List of measured data, compiled
     :param preCompiled: If True, sending in compiled meass. If false, just sending in the Sfolder
     :param names: Names of the meass, to label plots with. If empty, (should not be preCompiled), takes from meass
+    :param diffs: If so, plot differences compared to the first file
     '''
     
     colors = ['tab:blue', 'tab:orange']
     markers = ['o', 'v']
     
-    data = np.load(sim)
-    simSs = data['S_ref']
-    simFs = data['fvec']
     if(names==[]):
         for op in range(len(meass)):
             names.append(meass[op][114:])
     
-    for Sname in ['S11', 'S12', 'S31', 'S22', 'S33', 'S44']:
+    for Sname in ['S11', 'S12', 'S41', 'S22', 'S33', 'S44']:
         Sidx1 = int(Sname[-2:-1])-1
         Sidx2 = int(Sname[-1:])-1
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
         
-        ax1.plot(simFs/1e9, np.unwrap(np.angle(simSs[:, Sidx1, Sidx2])), label=f'Simulated {Sname}', linewidth=2)
-        ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSs[:, Sidx1, Sidx2])), label=f'Simulated {Sname}', linewidth=2)
+        for op2 in range(len(sims)):
+            sim=sims[op2]
+            data = np.load(sim)
+            simFs = data['fvec']
+            if('S_dut' in data.files):
+                simSs = data['S_dut']
+            else:
+                simSs = data['S_ref']
+                
+            if(diffs):
+                if(op2==0):
+                    simSsref = simSs
+                    continue
+                else:
+                    simSs = simSs-simSsref
+        
+            ax1.plot(simFs/1e9, np.unwrap(np.angle(simSs[:, Sidx1, Sidx2])), label=f'Sim. {Sname} {sim[13:-10]}', linewidth=2)
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSs[:, Sidx1, Sidx2])), label=f'Sim. {Sname} {sim[13:-10]}', linewidth=2)
         
         for op in range(len(meass)):
             meas = meass[op]
@@ -470,6 +485,11 @@ def measCompareSs(sim, meass, preCompiled=False, names=[]):
             a, b = meas
             meas = [a]+b ## convert from the format given from compilation
             measSs = meas[0] ## just take angle 0
+            if(diffs):
+                if(op==0):
+                    measSsref = measSs
+                    continue
+                measSs = measSs-measSsref
             ax1.plot(simFs/1e9, np.unwrap(np.angle(measSs[:, Sidx1, Sidx2])), label=f'{names[op]} {Sname}', linewidth=2)
             ax2.plot(simFs/1e9, 20*np.log10(np.abs(measSs[:, Sidx1, Sidx2])), label=f'{names[op]} {Sname}', linewidth=2)
         
@@ -527,13 +547,16 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
             for j in range(4): ## each antenna
                 for i in range(4): ## each antenna
                     S[l][i][j] = Sdata[i+j*4, l]
-                            
+        
         if(angle==angles[0]): ## try correcting phase, constant (to deal with offset) and linear (to deal with potential length-related problems)
             constantPhaseCorrection=np.zeros(4); linearPhaseCorrection=np.zeros(4) ## 1 for each antenna
             for i in range(4): ## simply determine these by looking at the reflection coefficient
-                linearPhaseCorrection[i] = ( (np.unwrap(np.angle(Srefsim[:, i, i]))[-1]-np.unwrap(np.angle(Srefsim[:, i, i]))[0]) - (np.unwrap(np.angle(S[:, i, i]))[-1]-np.unwrap(np.angle(S[:, i, i]))[0]) ) / (freqs[-1]-freqs[0]) /2
-                constantPhaseCorrection[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]-linearPhaseCorrection[i]*freqs[0]*2) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1]-linearPhaseCorrection[i]*freqs[-1]*2)) /2/2
-                ## divided by 2 since reflection should hit the end and then go back, then another 2 to average between last and first frequency-points
+                if(False): ## use linearPhaseCorrection
+                    linearPhaseCorrection[i] = ( (np.unwrap(np.angle(Srefsim[:, i, i]))[-1]-np.unwrap(np.angle(Srefsim[:, i, i]))[0]) - (np.unwrap(np.angle(S[:, i, i]))[-1]-np.unwrap(np.angle(S[:, i, i]))[0]) ) / (freqs[-1]-freqs[0]) /2
+                    constantPhaseCorrection[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]-linearPhaseCorrection[i]*freqs[0]*2) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1]-linearPhaseCorrection[i]*freqs[-1]*2)) /2/2
+                else: ## just constant
+                    constantPhaseCorrection[i] = ((np.unwrap(np.angle(Srefsim[:, i, i]))[0] - np.unwrap(np.angle(S[:, i, i]))[0]) + (np.unwrap(np.angle(Srefsim[:, i, i]))[-1] - np.unwrap(np.angle(S[:, i, i]))[-1])) /2/2
+                    ## divided by 2 since reflection should hit the end and then go back, then another 2 to average between last and first frequency-points
         for l in range(len(freqs)):
             for j in range(4): ## each antenna
                 for i in range(4): ## each antenna
@@ -546,13 +569,14 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
     
     return S_first, Ssextra
 
-def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=0.7, includeRefl=True):
+def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraSparamNames=[], solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=0.7, includeRefl=True):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
     :param extraProbs: Extra filenames - the A-matrices from these will be stacked under the main problem. Data is assumed to have the same format, and have been saved onto the same mesh, unless reconstructionMeshInfo is used.
     :param SparamMeas: Foldername for measured S parameters, first Sref, then Sdut, then the freqs, then angles. If this isn't blank, S-params will be taken from these meas. files, E-fields from the regular problem. Overrides SparamName.
     :param SparamName: Filename for S parameters. If this isn't blank, S-params will be taken from this simulation, everything else from the regular problem.
+    :param extraSparamNames: Extra filenames, if running at multiple angles or such
     :param solutionName: Name to be appended to the solution files - default is nothing
     :param antennasToUse: Use only data from these antennas - list of their indices. If empty (default), use all
     :param frequenciesToUse: Use only data from these frequencies - list of their indices. If empty (default), use all
@@ -579,7 +603,6 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
     
         ## load in all the data
         data = np.load(problemName+'output.npz')
-        b = data['b']
         fvec = data['fvec']
         S_ref = data['S_ref']
         if('S_dut' in data.files):
@@ -594,9 +617,14 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', soluti
             S_dut, extraS_duts = compileMeasuredSs(SparamMeas[1], freqs, angles, S_ref)
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
-            if('S_ref' in data.files):
+            if('S_ref' in data2.files):
                 S_ref = data2['S_ref']
             S_dut = data2['S_dut']
+            if(extraSparamNames !=[]):
+                for name in extraSparamNames:
+                    extraS_duts.append(np.load(name+'output.npz')['S_dut'])
+                for name in extraProbs: ## should have S_refs too
+                    extraS_refs.append(np.load(name+'output.npz')['S_ref'])
         
         #epsr_mat = data['epsr_mat']
         #epsr_defect = data['epsr_defect']
