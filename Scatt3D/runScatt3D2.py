@@ -131,7 +131,7 @@ if __name__ == '__main__':
             prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         else: ## save Ss
             prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
-            prob.makeOptVects(justSaveNpz=True)
+            prob.makeOptVectors(justSaveNpz=True)
         prevRuns.memTimeAppend(prob)
     
     def patchSsPlot(sims): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
