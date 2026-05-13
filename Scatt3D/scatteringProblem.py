@@ -1028,14 +1028,15 @@ class Scatt3DProblem():
             sys.stdout.flush()
            
     #@profile
-    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False, saveName=''):
+    def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False, justSaveNpz=False, saveName=''):
         '''
         Computes the optimization vectors (rows of the A-matrix) from the E-fields and saves to .xdmf - this is done on the reference mesh.
         This function also saves various other parameters needed for later postprocessing
         :param DUTMesh: If True, don't actually compute the opt vectors, just save the DUTmesh and some info
         :param skipQs: Skip writing the actual optimization vectors
         :param reconstructionMesh: If True, the problem should be made with the interpolation mesh, so the dofs_map should be interpolated in. Data is loaded from the actual mesh and run.
-        :param extraText: Name to use for saved files (for use when computing both ErefEref and ErefEdut)
+        :param justSaveNpz: if True, just saves the npz file then exits
+        :param saveName: Name to use for saved files (for use when computing both ErefEref and ErefEdut)
         '''
         if(saveName==''): ## not sure how to better set this as the default
             saveName=self.name
@@ -1057,6 +1058,9 @@ class Scatt3DProblem():
             if( hasattr(self, 'S_dut') ):
                 saveData['S_dut'] = self.S_dut
             np.savez(self.dataFolder+saveName+'output.npz', **saveData)
+            
+        if(justSaveNpz):
+            return
             
         ## Then, compute opt. vectors, and save data
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)):

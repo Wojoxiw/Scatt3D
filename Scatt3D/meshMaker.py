@@ -190,7 +190,6 @@ class MeshInfo():
             self.antenna_depth = 13.68e-3 ## the length (in x)
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 1e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = 2.252e-3
-            self.kc = 0 ## cutoff wavenumber
             if(self.antenna_type.endswith('percentsmaller')): ## make the patch smaller, and nothing else
                 smaller = float(self.antenna_type[len('patch_'):-len('percentsmaller')])
                 self.antenna_type='patch'
@@ -205,7 +204,6 @@ class MeshInfo():
             self.antenna_depth = 21.4e-3 ## the length (in x)
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 2.5e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.feed_offset = -4.72e-3 ## it is placed upward along the z-axis
-            self.kc = 0 ## cutoff wavenumber
             
             ##the 3-D printed holder sections, which stick out partially in front of the patch
             self.patchholder_t = 3e-3
