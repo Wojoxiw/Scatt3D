@@ -520,25 +520,14 @@ class Scatt3DProblem():
                     Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
                     Ep[:, np.abs(y[2])  > 1e-5] = 0 ## no field outside the height
                     return Ep
-                elif(meshInfo.antenna_type == 'coaxTest'):
-                    centre = np.array([0, 0, 0])## centre of the radiating face
-                    y = (x.T-centre).T ## local position
-                    r = np.sqrt(y[0]**2 + y[1]**2)
-                    rhat = np.array([y[0], y[1], y[0]*0])/r
-                    E = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
-                    Ep = Ep + E
-                    Ep[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
-                    Ep[:, r  < meshInfo.coax_inr] = 0 ## no field inside the radius
-                    Ep[:, np.abs(y[2])  > 1e-10] = 0 ## no field outside the height
-                    return Ep
-                elif(meshInfo.antenna_type == 'patch' or meshInfo.antenna_type == '6GHz measurement'): ## the regular patches, rotated and placed facing radially inward
+                elif(meshInfo.antenna_type == 'patch' or meshInfo.antenna_type == '6GHz measurement' or meshInfo.antenna_type == 'coaxTest'): ## the regular patches, rotated and placed facing radially inward
                     for p in range(meshInfo.N_antennas): ## for each antenna, translate + rotate back to the original coordinates it was defined in
-                        totalRot = np.dot(meshMaker.Rmaty(-pi/2), np.dot(meshMaker.Rmatz(-pi/2), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
+                        totalRot = np.dot(meshMaker.Rmaty(-meshInfo.antenna_Yrot), np.dot(meshMaker.Rmatz(-meshInfo.antenna_Zrot), meshMaker.Rmatz(-meshInfo.rot_antennas[p]))) ## rotate in the opposite order and direction
                         y = np.dot(totalRot, np.transpose(x.T - meshInfo.pos_antennas[p])) ## the new (original) coordinate system
                         centre = np.array([meshInfo.feed_offset, 0, -meshInfo.antenna_height/2-meshInfo.coax_outh]) ## centre of the radiating face
                         y = (y.T-centre).T ## local position now, at the center of the radiating face
                         r = np.sqrt(y[0]**2 + y[1]**2)
-                        totalRotInverse = np.dot(meshMaker.Rmatz(meshInfo.rot_antennas[p]), np.dot(meshMaker.Rmatz(pi/2), meshMaker.Rmaty(pi/2)))
+                        totalRotInverse = np.dot(meshMaker.Rmatz(meshInfo.rot_antennas[p]), np.dot(meshMaker.Rmatz(meshInfo.antenna_Zrot), meshMaker.Rmaty(meshInfo.antenna_Yrot)))
                         rhat = np.dot(totalRotInverse, np.array([y[0], y[1], y[0]*0]))/r ## since this is the E-field polarization, need to rotate back to coordinates
                         Ep_loc = meshInfo.coax_inr/r * rhat ## say we have E=1 at the inner conductor (I actually get slightly less)
                         Ep_loc[:, r  > meshInfo.coax_outr] = 0 ## no field outside the radius
@@ -631,7 +620,7 @@ class Scatt3DProblem():
             normFactorPart = dolfinx.fem.assemble.assemble_scalar(normFactorForm)
             normFactorParts = self.comm.gather(normFactorPart, root=self.model_rank)
             if(self.comm.rank == 0): ## assemble each part as it is made
-                    normFactor = np.sqrt(sum(normFactorParts)) ## since we are normalizing the abs. squared integrated field, by modifying the field
+                normFactor = np.sqrt(sum(normFactorParts)) ## since we are normalizing the abs. squared integrated field, by modifying the field
             else:
                 normFactor = None
             normFactor= self.comm.bcast(normFactor, root=self.model_rank)

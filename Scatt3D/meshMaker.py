@@ -57,6 +57,8 @@ class MeshInfo():
                  antenna_radius = -1,
                  antenna_z_offset = 0,
                  antenna_bounding_box_offset = 0,
+                 antenna_Yrot=pi/2,
+                 antenna_Zrot=pi/2,
                  object_radius = 1.06,
                  object_height = 1.25,
                  object_offset = np.array([0, 0, 0]),
@@ -98,6 +100,8 @@ class MeshInfo():
         :param antenna_radius: Radius at which antennas are placed
         :param antenna_z_offset: Height (from the middle of the sim.) at which antennas are placed. Default to centering on the x-y plane
         :param antenna_bounding_box_offset: How far the bb extends from the antenna. If 0, takes h/2
+        :param antenna_Yrot: pi/2 standard
+        :param antenna_Zrot: pi/2 standard
         :param object_scale: If object is a sphere (or cylinder), the radius. Even if not, ideally this should be approximately the size of the object
         :param object_height: If object is a cylinder, the height
         :param object_offset: The object is shifted this far (in wavelengths)
@@ -209,16 +213,13 @@ class MeshInfo():
             self.patchholder_t = 3e-3
             self.patchholder_corner_ext = 5e-3
             self.patchholder_cablehole_r = 5e-3
-        elif(self.antenna_type == 'coaxialPortTest'):
-            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3;
-            self.coax_L = 10e-3 ## length of first segment
-            self.coax_d = 5e-3 ## length of second segment
         elif(self.antenna_type == 'waveguide'):
             self.kc = pi/self.antenna_width ## cutoff wavenumber... maybe correct
         elif(self.antenna_type == 'coaxTest'):
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3;
             self.coax_L = object_height
             self.coax_d = defect_height
+            self.feed_offset=0; self.coax_outh=0; self.antenna_height=0 ## feed centered at origin
         else:
             print('Nonvalid antenna geom, exiting...')
             exit()
@@ -239,7 +240,8 @@ class MeshInfo():
             self.phi_antennas = phi_antennas*pi/180 + np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## evenly-spaced placement angles
         self.pos_antennas = np.array([[self.antenna_radius*np.cos(phi), self.antenna_radius*np.sin(phi), self.antenna_z_offset] for phi in self.phi_antennas]) ## placement positions
         self.rot_antennas = self.phi_antennas + np.pi/2 ## rotation so that they face the center
-        
+        self.antenna_Yrot = antenna_Yrot
+        self.antenna_Zrot = antenna_Zrot
         ## Object + defect(s) parameters
         self.reconstruction_submesh_radius = min(object_radius*self.lambda0*1.2, (object_radius+0.15)*self.lambda0) ## should ideally contain slightly more than the object
         if(object_geom == 'sphere'):
@@ -276,7 +278,7 @@ class MeshInfo():
         elif(defect_geom == 'complex1'):
             self.defect_radius = defect_radius * self.lambda0
             self.defect_height = defect_height * self.lambda0
-        elif(defect_geom == '' or defect_geom.startswith('6GHz measurement') or defect_geom is None):
+        elif(defect_geom == '' or defect_geom.startswith('6GHz measurement')):
             pass ## no defect, or specific settings
         else:
             print('Nonvalid defect geom, exiting...')
@@ -518,28 +520,42 @@ class MeshInfo():
                 antennaMatDimTags.append((3, patch))
                 antennaMatDimTags.append((3, coax_outer))
             elif(self.antenna_type=='coaxTest'): ## two lengths of coax - one inner cylinder, two outer segments
-                coax_one = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L, self.coax_outr)
-                coax_inner = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L+self.coax_d, self.coax_inr)
-                coax_two = gmsh.model.occ.addCylinder(0,0,self.coax_L,0,0,self.coax_d, self.coax_outr)
-                
-                coax_one = gmsh.model.occ.cut([(self.tdim, coax_one)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
-                coax_two = gmsh.model.occ.cut([(self.tdim, coax_two)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
-                
-                antennas_DimTags.append((3, coax_inner))
-                antennaMatDimTags.append((3, coax_one))
-                antennaMatDimTags.append((3, coax_two))
-                
-                antennaSurfacePts.append([self.coax_inr+self.coax_outr/2, 0, 0])
-                smallMeshSurfacePts.append([self.coax_inr, 0, self.coax_L/2])
-                smallMeshSurfacePts.append([self.coax_inr, 0, self.coax_L+self.coax_d/2])
-                PECSurfacePts.append([self.coax_inr, 0, self.coax_L/2])
-                PECSurfacePts.append([self.coax_inr, 0, self.coax_L+self.coax_d/2])
-                PECSurfacePts.append([self.coax_outr, 0, self.coax_L/2])
-                PECSurfacePts.append([self.coax_outr, 0, self.coax_L+self.coax_d/2])
-                PECSurfacePts.append([self.coax_inr+self.coax_outr/2, 0, self.coax_L+self.coax_d])
-                
-                total = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L+self.coax_d, self.coax_outr)
-                pml.append((3, total)) ## might need a PML due to code structuring
+                x_pec = np.zeros((self.N_antennas, 5, 3))
+                for n in range(self.N_antennas): ## just one
+                    coax_one = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L, self.coax_outr)
+                    coax_inner = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L+self.coax_d, self.coax_inr)
+                    coax_two = gmsh.model.occ.addCylinder(0,0,self.coax_L,0,0,self.coax_d, self.coax_outr)
+                    
+                    coax_one = gmsh.model.occ.cut([(self.tdim, coax_one)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                    coax_two = gmsh.model.occ.cut([(self.tdim, coax_two)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
+                    
+                    antennas_DimTags.append((3, coax_inner))
+                    antennaMatDimTags.append((3, coax_one))
+                    antennaMatDimTags.append((3, coax_two))
+                    
+                    total = gmsh.model.occ.addCylinder(0,0,0,0,0,self.coax_L+self.coax_d, self.coax_outr)
+                    pml.append((3, total)) ## might need a PML due to code structuring. Gets removed in fracturing
+                    
+                    itemsToRotate = [(self.tdim, total), (self.tdim, coax_one), (self.tdim, coax_two), (self.tdim, coax_inner)]
+                    gmsh.model.occ.rotate(itemsToRotate, 0, 0, 0, 0, 1, 0, self.antenna_Yrot) ## rotate to be z-polarized
+                    gmsh.model.occ.rotate(itemsToRotate, 0, 0, 0, 0, 0, 1, self.antenna_Zrot) ## rotate to face y-hat
+                    gmsh.model.occ.rotate(itemsToRotate, 0, 0, 0, 0, 0, 1, self.rot_antennas[n]) ## then the center
+                    gmsh.model.occ.translate(itemsToRotate, self.pos_antennas[n,0], self.pos_antennas[n,1], self.pos_antennas[n,2])
+                    
+                    totalRot = np.dot(Rmatz(self.rot_antennas[n]), np.dot(Rmatz(self.antenna_Zrot), Rmaty(self.antenna_Yrot)))
+                    
+                    x_pec[n, 0] = [self.coax_inr, 0, self.coax_L/2]
+                    x_pec[n, 1] = [self.coax_inr, 0, self.coax_L+self.coax_d/2]
+                    x_pec[n, 2] = [self.coax_outr, 0, self.coax_L/2]
+                    x_pec[n, 3] = [self.coax_outr, 0, self.coax_L+self.coax_d/2]
+                    x_pec[n, 4] = [self.coax_inr+self.coax_outr/2, 0, self.coax_L+self.coax_d]
+                    
+                    antennaSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, [self.coax_inr+self.coax_outr/2, 0, 0])) 
+                    ## append the points, corrected for the position+rotation of the antenna
+                    for i in range(np.shape(x_pec)[1]):
+                        PECSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
+                        if(i in [0,1]): ## the inner cylinder should have a smaller mesh
+                            smallMeshSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
             
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
