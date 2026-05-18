@@ -321,7 +321,7 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     #testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.2', epsr_FR4=4.2*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
-    testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_largerdomain_ho{6.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
+    testPatchPattern(h=1/5, name=f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
     #patchSsPlot([f'6GHzpatchPatternTest_aftermeas_ho{3.5:.1f}', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.2']) ## plot S11 comp. with Feko
     
