@@ -76,7 +76,7 @@ if __name__ == '__main__':
             epsrs.append(4.3*(1 - .11/4.4j)) ## box
             epsrs.append(4.3*(1 - .11/4.4j)) ## patch
             epsrs.append(2.1*(1 - 0.01j)) ## coax dielectric
-            epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder
+            epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder - guess of permittivity
         prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
         
         if(dutForSimSolution): ## test-case simulation
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', showPlots=True, epsr_FR4=4.3*(1-.11/4.4j)): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = True, verbosity = verbosity, N_antennas=1, domain_radius=1.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type='6GHz measurement', object_geom='', defect_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = False, verbosity = verbosity, N_antennas=1, domain_radius=2.8, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type='6GHz measurement', object_geom='', defect_geom='', FF_surface = True, order=degree)
         epsrs=[]
         epsrs.append(epsr_FR4) ## susbtrate - patch
         epsrs.append(epsr_FR4) ## substrate under patch
@@ -206,8 +206,8 @@ if __name__ == '__main__':
             plt.tight_layout()
         plt.show()
         
-    def cablePortTest(h, epsr1, epsr2, d, L, freqs=np.linspace(5.4e9, 7.2e9, 1), degree=3, runName='cablePortTest'): ## checks the port by simulating transmission through a coaxial cable in 2 sections and capped with a short. First section by the port has epsr1, length L. Second has epsr2, length d
-        ## theory seems to match the simulated values reasonably well, for h~<1/20
+    def cablePortTest(h, epsr1, epsr2, d, L, freqs=np.linspace(5.4e9, 7.2e9, 1), degree=3, runName='cablePortTest', prints=True): ## checks the port by simulating transmission through a coaxial cable in 2 sections and capped with a short. First section by the port has epsr1, length L. Second has epsr2, length d
+        ## theory seems to match the simulated values reasonably well, for h~<1/3.5
         mesh_settings = {'h': h, 'N_antennas': 1, 'order': degree, 'antenna_type': 'coaxTest', 'object_geom': None, 'domain_geom': None, 'object_height': L, 'defect_height': d} ## uses settings given before those specified here ## settings for the meshMaker
         prob_settings = {'E_ref_anim': True, 'freqs': freqs, 'E_dut_anim': False, 'E_anim_allAnts': False, 'ErefEdut': False, 'verbosity': verbosity, 'antenna_mat_epsrs': [epsr1,epsr2], 'dataFolder': folder, 'computeBoth': False, 'makeOptVects': False}
         
@@ -220,9 +220,25 @@ if __name__ == '__main__':
         Z2 = eta0/np.sqrt(epsr2)/(2*pi)*np.log(refMesh.coax_outr/refMesh.coax_inr)
         theory = ((-1 + Z2/Z1*1j*np.tan(k2*d)) / (1 + Z2/Z1*1j*np.tan(k2*d)))*np.exp(-2j*k1*L)
         sim = prob.S_ref.flatten()
-        print(f'S11s: Simulated: {sim}, Theoretical: {theory}')
-        print(f'Mag/Phase: {np.abs(sim)}/{np.angle(sim)}, {np.abs(theory)}/{np.angle(theory)}')
-        print(f'Rel. Diffs: {np.abs(np.abs(theory)-np.abs(sim))/np.abs(theory)}/{np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory)}')
+        if(prints):
+            print(f'S11s: Simulated: {sim}, Theoretical: {theory}')
+            print(f'Mag/Phase: {np.abs(sim)}/{np.angle(sim)}, {np.abs(theory)}/{np.angle(theory)}')
+            print(f'Rel. Diffs: {np.abs(np.abs(theory)-np.abs(sim))/np.abs(theory)}/{np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory)}')
+        return sim, theory
+        
+    def cablePortRMSError(h=1/3.5, freqs=np.linspace(6.1e9, 6.4e9, 1)): ## finds the RMS error in phase and magnitude for 10 coaxs using cablePortTest
+        coaxs=[[2.1*(1-0.01j), 2.1*(1-1j), 1e-3, 1e-3], [5.1*(1-0.001j), 8.1*(1-0.01j), 4e-3, 2e-3], [2.7*(1-0.01j), 2.1*(1-0.01j), 3e-3, 1e-3], [2.1*(1-0.01j), 12.1*(1-0.01j), 1e-3, 8e-3], [2.1*(1-0.01j), 23.1*(1-0.1j), 7e-3, 3e-3],
+        [1.3*(1-0.01j), 2.1*(1-0.8j), .5e-3, .4e-3], [2.1*(1-0.01j), 8.1*(1-0.01j), 1.1e-3, .1e-3], [2.1*(1-0.01j), 12.1*(1-0.1j), 3e-3, 1e-3], [2.1*(1-0.1j), 2.1*(1-0.01j), 1e-3, 10e-3], [751*(1-0.01j), 76.1*(1-0.01j), 8e-3, 2e-3]]
+        magErrs = []; phaseErrs = []
+        for coax in coaxs:
+            print(f'Run with coax: {coax}')
+            sim, theory = cablePortTest(h, coax[0], coax[1], coax[2], coax[3], freqs, prints=False)
+            magErrs.append( np.abs(np.abs(sim)-np.abs(theory))/np.abs(theory) )
+            phaseErrs.append( np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory) )
+            
+        print(np.max(magErrs), np.max(np.abs(phaseErrs)))
+        print(np.mean(magErrs), np.mean(phaseErrs))
+        print(np.sqrt(np.mean(np.square(magErrs))), np.sqrt(np.mean(np.square(phaseErrs))))
         
     ###
     ###
@@ -244,9 +260,11 @@ if __name__ == '__main__':
     #===========================================================================
     
     testrunName = f'measurements_noobject'
-    measurementScript(h=1/3.5, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    #===========================================================================
+    # measurementScript(h=1/3.5, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    #===========================================================================
     
     testrunName = f'{runName}dut_POMfill_' ## the test case where there is a hole partially filled with a POM cylinder
     #===========================================================================
@@ -280,13 +298,17 @@ if __name__ == '__main__':
     
     Ssangle = angles[0]
     measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}emptySetup/', f'{measFolder}emptySetup+foam/']
-    #measfnames = [f'{measFolder}solidPOMblock/angle{Ssangle:.2f}.csv', f'{measFolder}solidPOMblock+hole_near_A1/angle{Ssangle:.2f}.csv', f'{measFolder}solidPOMblock+hole_near_A1_filledwithPLA/angle{Ssangle:.2f}.csv']
+    #measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}solidPOMblock+hole_near_A1/', f'{measFolder}solidPOMblock+hole_near_A1_filledwithPLA/']
     simfnames = [f'{folder}{runName}_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz']
     
     ##diffs
     measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}solidPOMblock+hole_near_A2_filledwithPOM']
     simfnames = [f'{folder}{runName}_angle{Ssangle:.1f}output.npz', f'{folder}{runName}dut_POMfill__angle{Ssangle:.1f}output.npz']
-    #postProcessing.measCompareSs(simfnames, measfnames)
+    
+    ## empty vs ref
+    measfnames = [f'{measFolder}emptysetup/', f'{measFolder}solidPOMblock/']
+    simfnames = [f'{folder}measurements_noobject_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected__angle{Ssangle:.1f}output.npz']
+    #postProcessing.measCompareSs(simfnames, measfnames, diffs=False, angle=Ssangle)
     
     angles = [0.0, 40.0, 80.0, 120.0, 160.0, 200.0]#np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
     frequenciesToUse=[]#[i for i in np.arange(20) if i%2==0]
@@ -299,9 +321,12 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     #testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.2', epsr_FR4=4.2*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
+    testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_largerdomain_ho{6.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
+    
     #patchSsPlot([f'6GHzpatchPatternTest_aftermeas_ho{3.5:.1f}', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.2']) ## plot S11 comp. with Feko
     
     #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
+    #cablePortRMSError()
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')

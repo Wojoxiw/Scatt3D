@@ -556,6 +556,15 @@ class MeshInfo():
                         PECSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
                         if(i in [0,1]): ## the inner cylinder should have a smaller mesh
                             smallMeshSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_pec[n, i]))
+                            
+            #===================================================================
+            # ### to export antenna model
+            # gmsh.model.occ.synchronize()
+            # gmsh.model.mesh.generate(2)
+            # gmsh.write(self.fname+'.step') ## change extension here to change export format
+            # gmsh.finalize()
+            # exit()
+            #===================================================================
             
             ## Make the object and defects (if not a reference case)
             if(self.object_geom == 'sphere'):
@@ -877,7 +886,7 @@ class MeshInfo():
             gmsh.model.occ.synchronize()
             
             gmsh.model.mesh.generate(self.tdim)
-            #gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out
+            gmsh.write(self.fname) ## Write the mesh to a file. I have never actually looked at this, so I've commented it out
             
             
             if(self.justInterpolationSubmesh):

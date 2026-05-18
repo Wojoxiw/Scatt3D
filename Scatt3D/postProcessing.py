@@ -435,7 +435,7 @@ def scalapackLeastSquares(comm, MPInum, A_np=None, b_np=None, checkVsNp=False):
                     
             return x0.data[:, 0]
         
-def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False):
+def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False, angle=0):
     '''
     Compares measured S-parameters to simulated ones
     
@@ -445,6 +445,7 @@ def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False):
     :param preCompiled: If True, sending in compiled meass. If false, just sending in the Sfolder
     :param names: Names of the meass, to label plots with. If empty, (should not be preCompiled), takes from meass
     :param diffs: If so, plot differences compared to the first file
+    :param angle: Which measured angle to use (20 degree spacing)
     '''
     
     colors = ['tab:blue', 'tab:orange']
@@ -454,7 +455,7 @@ def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False):
         for op in range(len(meass)):
             names.append(meass[op][114:])
     
-    for Sname in ['S11', 'S12', 'S41', 'S22', 'S33', 'S44']:
+    for Sname in ['S11', 'S12', 'S41', 'S23', 'S22', 'S33', 'S44']:
         Sidx1 = int(Sname[-2:-1])-1
         Sidx2 = int(Sname[-1:])-1
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))
@@ -481,10 +482,10 @@ def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False):
         for op in range(len(meass)):
             meas = meass[op]
             if not preCompiled:
-                meas = compileMeasuredSs(meas, np.zeros(1, dtype=float), freqs=simFs, Srefsim=simSs)
+                meas = compileMeasuredSs(meas, np.zeros(1, dtype=float)+angle, freqs=simFs, Srefsim=simSs)
             a, b = meas
             meas = [a]+b ## convert from the format given from compilation
-            measSs = meas[0] ## just take angle 0
+            measSs = meas[0]
             if(diffs):
                 if(op==0):
                     measSsref = measSs
