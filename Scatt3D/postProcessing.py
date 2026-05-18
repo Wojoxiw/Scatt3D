@@ -455,7 +455,7 @@ def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False, angle=0
         for op in range(len(meass)):
             names.append(meass[op][114:])
     
-    for Sname in ['S11', 'S12', 'S41', 'S23', 'S22', 'S33', 'S44']:
+    for Sname in ['S11', 'S12', 'S13', 'S41', 'S23', 'S22', 'S33', 'S44']:
         Sidx1 = int(Sname[-2:-1])-1
         Sidx2 = int(Sname[-1:])-1
         fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(14, 10))

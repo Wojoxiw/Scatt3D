@@ -135,8 +135,8 @@ if __name__ == '__main__':
         prevRuns.memTimeAppend(prob)
     
     def patchSsPlot(sims): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
-        colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple']
-        markers = ['o', 'v', 'o', 'v']
+        colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple', 'tab:red']
+        markers = ['o', 'v', 'o', 'v', 'o']
         i=0
         measFolder = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Patch Data/'
         
@@ -321,9 +321,10 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     #testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.2', epsr_FR4=4.2*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
-    testPatchPattern(h=1/5, name=f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
+    testPatchPattern(h=1/20, name=f'6GHzpatchPatternTest_deg1_ho{20.0:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=1, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
+    testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_order2mesh_ho{6.0:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
-    #patchSsPlot([f'6GHzpatchPatternTest_aftermeas_ho{3.5:.1f}', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_aftermeas_ho{6.0:.1f}_epsr4.2']) ## plot S11 comp. with Feko
+    #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_deg1_ho{20.0:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{6.0:.1f}]) ## plot S11 comp. with Feko
     
     #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
     #cablePortRMSError()
