@@ -145,7 +145,7 @@ class MeshInfo():
         self.tdim = 3 ## Tetrahedra dimensionality - 3D
         self.fdim = self.tdim - 1 ## Facet dimensionality - 2D
         self.FF_surface = FF_surface
-        self.order = min(order, 2) ## capped at 1, since the interpolation between meshes can sometimes get an error with order 2, and since xdmf can't save above order 2. Also, doesn't seem to make a huge difference
+        self.order = min(order, 1) ## capped at 1, since the interpolation between meshes can sometimes get an error with order 2, and since xdmf can't save above order 2. Also, doesn't seem to make a huge difference
         
         
         if(PML_thickness == 0): ## if not specified, calculate it
