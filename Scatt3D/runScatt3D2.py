@@ -255,11 +255,9 @@ if __name__ == '__main__':
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
-    #===========================================================================
-    # measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
-    #===========================================================================
+    measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     testrunName = f'measurements_noobject'
     #===========================================================================
@@ -325,7 +323,7 @@ if __name__ == '__main__':
     
     #testPatchPattern(h=1/13, name=f'6GHzpatchPatternTest_deg1_ho{13.0:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=1, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     #testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
-    testPatchPattern(h=1/4.8, name=f'6GHzpatchPatternTest_ho{4.8:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
+    #testPatchPattern(h=1/4.8, name=f'6GHzpatchPatternTest_ho{4.8:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
     #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_deg1_ho{13.0:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
     
