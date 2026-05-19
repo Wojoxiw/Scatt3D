@@ -255,11 +255,9 @@ if __name__ == '__main__':
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
-    #===========================================================================
-    # measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
-    #===========================================================================
+    measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     testrunName = f'measurements_noobject'
     #===========================================================================
@@ -276,9 +274,11 @@ if __name__ == '__main__':
     #===========================================================================
     
     testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.5 cylinder
-    measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
+    #===========================================================================
+    # measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
+    #===========================================================================
     
     ## try the postprocessing with just sim. stuff:
     angles = [0.0, 40.0, 80.0, 120.0, 160.0]
