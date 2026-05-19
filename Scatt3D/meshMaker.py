@@ -304,8 +304,8 @@ class MeshInfo():
             gmsh.model.add('The Model') ## name for the whole thing
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/100)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0)
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/1000) ## presumably lower than anything will ever go
+            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0) ## presumably larger than anything will ever go
             gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
             gmsh.logger.start() ## I don't know what these logs are, or how to view them
              
@@ -861,7 +861,7 @@ class MeshInfo():
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/100) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/40) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 

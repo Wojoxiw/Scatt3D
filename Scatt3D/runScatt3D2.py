@@ -325,11 +325,13 @@ if __name__ == '__main__':
     
     testPatchPattern(h=1/13, name=f'6GHzpatchPatternTest_deg1_ho{13.0:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=1, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     testPatchPattern(h=1/6, name=f'6GHzpatchPatternTest_order2mesh_ho{6.0:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
+    testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
-    #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_deg1_ho{13.0:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{6.0:.1f}]) ## plot S11 comp. with Feko
+    #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_deg1_ho{13.0:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{6.0:.1f}, f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
     
     #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
-    #cablePortRMSError()
+    #cablePortRMSError(h=1/3.5)
+    #cablePortRMSError(h=1/8)
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')
