@@ -120,10 +120,15 @@ if __name__ == '__main__':
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type=atype, object_geom='', defect_geom='', FF_surface = True, order=degree)
         epsrs=[]
-        epsrs.append(epsr_FR4) ## susbtrate - patch
-        epsrs.append(epsr_FR4) ## substrate under patch
+        #=======================================================================
+        # epsrs.append(epsr_FR4) ## susbtrate - patch
+        # epsrs.append(epsr_FR4) ## substrate under patch
+        # epsrs.append(2.1*(1 - 0.01j))
+        # epsrs.append(2.7*(1 - 0.01j))
+        #=======================================================================
+        epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
+        epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
         epsrs.append(2.1*(1 - 0.01j))
-        epsrs.append(2.7*(1 - 0.01j))
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         if(len(freqs) == 1): ## plot the given frequency, if there is only 1
