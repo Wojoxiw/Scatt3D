@@ -87,7 +87,7 @@ if __name__ == '__main__':
                     continue
                 else:
                     if(comm.rank == model_rank):
-                        print(f'Computing run with angle={angle}:')
+                        print(f'{folder+runName}_angle{angle}output-qs.xdmf not found - Computing run with angle={angle}:')
                 testMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', reference = False, verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
                 prob = scatteringProblem.Scatt3DProblem(comm, testMesh, testMesh, MPInum = MPInum, name = runName+f'_angle{angle}', fem_degree=degree, computeImmediately=False, dutOnRefMesh=False, **prob_settings)
                 prob.compute(computeRef=False, makeOptVects=False)
