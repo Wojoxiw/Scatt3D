@@ -81,13 +81,13 @@ if __name__ == '__main__':
         
         if(dutForSimSolution): ## test-case simulation
             for angle in angles:
-                if(os.path.isfile(folder+runName+f'_angle{angle}'+'output-qs.xdmf')): ## check if the angle has already been run
+                if(os.path.isfile(folder+runName+f'_angle{angle}'+'output.npz')): ## check if the angle has already been run
                     if(comm.rank == model_rank):
                         print(f'Already computed run with {angle=}, skipping...')
                     continue
                 else:
                     if(comm.rank == model_rank):
-                        print(f'{folder+runName}_angle{angle}output-qs.xdmf not found - Computing run with angle={angle}:')
+                        print(f'{folder+runName}_angle{angle}output.npz not found - Computing run with angle={angle}:')
                 testMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', reference = False, verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
                 prob = scatteringProblem.Scatt3DProblem(comm, testMesh, testMesh, MPInum = MPInum, name = runName+f'_angle{angle}', fem_degree=degree, computeImmediately=False, dutOnRefMesh=False, **prob_settings)
                 prob.compute(computeRef=False, makeOptVects=False)
@@ -102,7 +102,7 @@ if __name__ == '__main__':
                     continue
                 else:
                     if(comm.rank == model_rank):
-                        print(f'Computing run with angle={angle}:')
+                        print(f'{folder+runName}_angle{angle}output-qs.xdmf not found - Computing run with angle={angle}:')
                 refMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', reference = True, verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
                 #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
                 #refMesh.plotMeshPartition()
