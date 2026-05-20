@@ -115,10 +115,10 @@ if __name__ == '__main__':
                 prevRuns.memTimeAppend(prob)
         return prob
     
-    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', showPlots=True, epsr_FR4=4.3*(1-.11/4.4j), viewGMSH=False): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', showPlots=True, epsr_FR4=4.3*(1-.11/4.4j), viewGMSH=False, atype='6GHz measurement'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type='6GHz measurement', object_geom='', defect_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type=atype, object_geom='', defect_geom='', FF_surface = True, order=degree)
         epsrs=[]
         epsrs.append(epsr_FR4) ## susbtrate - patch
         epsrs.append(epsr_FR4) ## substrate under patch
@@ -145,7 +145,7 @@ if __name__ == '__main__':
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
              
-            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=sim, linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=sim[21:], linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
             i = i+1
         
         fekof = measFolder+'feko patch S11.dat'
@@ -156,7 +156,10 @@ if __name__ == '__main__':
         for patch in ['1', '2', '3', '4']:
             #measData = np.transpose(np.loadtxt(measFolder+'Patches S11 before holders/'+patch+'.csv', skiprows = 3))
             measData = np.transpose(np.loadtxt(measFolder+'Patch S11s in Holders Individually/'+patch+'.csv', skiprows = 3))
-            plt.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[1]+1j*measData[2])), label='Meas.'+patch, linestyle=':')#, color='tab:green', marker='+', markevery=8, markersize=10)
+            if(patch=='1'):
+                plt.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[1]+1j*measData[2])), label='Measured', linestyle=':')#, color='tab:green', marker='+', markevery=8, markersize=10)
+            else:
+                plt.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[1]+1j*measData[2])), linestyle=':')#, color='tab:green', marker='+', markevery=8, markersize=10)
         
         plt.grid()
         plt.ylabel(r'$|$S$_{11}|$ [dB]')
@@ -327,13 +330,18 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     #testPatchPattern(h=1/4.8, name=f'6GHzpatchPatternTest_ho{4.8:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
-    testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
+    #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
     
-    patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{9.0:.1f}', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
+    #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
     
     #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
-    #cablePortRMSError(h=1/3.5)
-    #cablePortRMSError(h=1/8)
+    #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
+    #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
+    
+    
+    testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(9e9, 11e9, 22), showPlots=False, viewGMSH=False, atype='patchtest')
+    testPatchPattern(h=1/6.0, name=f'10GHzpatchTest_ho{6.0:.1f}', degree=3, freqs = np.linspace(9e9, 11e9, 22), showPlots=False, viewGMSH=False, atype='patchtest')
+    #patchSsPlot([f'10GHzpatchTest_ho{3.5:.1f}', f'10GHzpatchTest_ho{6.0:.1f}'])
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')
