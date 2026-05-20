@@ -134,7 +134,7 @@ if __name__ == '__main__':
             prob.makeOptVectors(justSaveNpz=True)
         prevRuns.memTimeAppend(prob)
     
-    def patchSsPlot(sims): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
+    def patchSsPlot(sims, feko=''): ## Makes a plot of the patch S11 vs the FEKO S11, for some given h/lambdas
         colors = ['tab:blue', 'tab:orange', 'tab:green', 'tab:purple', 'tab:red']
         markers = ['o', 'v', 'o', 'v', 'o']
         i=0
@@ -148,7 +148,10 @@ if __name__ == '__main__':
             plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=sim[21:], linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
             i = i+1
         
-        fekof = measFolder+'feko patch S11.dat'
+        if(feko==''):
+            fekof = measFolder+'feko patch S11.dat'
+        else:
+            fekof = feko
         fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
         plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO', color='tab:purple')#, marker='+', markevery=8, markersize=10)
         
@@ -279,9 +282,11 @@ if __name__ == '__main__':
     #===========================================================================
     
     testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.5 cylinder
-    measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
+    #===========================================================================
+    # measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
+    #===========================================================================
     
     ## try the postprocessing with just sim. stuff:
     angles = [0.0, 40.0, 80.0, 120.0, 160.0]
@@ -337,9 +342,9 @@ if __name__ == '__main__':
     #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
     
     
-    #testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(9e9, 11e9, 22), showPlots=False, viewGMSH=False, atype='patchtest')
-    #testPatchPattern(h=1/6.0, name=f'10GHzpatchTest_ho{6.0:.1f}', degree=3, freqs = np.linspace(9e9, 11e9, 22), showPlots=False, viewGMSH=False, atype='patchtest')
-    #patchSsPlot([f'10GHzpatchTest_ho{3.5:.1f}', f'10GHzpatchTest_ho{6.0:.1f}'])
+    testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
+    testPatchPattern(h=1/8.0, name=f'10GHzpatchTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
+    #patchSsPlot([f'10GHzpatchTest_ho{3.5:.1f}', f'10GHzpatchTest_ho{8.0:.1f}'], feko='TestStuff/FEKO patch S11 lambdaover50.dat')
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')
