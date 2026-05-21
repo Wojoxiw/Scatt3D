@@ -120,15 +120,10 @@ if __name__ == '__main__':
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type=atype, object_geom='', defect_geom='', FF_surface = True, order=degree)
         epsrs=[]
-        #=======================================================================
-        # epsrs.append(epsr_FR4) ## susbtrate - patch
-        # epsrs.append(epsr_FR4) ## substrate under patch
-        # epsrs.append(2.1*(1 - 0.01j))
-        # epsrs.append(2.7*(1 - 0.01j))
-        #=======================================================================
-        epsrs.append(4.4*(1 - .11/4.4j)) ## susbtrate - patch
-        epsrs.append(4.4*(1 - .11/4.4j)) ## substrate under patch
+        epsrs.append(epsr_FR4) ## susbtrate - patch
+        epsrs.append(epsr_FR4) ## substrate under patch
         epsrs.append(2.1*(1 - 0.01j))
+        epsrs.append(2.7*(1 - 0.01j))
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         if(len(freqs) == 1): ## plot the given frequency, if there is only 1
@@ -239,7 +234,7 @@ if __name__ == '__main__':
         
     def cablePortRMSError(h=1/3.5, freqs=np.linspace(6.1e9, 6.4e9, 1)): ## finds the RMS error in phase and magnitude for 10 coaxs using cablePortTest
         coaxs=[[2.1*(1-0.01j), 2.1*(1-1j), 1e-3, 1e-3], [5.1*(1-0.001j), 8.1*(1-0.01j), 4e-3, 2e-3], [2.7*(1-0.01j), 2.1*(1-0.01j), 3e-3, 1e-3], [2.1*(1-0.01j), 12.1*(1-0.01j), 1e-3, 8e-3], [2.1*(1-0.01j), 23.1*(1-0.1j), 7e-3, 3e-3],
-        [1.3*(1-0.01j), 2.1*(1-0.8j), .5e-3, .4e-3], [2.1*(1-0.01j), 8.1*(1-0.01j), 1.1e-3, .1e-3], [2.1*(1-0.01j), 12.1*(1-0.1j), 3e-3, 1e-3], [2.1*(1-0.1j), 2.1*(1-0.01j), 1e-3, 10e-3], [751*(1-0.01j), 76.1*(1-0.01j), 8e-3, 2e-3]]
+        [1.3*(1-0.01j), 2.1*(1-0.8j), .5e-3, .4e-3], [2.1*(1-0.01j), 8.1*(1-0.01j), 1.1e-3, .1e-3], [2.1*(1-0.01j), 12.1*(1-0.1j), 3e-3, 1e-3], [2.1*(1-0.1j), 2.1*(1-0.01j), 1e-3, 10e-3], [75*(1-0.01j), 76.1*(1-0.01j), 8e-3, 2e-3]]
         magErrs = []; phaseErrs = []
         for coax in coaxs:
             print(f'Run with coax: {coax}')
@@ -247,9 +242,9 @@ if __name__ == '__main__':
             magErrs.append( np.abs(np.abs(sim)-np.abs(theory))/np.abs(theory) )
             phaseErrs.append( np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory) )
             
-        print(np.max(magErrs), np.max(np.abs(phaseErrs)))
-        print(np.mean(magErrs), np.mean(phaseErrs))
-        print(np.sqrt(np.mean(np.square(magErrs))), np.sqrt(np.mean(np.square(phaseErrs))))
+        print(f'max. ({h=})',np.max(magErrs), np.max(np.abs(phaseErrs)))
+        print(f'mean ({h=})',np.mean(magErrs), np.mean(phaseErrs))
+        print(f'rms ({h=})',np.sqrt(np.mean(np.square(magErrs))), np.sqrt(np.mean(np.square(phaseErrs))))
         
     ###
     ###
@@ -258,9 +253,8 @@ if __name__ == '__main__':
     
     #runName = f'measurements_init_'
     #runName = f'measurements_init_actuallMeasuredFreqs_'
-    runName = f'measurements_corrected_'
+    runName = f'measurements_corrected_' ## using new FR4 epsr=4.3, accidentally overrode old one
     #runName = f'measurements_corrected_smallmesh_' ## made it to 240 degrees before seeming to time out
-    #runName = f'measurements_corrected_semismallmesh_' ## using new FR4 epsr=4.3
     
     angles = np.arange(0, 360, 40, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
@@ -294,8 +288,8 @@ if __name__ == '__main__':
     #===========================================================================
     
     ## try the postprocessing with just sim. stuff:
-    angles = [0.0, 40.0, 80.0, 120.0, 160.0]
-    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
+    angles = [0.0]
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', maxRefl=1, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
     
     #######
     ### Measurement Stuff
@@ -347,9 +341,10 @@ if __name__ == '__main__':
     #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
     
     
-    testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
-    testPatchPattern(h=1/8.0, name=f'10GHzpatchTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
+    #testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
+    #testPatchPattern(h=1/8.0, name=f'10GHzpatchTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
     #patchSsPlot([f'10GHzpatchTest_ho{3.5:.1f}', f'10GHzpatchTest_ho{8.0:.1f}'], feko='TestStuff/FEKO patch S11 lambdaover50.dat')
+    
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')
