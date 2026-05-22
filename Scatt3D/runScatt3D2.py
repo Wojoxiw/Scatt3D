@@ -241,11 +241,11 @@ if __name__ == '__main__':
             print(f'Run with coax: {coax}')
             sim, theory = cablePortTest(h, coax[0], coax[1], coax[2], coax[3], freqs, prints=False)
             magErrs.append( np.abs(np.abs(sim)-np.abs(theory))/np.abs(theory) )
-            phaseErrs.append( np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory) )
+            phaseErrs.append( np.abs(np.unwrap(np.angle(sim))-np.unwrap(np.angle(theory))) )
             
-        print(f'max. ({h=})',np.max(magErrs), np.max(np.abs(phaseErrs)))
-        print(f'mean ({h=})',np.mean(magErrs), np.mean(phaseErrs))
-        print(f'rms ({h=})',np.sqrt(np.mean(np.square(magErrs))), np.sqrt(np.mean(np.square(phaseErrs))))
+        print(f'max. ({h=})',np.max(magErrs)*100, np.max(np.abs(phaseErrs)*180/pi))
+        print(f'mean ({h=})',np.mean(magErrs)*100, np.mean(phaseErrs)*180/pi)
+        print(f'rms ({h=})',np.sqrt(np.mean(np.square(magErrs)))*100, np.sqrt(np.mean(np.square(phaseErrs)))*180/pi)
         
     ###
     ###
@@ -354,8 +354,8 @@ if __name__ == '__main__':
     #patchSsPlot([f'6GHzpatchShortcoax_ho{3.5:.1f}', f'6GHzpatchShortcoax_ho{8.0:.1f}', f'6GHzpatchLongcoax_ho{3.5:.1f}', f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}']) ## plot S11 comp.
     
     #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
-    #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
-    #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
+    cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
+    cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
     
     
     
