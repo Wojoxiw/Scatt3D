@@ -898,7 +898,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
