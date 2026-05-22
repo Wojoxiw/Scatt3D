@@ -237,7 +237,7 @@ class MeshInfo():
         else:
             self.antenna_radius = antenna_radius
         
-        if(self.antenna_type == '6GHz measurement'): ## use specific angles
+        if(self.antenna_type == '6GHz measurement2'): ## use specific angles
             self.phi_antennas = phi_antennas*pi/180 + np.array([0, 20, 80, 180])*pi/180
         else:
             self.phi_antennas = phi_antennas*pi/180 + np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## evenly-spaced placement angles
@@ -858,13 +858,13 @@ class MeshInfo():
                 ## then mesh fields for the antenna and PEC surfaces:
                 antennaSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(antennaSurfaceField, "SurfacesList", antenna_surfaces)
-                gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VIn", self.h/75) ## this is potentially the most important surface to resolve well
+                gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VIn", self.h/65) ## this is potentially the most important surface to resolve well
                 gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VOut", self.h)
                 meshFields.append(antennaSurfaceField)
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/100) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/50) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 

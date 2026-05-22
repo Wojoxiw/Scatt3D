@@ -770,8 +770,6 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
                 
                     idxOrig = Amesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
             f = h5py.File(problemName+'output-qs.h5', 'r') ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
-            if(indexCount==0): ## only set this once
-                dofs_map = np.array(f['Function']['real_f']['-4']).squeeze()[idxOrig] ## f being the default name of the function as seen in paraview
             
             for nf in range(Nf):
                 for m in range(N_antennas): ## transmitting index
@@ -784,6 +782,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
                                 cellData.interpolate_nonmatching(AcellData, cells, interpolation_data=interpolation_data)
                                 cellData.x.scatter_forward()
                                 A[indexCount,:] = cellData.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                Apart = None
                             else:
                                 Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
                                 A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
@@ -803,7 +802,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
         else:
             #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
             idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
-        A_ap = A[:, np.nonzero(np.real(dofs_map[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
+        A_ap = A[:, idx_ap]#A[:, np.nonzero(np.real(dofs_map[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells, {np.size(idx_ap)} in-object cells')
         print('shape of b:', np.shape(b))
         
