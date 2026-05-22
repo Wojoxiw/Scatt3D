@@ -115,10 +115,10 @@ if __name__ == '__main__':
                 prevRuns.memTimeAppend(prob)
         return prob
     
-    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', showPlots=True, epsr_FR4=4.3*(1-.11/4.4j), viewGMSH=False, atype='6GHz measurement'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', coax_outh=2.5e-3, showPlots=True, epsr_FR4=4.3*(1-.11/4.4j), viewGMSH=False, atype='6GHz measurement'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
-        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type=atype, object_geom='', defect_geom='', FF_surface = True, order=degree)
+        refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, coax_outh=coax_outh, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type=atype, object_geom='', defect_geom='', FF_surface = True, order=degree)
         epsrs=[]
         epsrs.append(epsr_FR4) ## susbtrate - patch
         epsrs.append(epsr_FR4) ## substrate under patch
@@ -230,6 +230,7 @@ if __name__ == '__main__':
             print(f'S11s: Simulated: {sim}, Theoretical: {theory}')
             print(f'Mag/Phase: {np.abs(sim)}/{np.angle(sim)}, {np.abs(theory)}/{np.angle(theory)}')
             print(f'Rel. Diffs: {np.abs(np.abs(theory)-np.abs(sim))/np.abs(theory)}/{np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory)}')
+        print(f'Mag/Phase: {np.abs(sim)}/{np.angle(sim)}, {np.abs(theory)}/{np.angle(theory)}')
         return sim, theory
         
     def cablePortRMSError(h=1/3.5, freqs=np.linspace(6.1e9, 6.4e9, 1)): ## finds the RMS error in phase and magnitude for 10 coaxs using cablePortTest
@@ -290,6 +291,11 @@ if __name__ == '__main__':
     ## try the postprocessing with just sim. stuff:
     angles = [0.0]
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', maxRefl=1, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
+    ## and interpolating onto another mesh
+    rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/5,'order': 1, 'N_antennas': 0, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2} ## uses settings given before those specified here ## settings for the meshMaker
+    #recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', viewGMSH=False, reference = True, verbosity = verbosity, **rec_mesh_settings)
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3], reconstructionMeshInfo=recMesh, maxRefl=1)
+    
     
     #######
     ### Measurement Stuff
@@ -332,18 +338,30 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/3.5, name=f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     #testPatchPattern(h=1/4.8, name=f'6GHzpatchPatternTest_ho{4.8:.1f}', epsr_FR4=4.3*(1-.11/4.4j), degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False)
     
+    #testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
+    #testPatchPattern(h=1/8.0, name=f'10GHzpatchTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
+    #patchSsPlot([f'10GHzpatchTest_ho{3.5:.1f}', f'10GHzpatchTest_ho{8.0:.1f}'], feko='TestStuff/FEKO patch S11 lambdaover50.dat')
+    
     #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
     
     #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
+    
+    testPatchPattern(h=1/3.5, name=f'6GHzpatchShortcoax_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=.2e-3)
+    testPatchPattern(h=1/8, name=f'6GHzpatchShortcoax_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=.2e-3)
+    
+    #===========================================================================
+    # testPatchPattern(h=1/3.5, name=f'6GHzpatchLongcoax_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=20e-3)
+    # testPatchPattern(h=1/8, name=f'6GHzpatchLongcoax_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=20e-3)
+    #===========================================================================
+    
+    patchSsPlot([f'6GHzpatchShortcoax_ho{3.5:.1f}', f'6GHzpatchShortcoax_ho{8.0:.1f}', f'6GHzpatchLongcoax_ho{3.5:.1f}', f'6GHzpatchLongcoax_ho{8.0:.1f}', f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp.
     
     #cablePortTest(h=1/3.5, epsr1=4.1*(1-0j), epsr2=8.1*(1-0.5j), d=3e-3, L=1e-3)
     #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
     #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
     
     
-    #testPatchPattern(h=1/3.5, name=f'10GHzpatchTest_ho{3.5:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
-    #testPatchPattern(h=1/8.0, name=f'10GHzpatchTest_ho{8.0:.1f}', degree=3, freqs = np.linspace(8e9, 12e9, 36), showPlots=False, viewGMSH=False, atype='patchtest')
-    #patchSsPlot([f'10GHzpatchTest_ho{3.5:.1f}', f'10GHzpatchTest_ho{8.0:.1f}'], feko='TestStuff/FEKO patch S11 lambdaover50.dat')
+    
     
     
     if(comm.rank == model_rank):

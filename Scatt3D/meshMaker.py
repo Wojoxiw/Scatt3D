@@ -75,6 +75,7 @@ class MeshInfo():
                  order = 1,
                  justInterpolationSubmesh=False,
                  interpolationSubmeshSize = -1,
+                 coax_outh=2.5e-3,
                  ):
         '''
         Makes it - given various inputs
@@ -118,6 +119,7 @@ class MeshInfo():
         :param order: Order of the mesh elements - have to switch from xdmf to vtx or vtk when going above 2? They don't work straightforwardly
         :param justInterpolationSubmesh: If True, only returns the interpolation submesh consisting of the material only
         :param interpolationSubmeshSize: If < 0, uses regular mesh size (h). Otherwise, uses specified value.
+        :param coax_outh: Length the coax cable extends from the substrate
         '''
         
         self.comm = comm                               # MPI communicator
@@ -206,7 +208,8 @@ class MeshInfo():
             self.patch_width = 17.3e-3
             self.antenna_width = 19.0e-3 ## the width
             self.antenna_depth = 21.4e-3 ## the length (in x)
-            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = 2.5e-3 ## coaxial inner and outer radii, and the height it extends beyond the substrate
+            self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = coax_outh ## coaxial inner and outer radii, and the height it extends beyond the substrate
+            self.coax_outh2 = 1e-3 ## the section removed from the mesh
             self.feed_offset = -4.72e-3 ## it is placed upward along the z-axis
             
             ##the 3-D printed holder sections, which stick out partially in front of the patch
@@ -234,7 +237,7 @@ class MeshInfo():
         else:
             self.antenna_radius = antenna_radius
         
-        if(self.antenna_type == '6GHz measurement1'): ## use specific angles
+        if(self.antenna_type == '6GHz measurement'): ## use specific angles
             self.phi_antennas = phi_antennas*pi/180 + np.array([0, 20, 80, 180])*pi/180
         else:
             self.phi_antennas = phi_antennas*pi/180 + np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## evenly-spaced placement angles
@@ -353,7 +356,7 @@ class MeshInfo():
                     
                     coax_outer = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh, self.coax_outr)
                     coax_inner = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh,0,0,self.coax_outh+self.antenna_height, self.coax_inr)
-                    coax_under = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh*2,0,0,self.coax_outh, self.coax_outr)
+                    coax_under = gmsh.model.occ.addCylinder(self.feed_offset,0,-self.antenna_height/2-self.coax_outh-self.coax_outh2,0,0,self.coax_outh2, self.coax_outr)
                     ## subtract the outer coax from the box, then the inner coax from the outer
                     box = gmsh.model.occ.cut([(self.tdim, box)], [(self.tdim, coax_outer)], removeTool=False)[0][0][1]
                     coax_outer = gmsh.model.occ.cut([(self.tdim, coax_outer)], [(self.tdim, coax_inner)], removeTool=False)[0][0][1]
@@ -374,7 +377,7 @@ class MeshInfo():
                     patchholder = gmsh.model.occ.cut([(self.tdim, patchholder)], [(self.tdim, patch), (self.tdim, box)], removeTool=False)[0][0][1]
                     #gmsh.model.occ.remove([(self.tdim, topCutout), (self.tdim, bottomCutout), (self.tdim, circleCut)]) ## remove the other cutters
                     
-                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh*2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
+                    boundingBox  = gmsh.model.occ.addBox(-self.antenna_depth/2-self.bb/2, -self.antenna_width/2-self.bb/2, -self.antenna_height/2-self.coax_outh-self.coax_outh2-self.bb/2, self.antenna_depth+self.bb, self.antenna_width+self.bb, self.antenna_height+self.coax_outh+self.coax_outh2+self.bb) ## try a box of domain around each antenna to break up the mesh, with the goal of increasing mesh size away from antennas
                     
                     itemsToRotate = [(self.tdim, box), (self.tdim, patch), (self.tdim, coax_outer), (self.tdim, coax_inner), (self.tdim, coax_under), (self.tdim, boundingBox), (self.tdim, patchholder)]
                     gmsh.model.occ.rotate(itemsToRotate, 0, 0, 0, 0, 1, 0, pi/2) ## rotate to be z-polarized
@@ -409,8 +412,8 @@ class MeshInfo():
                     x_pec[n, 4] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh/2] ## outer coax cylinder
                     x_pec[n, 5] = [self.feed_offset, self.coax_inr, -self.antenna_height/2-self.coax_outh/2] ## inner coax cylinder
                     x_pec[n, 6] = [self.feed_offset, self.coax_inr, -self.antenna_height/3] ## inner coax cylinder - part that's inside the substrate
-                    x_pec[n, 7] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh*1.5] ## under coax cylinder
-                    x_pec[n, 8] = [self.feed_offset, 0, -self.antenna_height/2-self.coax_outh*2] ## under coax face
+                    x_pec[n, 7] = [self.feed_offset, self.coax_outr, -self.antenna_height/2-self.coax_outh-self.coax_outh2/2] ## under coax cylinder
+                    x_pec[n, 8] = [self.feed_offset, 0, -self.antenna_height/2-self.coax_outh-self.coax_outh2] ## under coax face
                     
                     ## append the points, corrected for the position+rotation of the antenna
                     antennaSurfacePts.append(self.pos_antennas[n] + np.dot(totalRot, x_antenna[n])) ## the antenna port surface
@@ -820,7 +823,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[0])
                     else:
                         epsr = np.real(self.material_epsrs[n])
-                    sf = max(1.5, np.sqrt(epsr)) ## just so the material is always relatively well resolved
+                    sf = max(1.8, np.sqrt(epsr)) ## just so the material is always relatively well resolved
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [matDimTags[n][1]])
@@ -855,19 +858,19 @@ class MeshInfo():
                 ## then mesh fields for the antenna and PEC surfaces:
                 antennaSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(antennaSurfaceField, "SurfacesList", antenna_surfaces)
-                gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VIn", self.h/25) ## this is potentially the most important surface to resolve well
+                gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VIn", self.h/75) ## this is potentially the most important surface to resolve well
                 gmsh.model.mesh.field.setNumber(antennaSurfaceField, "VOut", self.h)
                 meshFields.append(antennaSurfaceField)
                 
                 smallMeshSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(smallMeshSurfaceField, "SurfacesList", smallMesh_surfaces)
-                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/40) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
+                gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VIn", self.h/100) ## this is potentially the most important surface/volume to resolve well - just the inner coax feed for the patch antenna, currently
                 gmsh.model.mesh.field.setNumber(smallMeshSurfaceField, "VOut", self.h)
                 meshFields.append(smallMeshSurfaceField)
                 
                 PECSurfaceField = gmsh.model.mesh.field.add("Constant")
                 gmsh.model.mesh.field.setNumbers(PECSurfaceField, "SurfacesList", PEC_surfaces)
-                gmsh.model.mesh.field.setNumber(PECSurfaceField, "VIn", self.h/2.5) ## this is probably an important surface to resolve well
+                gmsh.model.mesh.field.setNumber(PECSurfaceField, "VIn", self.h/3) ## this is probably an important surface to resolve well
                 gmsh.model.mesh.field.setNumber(PECSurfaceField, "VOut", self.h)
                 meshFields.append(PECSurfaceField)
                 
