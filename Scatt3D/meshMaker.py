@@ -237,7 +237,7 @@ class MeshInfo():
         else:
             self.antenna_radius = antenna_radius
         
-        if(self.antenna_type == '6GHz measurement2'): ## use specific angles
+        if(self.antenna_type == '6GHz measurement'): ## use specific angles
             self.phi_antennas = phi_antennas*pi/180 + np.array([0, 20, 80, 180])*pi/180
         else:
             self.phi_antennas = phi_antennas*pi/180 + np.linspace(0, 2*pi, N_antennas + 1)[:-1] ## evenly-spaced placement angles

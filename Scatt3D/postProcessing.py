@@ -707,7 +707,10 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
             epsr_dut = rec_cellData.x.array[:].copy()
             
             cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
-            cellData = dolfinx.fem.Function(rec_WSpace)
+            print(np.shape(cellData.x.array[:]))
+            cellData = dolfinx.fem.Function(rec_WSpace) ## so later uses of cellData should use the rec space
+            print(np.shape(cellData.x.array[:]))
+            exit()
             idx_non_pml = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be no PML in the reconstruction mesh
         else:
             idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
