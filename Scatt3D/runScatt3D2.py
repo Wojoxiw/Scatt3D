@@ -226,11 +226,10 @@ if __name__ == '__main__':
         Z2 = eta0/np.sqrt(epsr2)/(2*pi)*np.log(refMesh.coax_outr/refMesh.coax_inr)
         theory = ((-1 + Z2/Z1*1j*np.tan(k2*d)) / (1 + Z2/Z1*1j*np.tan(k2*d)))*np.exp(-2j*k1*L)
         sim = prob.S_ref.flatten()
-        if(prints):
+        if(prints and comm.rank == model_rank):
             print(f'S11s: Simulated: {sim}, Theoretical: {theory}')
             print(f'Mag/Phase: {np.abs(sim)}/{np.angle(sim)}, {np.abs(theory)}/{np.angle(theory)}')
             print(f'Rel. Diffs: {np.abs(np.abs(theory)-np.abs(sim))/np.abs(theory)}/{np.abs(np.angle(sim)-np.angle(theory))/np.angle(theory)}')
-        print(f'Mag/Phase: {np.abs(sim)}/{np.angle(sim)}, {np.abs(theory)}/{np.angle(theory)}')
         return sim, theory
         
     def cablePortRMSError(h=1/3.5, freqs=np.linspace(6.1e9, 6.4e9, 1)): ## finds the RMS error in phase and magnitude for 10 coaxs using cablePortTest
@@ -238,14 +237,16 @@ if __name__ == '__main__':
         [1.3*(1-0.01j), 2.1*(1-0.8j), .5e-3, .4e-3], [2.1*(1-0.01j), 8.1*(1-0.01j), 1.1e-3, .1e-3], [2.1*(1-0.01j), 12.1*(1-0.1j), 3e-3, 1e-3], [2.1*(1-0.1j), 2.1*(1-0.01j), 1e-3, 10e-3], [75*(1-0.01j), 76.1*(1-0.01j), 8e-3, 2e-3]]
         magErrs = []; phaseErrs = []
         for coax in coaxs:
-            print(f'Run with coax: {coax}')
+            if(comm.rank == model_rank):
+                print(f'Run with coax: {coax}')
             sim, theory = cablePortTest(h, coax[0], coax[1], coax[2], coax[3], freqs, prints=False)
             magErrs.append( np.abs(np.abs(sim)-np.abs(theory))/np.abs(theory) )
             phaseErrs.append( np.abs(np.unwrap(np.angle(sim))-np.unwrap(np.angle(theory))) )
-            
-        print(f'max. ({h=})',np.max(magErrs)*100, np.max(np.abs(phaseErrs)*180/pi))
-        print(f'mean ({h=})',np.mean(magErrs)*100, np.mean(phaseErrs)*180/pi)
-        print(f'rms ({h=})',np.sqrt(np.mean(np.square(magErrs)))*100, np.sqrt(np.mean(np.square(phaseErrs)))*180/pi)
+        
+        if(comm.rank == model_rank):
+            print(f'max. ({h=})',np.max(magErrs)*100, np.max(np.abs(phaseErrs)*180/pi))
+            print(f'mean ({h=})',np.mean(magErrs)*100, np.mean(phaseErrs)*180/pi)
+            print(f'rms ({h=})',np.sqrt(np.mean(np.square(magErrs)))*100, np.sqrt(np.mean(np.square(phaseErrs)))*180/pi)
         
     ###
     ###
