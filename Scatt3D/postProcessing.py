@@ -707,10 +707,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
             epsr_dut = rec_cellData.x.array[:].copy()
             
             cell_volumes = dolfinx.fem.assemble_vector(dolfinx.fem.form(ufl.conj(ufl.TestFunction(rec_WSpace))*ufl.dx)).array
-            print(np.shape(cellData.x.array[:]))
             cellData = dolfinx.fem.Function(rec_WSpace) ## so later uses of cellData should use the rec space
-            print(np.shape(cellData.x.array[:]))
-            exit()
             idx_non_pml = np.nonzero(np.abs(dofs_map) > -1)[0] ## should be no PML in the reconstruction mesh
         else:
             idx_non_pml = np.nonzero(np.real(dofs_map) > -1)[0] ## PML cells should have a value of -1 - can use everything else as the indices for non a-priori reconstructions
@@ -766,10 +763,10 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
                     Amesh = f.read_mesh() ## for the part of the A-matrix being read now
                     AWSpace = dolfinx.fem.functionspace(Amesh, ('DG', 0))
                     AcellData = dolfinx.fem.Function(AWSpace)
-                    mesh_cell_map = mesh.topology.index_map(Amesh.topology.dim)
+                    mesh_cell_map = reconstructionMeshInfo.mesh.topology.index_map(reconstructionMeshInfo.mesh.topology.dim)
                     num_cells_on_proc = mesh_cell_map.size_local + mesh_cell_map.num_ghosts
                     cells = np.arange(num_cells_on_proc, dtype=np.int32)
-                    interpolation_data = dolfinx.fem.create_interpolation_data(WSpace, AWSpace, cells, padding=1e-10)
+                    interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, AWSpace, cells, padding=1e-10)
                 
                     idxOrig = Amesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
             f = h5py.File(problemName+'output-qs.h5', 'r') ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)

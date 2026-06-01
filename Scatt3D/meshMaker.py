@@ -64,6 +64,7 @@ class MeshInfo():
                  object_offset = np.array([0, 0, 0]),
                  object_angles = np.array([0, 0, 0]),
                  material_epsrs = [3],
+                 antenna_epsrs = [3],
                  defect_epsrs = [],
                  defect_radius = 0,
                  defect_height = 0,
@@ -108,6 +109,7 @@ class MeshInfo():
         :param object_offset: The object is shifted this far (in wavelengths)
         :param object_angles: [x, y, z] angles to rotate about these axes
         :param material_epsrs: Relative permittivities for the object - used to scale mesh size by local wavelength. If only one is given, use that one for all objects
+        :param antenna_epsrs: Relative permittivities for the antenna materials - used to scale mesh size by local wavelength. If only one is given, use that one for all objects
         :param defect_epsrs: As above, but for defects (should just use the same as material - this is only used for mesh-size scaling). If not given, use the last 'object_epsr' for all.
         :param defect_radius: If defect is a sphere (or cylinder), the radius. If not given, uses half the object radius
         :param defect_height: If defect is a cylinder, the height. If not given, uses half the object radius
@@ -289,6 +291,7 @@ class MeshInfo():
         self.defect_geom = defect_geom
         
         self.material_epsrs = material_epsrs
+        self.antenna_epsrs = antenna_epsrs
         self.defect_epsrs = defect_epsrs
         
         self.interpolationSubmeshSize = interpolationSubmeshSize * self.lambda0
@@ -307,9 +310,16 @@ class MeshInfo():
             gmsh.model.add('The Model') ## name for the whole thing
             ## Give some mesh settings: verbosity, max. and min. mesh lengths
             gmsh.option.setNumber('General.Verbosity', self.verbosity)
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/1000) ## presumably lower than anything will ever go
-            gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0) ## presumably larger than anything will ever go
-            gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
+            if(self.justInterpolationSubmesh):
+                size = self.interpolationSubmeshSize
+                if(size < 0):
+                    size = self.h
+                gmsh.option.setNumber("Mesh.CharacteristicLengthMin", size) ## just use a uniform mesh size
+                gmsh.option.setNumber("Mesh.CharacteristicLengthMax", size)
+            else:
+                gmsh.option.setNumber("Mesh.CharacteristicLengthMin", self.lambda0/1000) ## presumably lower than anything will ever go
+                gmsh.option.setNumber("Mesh.CharacteristicLengthMax", self.lambda0) ## presumably larger than anything will ever go
+                gmsh.option.setNumber("Mesh.HighOrderOptimize", 2)
             gmsh.logger.start() ## I don't know what these logs are, or how to view them
              
             PECSurfacePts = []; ## points that are on only PEC surfaces
@@ -832,9 +842,9 @@ class MeshInfo():
                 for n in np.arange(nAntmats):
                     antennaDielectricMeshField = gmsh.model.mesh.field.add("Constant")
                     if(len(self.material_epsrs) == 1):
-                        epsr = np.real(self.material_epsrs[0])
+                        epsr = np.real(self.antenna_epsrs[0])
                     else:
-                        epsr = np.real(self.material_epsrs[n])
+                        epsr = np.real(self.antenna_epsrs[n])
                     sf = max(2.5, np.sqrt(epsr)) ## antenna volume is probably more important than the objects
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VOut", self.h)
@@ -849,7 +859,7 @@ class MeshInfo():
                         epsr = np.real(self.material_epsrs[-1])
                     else:
                         epsr = np.real(self.defect_epsrs[n])
-                    sf = max(1.5, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
+                    sf = max(2.5, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
                     gmsh.model.mesh.field.setNumber(defectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(defectMeshField, 'VolumesList', [defectDimTags[n][1]])
@@ -943,11 +953,6 @@ class MeshInfo():
                 mat_markers = [gmsh.model.addPhysicalGroup(3, [vol])] ## need some physical group, even if this gives a warning
                 gmsh.model.geo.synchronize()
                 
-                size = self.interpolationSubmeshSize
-                if(size < 0):
-                    size = self.h
-                gmsh.option.setNumber("Mesh.CharacteristicLengthMin", size) ## just use a uniform mesh size
-                gmsh.option.setNumber("Mesh.CharacteristicLengthMax", size)
                 gmsh.model.mesh.generate(self.tdim)
             
             if(viewGMSH):
