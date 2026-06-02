@@ -158,7 +158,8 @@ if __name__ == '__main__':
         
         for patch in ['1', '2', '3', '4']:
             #measData = np.transpose(np.loadtxt(measFolder+'Patches S11 before holders/'+patch+'.csv', skiprows = 3))
-            measData = np.transpose(np.loadtxt(measFolder+'Patch S11s in Holders Individually/'+patch+'.csv', skiprows = 3))
+            #measData = np.transpose(np.loadtxt(measFolder+'Patch S11s in Holders Individually/'+patch+'.csv', skiprows = 3))
+            measData = np.transpose(np.loadtxt(measFolder+'Patch S11s individually/'+patch+'.csv', skiprows = 3))
             if(patch=='1'):
                 plt.plot(measData[0]/1e9, 20*np.log10(np.abs(measData[1]+1j*measData[2])), label='Measured', linestyle=':')#, color='tab:green', marker='+', markevery=8, markersize=10)
             else:
@@ -323,7 +324,7 @@ if __name__ == '__main__':
     ## empty vs ref
     measfnames = [f'{measFolder}emptysetup/', f'{measFolder}solidPOMblock/']
     simfnames = [f'{folder}measurements_noobject_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected__angle{Ssangle:.1f}output.npz']
-    postProcessing.measCompareSs(simfnames, measfnames, diffs=False, angle=Ssangle)
+    #postProcessing.measCompareSs(simfnames, measfnames, diffs=False, angle=Ssangle)
     
     angles = [0.0, 40.0, 80.0, 120.0, 160.0, 200.0]#np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
     frequenciesToUse=[]#[i for i in np.arange(20) if i%2==0]
@@ -353,7 +354,7 @@ if __name__ == '__main__':
     # testPatchPattern(h=1/8, name=f'6GHzpatchShortcoax_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=.2e-3)
     # testPatchPattern(h=1/3.5, name=f'6GHzpatchLongcoax_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=20e-3)
     #===========================================================================
-    #patchSsPlot([f'6GHzpatchShortcoax_ho{3.5:.1f}', f'6GHzpatchShortcoax_ho{8.0:.1f}', f'6GHzpatchLongcoax_ho{3.5:.1f}', f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}']) ## plot S11 comp.
+    patchSsPlot([f'6GHzpatchShortcoax_ho{3.5:.1f}', f'6GHzpatchShortcoax_ho{8.0:.1f}', f'6GHzpatchLongcoax_ho{3.5:.1f}', f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}']) ## plot S11 comp.
     
     #cablePortTest(h=1/3.5, epsr1=141.1*(1-1.2j), epsr2=81.1*(1-1.5j), d=3e-3, L=1e-3)
     #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
