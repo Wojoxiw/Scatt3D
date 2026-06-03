@@ -73,8 +73,8 @@ if __name__ == '__main__':
         
         epsrs=[]
         for n in range(mesh_settings['N_antennas']): ## each patch has 3 dielectric zones
-            epsrs.append(4.3*(1 - .11/4.4j)) ## box
-            epsrs.append(4.3*(1 - .11/4.4j)) ## patch
+            epsrs.append(4.3*(1 - .11/4.4*1j)) ## box
+            epsrs.append(4.3*(1 - .11/4.4*1j)) ## patch
             epsrs.append(2.1*(1 - 0.01j)) ## coax dielectric
             epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder - guess of permittivity
         prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
@@ -115,7 +115,7 @@ if __name__ == '__main__':
                 prevRuns.memTimeAppend(prob)
         return prob
     
-    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', coax_outh=2.5e-3, showPlots=True, epsr_FR4=4.3*(1-.11/4.4j), viewGMSH=False, atype='6GHz measurement'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
+    def testPatchPattern(h = 1/3.5, degree=3, freqs = np.array([6e9]), name='6GHzpatchPatternTest', coax_outh=2.5e-3, showPlots=True, epsr_FR4=4.3*(1-.11/4.4*1j), viewGMSH=False, atype='6GHz measurement'): ## run a spherical domain and object, test the far-field pattern from a single patch antenna near the center
         runName = name
         prevRuns = memTimeEstimation.runTimesMems(folder, comm, filename = filename)
         refMesh = meshMaker.MeshInfo(comm, reference = True, viewGMSH = viewGMSH, verbosity = verbosity, N_antennas=1, coax_outh=coax_outh, domain_radius=1.6, PML_thickness=0.5, h=h, domain_geom='sphere', antenna_radius=0, antenna_type=atype, object_geom='', defect_geom='', FF_surface = True, order=degree)
@@ -349,12 +349,10 @@ if __name__ == '__main__':
     
     #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
     
-    #===========================================================================
-    # testPatchPattern(h=1/3.5, name=f'6GHzpatchShortcoax_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=.2e-3)
-    # testPatchPattern(h=1/8, name=f'6GHzpatchShortcoax_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=.2e-3)
-    # testPatchPattern(h=1/3.5, name=f'6GHzpatchLongcoax_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False, coax_outh=20e-3)
-    #===========================================================================
-    patchSsPlot([f'6GHzpatchShortcoax_ho{3.5:.1f}', f'6GHzpatchShortcoax_ho{8.0:.1f}', f'6GHzpatchLongcoax_ho{3.5:.1f}', f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}']) ## plot S11 comp.
+    testPatchPattern(h=1/3.5, name=f'6GHzpatchnewnew_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
+    testPatchPattern(h=1/8, name=f'6GHzpatchnewnew_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
+    
+    #patchSsPlot([f'6GHzpatchnewnew_ho{3.5:.1f}', f'6GHzpatchnewnew_ho{8.0:.1f}']) ## plot S11 comp.
     
     #cablePortTest(h=1/3.5, epsr1=141.1*(1-1.2j), epsr2=81.1*(1-1.5j), d=3e-3, L=1e-3)
     #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))

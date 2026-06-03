@@ -396,18 +396,21 @@ class Scatt3DProblem():
             pml_coords = ufl.as_vector((x_pml, y_pml, z_pml))
             FEMm.epsr_pml, FEMm.murinv_pml = pml_epsr_murinv(pml_coords)
     
-    def saveSol(self, sol, ref, mesh, freq, excitation):
+    def saveSol(self, sol, ref, mesh, freq, excitation, saveS):
         '''
         Saves the solution to an xdmf file - since keeping them all in memory is too much. Save on input mesh, so it can be loaded it later in the run.
+        :param sol: Function to save
         :param ref: Whether it is reference or not
         :param mesh: The mesh to save solutions on. The functions should always be defined on the same mesh, for one file
         :param freq: Frequency-index of the solution
         :param excitation: Excitation (antenna) -index of the solution
+        :param saveS: Partial (or maybe complete) S-parameter to be saved
         '''
         if(ref):
             nameAdd = 'Ref'
         else:
             nameAdd = 'Dut'
+        np.savez(self.dataFolder+self.name+nameAdd+'_temp_S.npz', saveS=saveS) ## also save current S-params
         fname = self.dataFolder+self.name+nameAdd+'.Solutions'
         
         if(hasattr(self, fname)): ## if this already exists, mesh should be written already
@@ -426,7 +429,12 @@ class Scatt3DProblem():
                 WFun.x.array[:] = self.FEMmesh_ref.epsr_array_ref
             adios4dolfinx.write_function(fname, WFun, time=0, name=f'{nameAdd}_epsr') ## also save the epsr, for interpolation mesh reasons
         
+        if(not adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{excitation}_freq{freq}') is []): ## it returns [] if there are no timestamps
+            print(adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{excitation}_freq{freq}') == [])
+        
         adios4dolfinx.write_function(fname, sol, time=0, name=f'{nameAdd}_excitation{excitation}_freq{freq}')
+        
+        print(adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{excitation}_freq{freq}'))
         
     def readSol(self, fun, ref, freq, excitation, special=None):
         '''
@@ -478,14 +486,16 @@ class Scatt3DProblem():
             
     def deleteSol(self, ref=0):
         '''
-        Deletes saved E-fields, since they take up a lot of space
+        Deletes saved E-fields, since they take up a lot of space. Also deletes the saved S_ref or S_dut to remove file clutter.
         :param ref: If 1, deletes ref fields. If 2, deletes dut fields. If 0, deletes both.
         '''
         if(self.comm.rank == self.model_rank): ## presumably it's fine to just delete with 1 process
             if(ref==0 or ref==1):
                 shutil.rmtree(self.dataFolder+self.name+'Ref.Solutions', ignore_errors=True) ## ignore errors if one of these doesn't exist
+                shutil.rmtree(self.dataFolder+self.name+'Ref_temp_S.npz', ignore_errors=True)
             if(ref==0 or ref==2):
                 shutil.rmtree(self.dataFolder+self.name+'Dut.Solutions', ignore_errors=True)
+                shutil.rmtree(self.dataFolder+self.name+'Dut_temp_S.npz', ignore_errors=True)
             
             
     #@profile
@@ -926,6 +936,10 @@ class Scatt3DProblem():
             Computes the fields. There are two cases: one with antennas, and one without (PW excitation)
             Returns solutions, a list of Es for each frequency and exciting antenna, and S (0 if no antennas), a list of S-parameters for each frequency, exciting antenna, and receiving antenna
             '''
+            if(ref):
+                nameAdd = 'Ref'
+            else:
+                nameAdd = 'Dut'
             S = np.zeros((self.Nf, meshInfo.N_antennas, meshInfo.N_antennas), dtype=complex)
             for nf in range(self.Nf):
                 if( (self.verbosity > 1.9 and self.comm.rank == self.model_rank) or (self.verbosity > 2.5) ):
@@ -946,7 +960,14 @@ class Scatt3DProblem():
                         a[m].value = 0.0
                     a[n].value = 1.0
                     top8 = timer() ## solve starting time
-                    E_h = problem.solve()
+                    if(adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{n}_freq{nf}') is []): ## it returns [] if there are no timestamps
+                        E_h = problem.solve()
+                    else:
+                        S = None
+                        if( self.comm.rank == self.model_rank ):
+                            print( f'{nameAdd}_excitation{n}_freq{nf} found: skipping computation.')
+                            S = np.load(self.dataFolder+self.name+nameAdd+'_temp_S.npz')['saveS']
+                        continue
                     NaNfound=False
                     if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results. Sometimes another error will give Inf. results
                         if( self.comm.rank == self.model_rank ):
@@ -956,9 +977,9 @@ class Scatt3DProblem():
                         NaNfound=True
                     NaNs = self.comm.allgather(NaNfound)
                     if(np.any(NaNs)):
-                        ## if NaN, try one more time since it seems to somewhat randomly fail
+                        ## if NaN, try one more time since it seems to somewhat randomly fail. This never seems to help
                         E_h = problem.solve()
-                        if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results. Sometimes another error will give Inf. results
+                        if(np.isnan(np.dot(E_h.x.array, E_h.x.array))):
                             if( self.comm.rank == self.model_rank ):
                                 print('NaN result found again - possibly due to exceeding memory limitations. Exiting...')
                             exit()
@@ -983,7 +1004,7 @@ class Scatt3DProblem():
                         self.saveEFieldsForAnim(E_h, n, self.fvec[nf], ref=True)
                     elif(nf in self.E_anim_freqs and self.E_dut_anim and not ref): ## just save for the central frequency
                         self.saveEFieldsForAnim(E_h, n, self.fvec[nf], ref=False)
-                    self.saveSol(E_h, ref, FEMm.meshInfo.mesh, nf, n)
+                    self.saveSol(E_h, ref, FEMm.meshInfo.mesh, nf, n, saveS=S)
                     if(nf==0 and n==0 or self.verbosity > 2): ## after the first solve, give some info
                         mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
                         mems = self.comm.gather(mem_usage, root=self.model_rank)
