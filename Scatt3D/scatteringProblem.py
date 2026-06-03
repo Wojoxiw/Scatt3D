@@ -429,12 +429,7 @@ class Scatt3DProblem():
                 WFun.x.array[:] = self.FEMmesh_ref.epsr_array_ref
             adios4dolfinx.write_function(fname, WFun, time=0, name=f'{nameAdd}_epsr') ## also save the epsr, for interpolation mesh reasons
         
-        if(not adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{excitation}_freq{freq}') is []): ## it returns [] if there are no timestamps
-            print(adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{excitation}_freq{freq}') == [])
-        
         adios4dolfinx.write_function(fname, sol, time=0, name=f'{nameAdd}_excitation{excitation}_freq{freq}')
-        
-        print(adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{excitation}_freq{freq}'))
         
     def readSol(self, fun, ref, freq, excitation, special=None):
         '''
@@ -960,14 +955,16 @@ class Scatt3DProblem():
                         a[m].value = 0.0
                     a[n].value = 1.0
                     top8 = timer() ## solve starting time
-                    if(adios4dolfinx.read_timestamps(fname, self.comm, f'{nameAdd}_excitation{n}_freq{nf}') is []): ## it returns [] if there are no timestamps
-                        E_h = problem.solve()
-                    else:
-                        S = None
-                        if( self.comm.rank == self.model_rank ):
-                            print( f'{nameAdd}_excitation{n}_freq{nf} found: skipping computation.')
-                            S = np.load(self.dataFolder+self.name+nameAdd+'_temp_S.npz')['saveS']
-                        continue
+                    if(os.path.isfile(self.dataFolder+self.name+nameAdd+'.Solutions/data.0')):
+                        if(len(adios4dolfinx.read_timestamps(self.dataFolder+self.name+nameAdd+'.Solutions', self.comm, f'{nameAdd}_excitation{n}_freq{nf}')) == 1): ## it returns [] if there are no timestamps
+                            setattr(self, self.dataFolder+self.name+nameAdd+'.Solutions', True)
+                            S = None
+                            if( self.comm.rank == self.model_rank ):
+                                print( f'{nameAdd}_excitation{n}_freq{nf} found: skipping computation.')
+                                S = np.load(self.dataFolder+self.name+nameAdd+'_temp_S.npz')['saveS']
+                            S = self.comm.bcast(S, root=self.model_rank)
+                            continue
+                    E_h = problem.solve()
                     NaNfound=False
                     if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results. Sometimes another error will give Inf. results
                         if( self.comm.rank == self.model_rank ):
