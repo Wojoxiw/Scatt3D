@@ -349,10 +349,10 @@ if __name__ == '__main__':
     
     #patchSsPlot([f'6GHzpatchPatternTest_largerdomain_ho{5.0:.1f}_epsr4.3', f'6GHzpatchPatternTest_ho{8.0:.1f}', f'6GHzpatchPatternTest_ho{4.8:.1f}', f'6GHzpatchPatternTest_order2mesh_ho{3.5:.1f}']) ## plot S11 comp. with Feko
     
-    testPatchPattern(h=1/3.5, name=f'6GHzpatchnewnew_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
-    testPatchPattern(h=1/8, name=f'6GHzpatchnewnew_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
+    #testPatchPattern(h=1/3.5, name=f'6GHzpatchnewnew_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
+    #testPatchPattern(h=1/8, name=f'6GHzpatchnewnew_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
     
-    #patchSsPlot([f'6GHzpatchnewnew_ho{3.5:.1f}', f'6GHzpatchnewnew_ho{8.0:.1f}']) ## plot S11 comp.
+    patchSsPlot([f'6GHzpatchnewnew_ho{3.5:.1f}', f'6GHzpatchnewnew_ho{8.0:.1f}']) ## plot S11 comp.
     
     #cablePortTest(h=1/3.5, epsr1=141.1*(1-1.2j), epsr2=81.1*(1-1.5j), d=3e-3, L=1e-3)
     #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
