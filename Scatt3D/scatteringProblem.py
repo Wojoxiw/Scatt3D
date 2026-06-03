@@ -979,7 +979,7 @@ class Scatt3DProblem():
                         if(np.isnan(np.dot(E_h.x.array, E_h.x.array))):
                             if( self.comm.rank == self.model_rank ):
                                 print('NaN result found again - possibly due to exceeding memory limitations. Exiting...')
-                            exit()
+                            raise ValueError('NaN result found again - possibly due to exceeding memory limitations. Exiting...')
                     for m in range(meshInfo.N_antennas):
                         factor = dolfinx.fem.assemble.assemble_scalar(dolfinx.fem.form(2*ufl.sqrt(Zm)*ufl.inner(ufl.cross(Ep, nvec), ufl.cross(Ep, nvec))*FEMm.ds_antennas[m]))
                         factors = self.comm.gather(factor, root=self.model_rank)
