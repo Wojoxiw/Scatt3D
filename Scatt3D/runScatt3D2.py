@@ -78,7 +78,6 @@ if __name__ == '__main__':
             epsrs.append(2.1*(1 - 0.01j)) ## coax dielectric
             epsrs.append(2.7*(1 - 0.01j)) ## PLA printed holder - guess of permittivity
         prob_settings = prob_settings | {'antenna_mat_epsrs': epsrs}
-        
         if(dutForSimSolution): ## test-case simulation
             for angle in angles:
                 if(os.path.isfile(folder+runName+f'_angle{angle}'+'output.npz')): ## check if the angle has already been run
@@ -257,18 +256,17 @@ if __name__ == '__main__':
     
     #runName = f'measurements_init_'
     #runName = f'measurements_init_actuallMeasuredFreqs_'
-    runName = f'measurements_corrected_' ## using new FR4 epsr=4.3, accidentally overrode old one
+    #runName = f'measurements_corrected_' ## using new FR4 epsr=4.3, accidentally overrode old one
     #runName = f'measurements_corrected_smallmesh_' ## made it to 240 degrees before seeming to time out
+    runName = f'meas_newnew'
     
-    angles = np.arange(0, 360, 40, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
+    angles = np.arange(0, 360, 400, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
-    #===========================================================================
-    # measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
-    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
-    #===========================================================================
+    measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     testrunName = f'measurements_noobject'
     #===========================================================================
@@ -284,15 +282,14 @@ if __name__ == '__main__':
     #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [1.0 - .0j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     #===========================================================================
     
-    #testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.5 cylinder
-    #===========================================================================
-    # measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
-    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
-    #===========================================================================
+    testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.5 cylinder
+    measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
     
     ## try the postprocessing with just sim. stuff:
     #angles = [0.0]
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', plotSs=True, maxRefl=1, solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', maxRefl=1, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
     ## and interpolating onto another mesh
     rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10,'order': 1, 'N_antennas': 0, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2} ## uses settings given before those specified here ## settings for the meshMaker
@@ -352,7 +349,7 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/3.5, name=f'6GHzpatchnewnew_ho{3.5:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
     #testPatchPattern(h=1/8, name=f'6GHzpatchnewnew_ho{8.0:.1f}', degree=3, freqs = np.linspace(5.4e9, 6.6e9, 22), showPlots=False, viewGMSH=False)
     
-    patchSsPlot([f'6GHzpatchnewnew_ho{3.5:.1f}', f'6GHzpatchnewnew_ho{8.0:.1f}']) ## plot S11 comp.
+    #patchSsPlot([f'6GHzpatchnewnew_ho{3.5:.1f}', f'6GHzpatchnewnew_ho{8.0:.1f}']) ## plot S11 comp.
     
     #cablePortTest(h=1/3.5, epsr1=141.1*(1-1.2j), epsr2=81.1*(1-1.5j), d=3e-3, L=1e-3)
     #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
