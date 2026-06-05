@@ -213,11 +213,6 @@ class MeshInfo():
             self.coax_inr = .65e-3; self.coax_outr = 2.1e-3; self.coax_outh = coax_outh ## coaxial inner and outer radii, and the height it extends beyond the substrate
             self.coax_outh2 = 1e-3 ## the section removed from the mesh
             self.feed_offset = -4.72e-3 ## it is placed upward along the z-axis
-            
-            ##the 3-D printed holder sections, which stick out partially in front of the patch
-            self.patchholder_t = 3e-3
-            self.patchholder_corner_ext = 5e-3
-            self.patchholder_cablehole_r = 5e-3
         elif(self.antenna_type == 'waveguide'):
             self.kc = pi/self.antenna_width ## cutoff wavenumber... maybe correct
         elif(self.antenna_type == 'coaxTest'):
