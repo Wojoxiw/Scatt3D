@@ -898,7 +898,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    folder = 'data3DLUNARC/'
+    #folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -1064,9 +1064,9 @@ if __name__ == '__main__':
     #testSolverSettings(h=1/6)
     
     #runName = 'patchTests.newnew_ho3.5'#'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
-    testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 100), name=runName, showPlots=False)
+    #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 100), name=runName, showPlots=False)
     #runName = 'patchTests.newnew_ho8.0'
-    testPatchPattern(h=1/8.0, degree=3, freqs = np.linspace(8e9, 12e9, 100), name=runName, showPlots=False)
+    #testPatchPattern(h=1/8.0, degree=3, freqs = np.linspace(8e9, 12e9, 100), name=runName, showPlots=False)
     runName = 'patchTests.newnew_ho3.5'
     #testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
