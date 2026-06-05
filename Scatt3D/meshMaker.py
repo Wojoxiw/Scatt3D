@@ -683,6 +683,7 @@ class MeshInfo():
             gmsh.model.occ.rotate(defectDimTags, 0, 0, 0, 0, 0, 1, self.defect_angles[2])
             
             ## Make the domain and the PML
+            PMLSurfacePts=[]
             if(self.domain_geom == 'domedCyl'):
                 domain_cyl = gmsh.model.occ.addCylinder(0, 0, -self.domain_height/2, 0, 0, self.domain_height, self.domain_radius)
                 pml_cyl = gmsh.model.occ.addCylinder(0, 0, -self.PML_height/2, 0, 0, self.PML_height, self.PML_radius)
@@ -702,18 +703,16 @@ class MeshInfo():
                 else:
                     domainDimTags.append((self.tdim, domain_cyl)) # needs to be dim, tags
                     pml = [(self.tdim, pml)] # needs to be dim, tags
-                if(self.PMLSurfacePEC):
-                    PECSurfacePts.append([self.domain_radius, 0, 0]) ## side of the sphere/cylinder
-                    PECSurfacePts.append([0, 0, self.domain_height/2+self.dome_height]) ## top face
-                    PECSurfacePts.append([0, 0, -self.domain_height/2-self.dome_height]) ## bottom face
+                PMLSurfacePts.append([self.domain_radius, 0, 0]) ## side of the sphere/cylinder
+                PMLSurfacePts.append([0, 0, self.domain_height/2+self.dome_height]) ## top face
+                PMLSurfacePts.append([0, 0, -self.domain_height/2-self.dome_height]) ## bottom face
                     
             elif(self.domain_geom == 'sphere'):
                 domain = gmsh.model.occ.addSphere(0, 0, 0, self.domain_radius)
                 pml = gmsh.model.occ.addSphere(0, 0, 0, self.PML_radius)
                 domainDimTags.append((self.tdim, domain)) # needs to be dim, tags
                 pml = [(self.tdim, pml)] # needs to be dim, tags
-                if(self.PMLSurfacePEC):
-                    PECSurfacePts.append([self.domain_radius, 0, 0]) ## side of the sphere/cylinder
+                PMLSurfacePts.append([self.domain_radius, 0, 0]) ## side of the sphere/cylinder
                     
             FF_surface_dimTags = []
             if(self.FF_surface):
@@ -762,7 +761,7 @@ class MeshInfo():
             print(f'Mesh markers created: {len(mat_markers)} material groups, {len(antennaMat_markers)} antenna dielectric groups, and {len(defect_markers)} defect groups.')
             
             # Identify antenna surfaces and make physical groups
-            PEC_surfaces = []; antenna_surfaces = []; farfield_surface = []; smallMesh_surfaces = []
+            PEC_surfaces = []; antenna_surfaces = []; farfield_surface = []; smallMesh_surfaces = []; PML_surfaces=[];
             
             distTol = 1e-6 ## close enough?
             for boundary in gmsh.model.occ.getEntities(dim=self.fdim):
@@ -776,6 +775,14 @@ class MeshInfo():
                     if(dist<distTol):
                         PEC_surfaces.append(boundary[1])
                         #print('inPEC', boundary[1])
+                    gmsh.model.occ.remove([(0, pt)]) ## clean-up
+                    
+                for point in PMLSurfacePts:
+                    pt = gmsh.model.occ.addPoint(point[0], point[1], point[2]) ## just for finding distance
+                    dist = gmsh.model.occ.getDistance(boundary[0], boundary[1], 0, pt)[0]
+                    if(dist<distTol):
+                        PML_surfaces.append(boundary[1])
+                        #print(PMLsurface', boundary[1])
                     gmsh.model.occ.remove([(0, pt)]) ## clean-up
                     
                 for point in smallMeshSurfacePts: ## any surface with this point is assumed to be PEC
@@ -811,8 +818,10 @@ class MeshInfo():
             if(len(antenna_surfaces) != len(antennaSurfacePts)):
                 print(f'Error finding antenna surfaces: {len(antenna_surfaces)} found, but {len(antennaSurfacePts)} specified')
                         
-            
-            pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, PEC_surfaces)
+            if(self.PMLSurfacePEC): ## also add PML
+                pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, PEC_surfaces+PML_surfaces)
+            else:
+                pec_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, PEC_surfaces)
             antenna_surface_markers = [gmsh.model.addPhysicalGroup(self.fdim, [s]) for s in antenna_surfaces]
             farfield_surface_marker = gmsh.model.addPhysicalGroup(self.fdim, farfield_surface)
             
