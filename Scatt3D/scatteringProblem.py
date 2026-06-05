@@ -84,6 +84,8 @@ class FEMmesh():
         
         if(not justInterping):
             self.pec_dofs = dolfinx.fem.locate_dofs_topological(self.VSpace, entity_dim=self.fdim, entities=self.meshInfo.meshData.facet_tags.find(self.meshInfo.pec_surface_marker))
+            #pmlss = dolfinx.fem.locate_dofs_topological(self.VSpace, entity_dim=self.tdim, entities=self.meshInfo.meshData.cell_tags.find(self.meshInfo.pml_marker))
+            #self.pec_dofs = np.hstack((self.pec_dofs, pmlss))
             self.bc_pec = dolfinx.fem.dirichletbc(self.Ezero, self.pec_dofs)
             if(self.meshInfo.FF_surface): ## if there is a farfield surface, mark cells on the surface
                 self.dS_farfield = self.dS(self.meshInfo.farfield_surface_marker)
