@@ -91,6 +91,7 @@ if __name__ == '__main__':
                 prob = scatteringProblem.Scatt3DProblem(comm, testMesh, testMesh, MPInum = MPInum, name = runName+f'_angle{angle}', fem_degree=degree, computeImmediately=False, dutOnRefMesh=False, **prob_settings)
                 prob.compute(computeRef=False, makeOptVects=False)
                 prob.makeOptVectors(DUTMesh=True, skipQs=True)
+                prob.deleteSol() ## remove saved E-fields afterward, since this generates too much data
         else: ## reference simulation
             rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings | {'viewGMSH': False} ## uses settings given before those specified here ## settings for the meshMaker
             recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
@@ -102,7 +103,7 @@ if __name__ == '__main__':
                 else:
                     if(comm.rank == model_rank):
                         print(f'{folder+runName}_angle{angle}output-qs.xdmf not found - Computing run with angle={angle}:')
-                refMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', reference = True, verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
+                refMesh = meshMaker.MeshInfo(comm, folder+runName+f'_angle{angle}'+'mesh.msh', verbosity = verbosity, phi_antennas=-angle, **mesh_settings)
                 #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
                 #refMesh.plotMeshPartition()
                 prob = scatteringProblem.Scatt3DProblem(comm, refMesh, MPInum = MPInum, name = runName+f'_angle{angle}', fem_degree=degree, **prob_settings)
@@ -110,7 +111,7 @@ if __name__ == '__main__':
                 ## make the opt vects on the rec mesh
                 prob.switchToRecMesh(recMesh)
                 prob.makeOptVectors(reconstructionMesh=True)
-                prob.deleteSol() ## remove saved E-fields afterward, since this generates too much data to store on the cluster easily
+                prob.deleteSol() ## remove saved E-fields afterward, since this generates too much data
                 prevRuns.memTimeAppend(prob)
         return prob
     
@@ -260,12 +261,12 @@ if __name__ == '__main__':
     #runName = f'measurements_corrected_smallmesh_' ## made it to 240 degrees before seeming to time out
     runName = f'meas_newnew'
     
-    angles = np.arange(0, 360, 400, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
+    angles = np.arange(0, 360, 40, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
     measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': False, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     testrunName = f'measurements_noobject'
@@ -283,9 +284,11 @@ if __name__ == '__main__':
     #===========================================================================
     
     testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.5 cylinder
-    measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
+    #===========================================================================
+    # measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
+    #===========================================================================
     
     ## try the postprocessing with just sim. stuff:
     #angles = [0.0]
@@ -294,6 +297,7 @@ if __name__ == '__main__':
     ## and interpolating onto another mesh
     rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10,'order': 1, 'N_antennas': 0, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2} ## uses settings given before those specified here ## settings for the meshMaker
     #recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', viewGMSH=False, reference = True, verbosity = verbosity, **rec_mesh_settings)
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', plotSs=False, maxRefl=1, solutionName=f'_Sdutfrom{testrunName}_interpmesh', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3], reconstructionMeshInfo=recMesh)
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}_interpmesh', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3], reconstructionMeshInfo=recMesh, maxRefl=1)
     
     
@@ -357,6 +361,18 @@ if __name__ == '__main__':
     
     
     
+    #===========================================================================
+    # m2 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/emptysetup+foam'
+    # m1 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/emptysetup'
+    # 
+    # m2 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock'
+    # m1 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock+hole_near_A2_filledwithPOM+PETGring'
+    # 
+    # f1 = np.loadtxt(m1+'/angle0.00.csv', delimiter=',', skiprows=3, dtype=complex)
+    # f2 = np.loadtxt(m2+'/angle0.00.csv', delimiter=',', skiprows=3, dtype=complex)
+    # plt.plot(f1[:, 0], 20*np.log10(np.abs(np.abs(f1[:, 1]) - np.abs(f2[:, 1]))))
+    # plt.show()
+    #===========================================================================
     
     
     if(comm.rank == model_rank):

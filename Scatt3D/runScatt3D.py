@@ -898,7 +898,7 @@ if __name__ == '__main__':
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
             
     #testRun(h=1/2)
-    #folder = 'data3DLUNARC/'
+    folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
     #reconstructionErrorTestPlots(False)
     
@@ -979,13 +979,15 @@ if __name__ == '__main__':
     # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], plotSs=False)
     #===========================================================================
     
-    runName = 'testmeas-like_sim'
-    measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
-    freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
-    testFullExample(h=1/3.5, degree=3, runName=runName,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'antenna_type': '6GHz measurement', 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2, 'object_offset': np.array([0, 0, 0]), 'defect_offset': np.array([0, 0, 0])},
-                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]})
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], maxRefl=1, plotSs=False, antennasToUse=[0,1,2,3])
+    #===========================================================================
+    # runName = 'testmeas-like_sim'
+    # measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
+    # freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
+    # testFullExample(h=1/3.5, degree=3, runName=runName,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'antenna_type': '6GHz measurement', 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2, 'object_offset': np.array([0, 0, 0]), 'defect_offset': np.array([0, 0, 0])},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]})
+    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], maxRefl=1, plotSs=False, antennasToUse=[0,1,2,3])
+    #===========================================================================
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrast_40freqs'
@@ -1076,7 +1078,7 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
     
-    #patchSsPlot([3.5, 8.0]) ## plot S11 comp. with Feko
+    patchSsPlot([3.5, 8.0]) ## plot S11 comp. with Feko
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)
