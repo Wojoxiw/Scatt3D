@@ -94,7 +94,7 @@ if __name__ == '__main__':
                 prob.deleteSol() ## remove saved E-fields afterward, since this generates too much data
         else: ## reference simulation
             rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10} | mesh_settings | {'viewGMSH': False} ## uses settings given before those specified here ## settings for the meshMaker
-            recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', reference = True, verbosity = verbosity, **rec_mesh_settings)
+            recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', verbosity = verbosity, **rec_mesh_settings) | {'reference': True}
             for angle in angles: ## 20 degree spacing. Should rotate in opposite direction to measurements, since this rotates the antennas while measurements rotate the object. (this way the E-fields in the object are all aligned)
                 if(os.path.isfile(folder+runName+f'_angle{angle}'+'output-qs.xdmf')): ## check if the angle has already been run
                     if(comm.rank == model_rank):
