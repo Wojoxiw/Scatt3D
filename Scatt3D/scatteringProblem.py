@@ -318,7 +318,11 @@ class Scatt3DProblem():
         
         t1 = timer()
         #mem_usage = memory_usage((self.ComputeSolutions, (meshInfo,), {'computeRef':computeRef,}), max_usage = True)/1000 ## track the memory usage here
-        self.ComputeSolutions(computeRef)
+        try:
+            self.ComputeSolutions(computeRef)
+        except ValueError:
+            print('Trying one more time...')
+            self.ComputeSolutions(computeRef)
         mem_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss/1024**2 ## should give max. RSS for the process in GB - possibly this is slightly less than the memory required
         self.calcTime = timer()-t1 ## Time it took to solve the problem. Given to mem-time estimator 
         if(self.verbosity > 2):
