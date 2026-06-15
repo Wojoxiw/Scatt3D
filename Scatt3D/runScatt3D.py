@@ -971,13 +971,13 @@ if __name__ == '__main__':
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
     #===========================================================================
     
+    runName = 'forPaper_D3LowerContrastPMLisPECagain'
     #===========================================================================
-    # runName = 'forPaper_D3LowerContrastPMLisPECagain'
     # testFullExample(h=1/3.5, degree=3, runName=runName,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], plotSs=False)
     #===========================================================================
+    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], plotSs=False)
     
     #===========================================================================
     # runName = 'testmeas-like_sim'
@@ -1078,7 +1078,7 @@ if __name__ == '__main__':
     #testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
     
-    patchSsPlot([3.5, 8.0]) ## plot S11 comp. with Feko
+    #patchSsPlot([3.5, 8.0]) ## plot S11 comp. with Feko
     
     #runName = 'testingComplexObject' ## h=1/8
     #testLargeExample(h=1/6, degree=2)
