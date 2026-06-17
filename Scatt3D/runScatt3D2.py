@@ -259,8 +259,8 @@ if __name__ == '__main__':
     #runName = f'measurements_init_actuallMeasuredFreqs_'
     #runName = f'measurements_corrected_' ## using new FR4 epsr=4.3, accidentally overrode old one
     #runName = f'measurements_corrected_smallmesh_' ## made it to 240 degrees before seeming to time out
-    #runName = f'meas_newnew'
-    runName = f'meas_newnew2' ## contains the 'cyl fill' defect in the mesh
+    runName = f'meas_newnew'
+    #runName = f'meas_newnew2' ## contains the 'cyl fill' defect in the mesh
     #runName = f'meas_newnew_altmesh' ## h = 1/4.2 instead of 1/4, only has angle 0
     
     angles = np.arange(0, 360, 40, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
