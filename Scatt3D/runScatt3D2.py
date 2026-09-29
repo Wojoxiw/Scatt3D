@@ -486,7 +486,7 @@ if __name__ == '__main__':
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
     measurementScript(h=1/5, degree=3, runName=runName, angles=angles,
-                    mesh_settings={'viewGMSH': True, 'N_antennas': 4, 'f0': 6e9, 'reference': True, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': True, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     testrunName = f'measurements_noobject'
