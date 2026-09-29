@@ -689,8 +689,8 @@ class Scatt3DProblem():
         max_its = 10000
         conv_sets = {"ksp_rtol": 1e-6, "ksp_atol": 1e-15, "ksp_max_it": max_its} ## convergence settings
         
-        petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
-        #petsc_options = {"ksp_type": "preonly", "pc_type": "cholesky", "pc_factor_mat_solver_type": "mumps"} ## uses less memory than the LU solver. Also faster? Supposed to only work for positive-definite matrices, while this one is indefinite, but the norm is tiny and the solution seems reasonable. Maybe sometimes gives NaNs when using many MPI processes... but I sometimes get those with LU solver too
+        #petsc_options = {"ksp_type": "preonly", "pc_type": "lu", "pc_factor_mat_solver_type": "mumps"} ## the basic option - fast, robust/accurate, but takes a lot of memory
+        petsc_options = {"ksp_type": "preonly", "pc_type": "cholesky", "pc_factor_mat_solver_type": "mumps"} ## faster/less memory than the LU solver, unless using symmetric setting. Supposed to only work for positive-definite matrices, while this one is indefinite, but the norm is tiny and the solution seems reasonable. Maybe sometimes gives NaNs when using many MPI processes... but I sometimes get those with LU solver too
         self.solve_type = 'direct'
         
         #petsc_options={"ksp_type": "lgmres", "pc_type": "sor", **self.solver_settings, **conv_sets} ## (https://petsc.org/release/manual/ksp/)
@@ -746,12 +746,52 @@ class Scatt3DProblem():
             self.solve_type = 'other'
         
         cache_dir = f"{str(Path.cwd())}/.cache"
-        jit_options={}
         jit_options= {"cffi_extra_compile_args": ['-O3', "-march=native"], "cache_dir": cache_dir, "cffi_libraries": ["m"]} ## possibly this speeds things up a little.
         
-        problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options, petsc_options_prefix='theScatteringProblem')
-        ksp = problem.solver
-        pc = ksp.getPC()
+        if(petsc_options == {"ksp_type": "preonly", "pc_type": "cholesky", "pc_factor_mat_solver_type": "mumps"}): ## manually use mumps and that this is a symmetric matrix
+            manualMumpsSolve = True
+        else:
+            manualMumpsSolve = False
+            
+        if(manualMumpsSolve): ## this stuff has a lower memory cost
+            a_form = dolfinx.fem.form(lhs, jit_options=jit_options)
+            L_form = dolfinx.fem.form(rhs, jit_options=jit_options)
+            A_mat = dolfinx.fem.petsc.create_matrix(a_form)
+            A_mat.setOption(PETSc.Mat.Option.SYMMETRIC, True)
+            A_mat.setOption(PETSc.Mat.Option.SYMMETRY_ETERNAL, True)
+            b_vec = dolfinx.fem.petsc.create_vector(FEMm.VSpace)
+            opts = PETSc.Options()
+            prefix = 'theScatteringProblem_'
+            opts[prefix+'pc_type'] = 'cholesky'
+            opts[prefix+'pc_factor_mat_solver_type'] = 'mumps'
+            opts[prefix+'ksp_type'] = 'preonly'
+            opts[prefix+'mat_mumps_icntl_14'] = 50 ## extra workspace margin - supposedly can avoid spurious failures/NaN results from MUMPS underallocation
+            opts[prefix+'mat_mumps_icntl_37'] = 1 ## slightly reduces memory cost
+            opts[prefix+'mat_mumps_icntl_35'] = 2
+            opts[prefix+'mat_mumps_cntl_7'] = float(1e-6) ## seems to slightly reduce memory/time cost
+            ksp = PETSc.KSP().create(self.comm)
+            ksp.setOptionsPrefix(prefix)
+            ksp.setOperators(A_mat)
+            ksp.setFromOptions()
+            pc = ksp.getPC()
+            def manualMumpsSolve():
+                A_mat.zeroEntries()
+                dolfinx.fem.petsc.assemble_matrix(A_mat, a_form, bcs=bcs)
+                A_mat.assemble()
+                E_h = dolfinx.fem.Function(FEMm.VSpace)
+                with b_vec.localForm() as loc:
+                    loc.set(0)
+                dolfinx.fem.petsc.assemble_vector(b_vec, L_form)
+                dolfinx.fem.petsc.apply_lifting(b_vec, [a_form], bcs=[bcs])
+                b_vec.ghostUpdate(addv=PETSc.InsertMode.ADD_VALUES, mode=PETSc.ScatterMode.REVERSE)
+                dolfinx.fem.petsc.set_bc(b_vec, bcs)
+                ksp.solve(b_vec, E_h.x.petsc_vec)
+                E_h.x.scatter_forward()
+                return E_h
+        else:
+            problem = dolfinx.fem.petsc.LinearProblem(lhs, rhs, bcs=bcs, petsc_options=petsc_options, jit_options=jit_options, petsc_options_prefix='theScatteringProblem')
+            ksp = problem.solver
+            pc = ksp.getPC()
         
         #=======================================================================
         # coarse_ksp = pc.getMGCoarseSolve()
@@ -968,7 +1008,10 @@ class Scatt3DProblem():
                                 S = np.load(self.dataFolder+self.name+nameAdd+'_temp_S.npz')['saveS']
                             S = self.comm.bcast(S, root=self.model_rank)
                             continue
-                    E_h = problem.solve()
+                    if(manualMumpsSolve):
+                        E_h = manualMumpsSolve()
+                    else:
+                        E_h = problem.solve()
                     if(np.isnan(np.dot(E_h.x.array, E_h.x.array))): ## sometimes if memory requirements are too high, it will still 'compute' but end with NaN results. Sometimes another error will give Inf. results
                         if( self.comm.rank == self.model_rank ):
                             print(E_h.x.array)
@@ -1013,7 +1056,7 @@ class Scatt3DProblem():
                 print(f'Rank {self.comm.rank}: Computing REF solutions (ndofs={FEMm.ndofs})')
             sys.stdout.flush()
             FEMm.epsr.x.array[:] = FEMm.epsr_array_ref
-            self.S_ref = ComputeFields()    
+            self.S_ref = ComputeFields()
         else:
             if( (self.verbosity >= 1 and self.comm.rank == self.model_rank) or (self.verbosity > 2) ):
                 print(f'Rank {self.comm.rank}: Computing DUT solutions (ndofs={FEMm.ndofs})')
@@ -1021,7 +1064,7 @@ class Scatt3DProblem():
             FEMm.epsr.x.array[:] = FEMm.epsr_array_dut
             self.S_dut = ComputeFields(ref=False)
             
-        solver = problem.solver
+        solver = ksp
         os.makedirs(os.path.dirname(self.dataFolder), exist_ok=True) ## make sure the data folder exists - this is the first place I get an error for it
         fname=self.dataFolder+self.name+"solver_output.info"
         viewer = PETSc.Viewer().createASCII(fname)
@@ -1365,7 +1408,7 @@ class Scatt3DProblem():
                     #print('phi',np.abs(farfields[b,:,1]))
                     #print('intensity',np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2)
                     #plt.plot(angles[:, 1], np.abs(farfields[b,:,0]), label = 'theta-pol')
-                    #plt.plot(angles[:, 1], np.abs(farfields[b,:,1]), label = 'phi-pol')'
+                    #plt.plot(angles[:, 1], np.abs(farfields[b,:,1]), label = 'phi-pol')
                     np.savez(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{FEMm.meshInfo.h/FEMm.meshInfo.lambda0:.2e}.npz', farfields=farfields)
                     
                     mag = np.abs(farfields[b,:,0])**2 + np.abs(farfields[b,:,1])**2
@@ -1375,13 +1418,13 @@ class Scatt3DProblem():
                             #ax1.plot(angles[:nvals, 0], mag[:nvals]/np.max(mag), label = r'Simulated ($\phi=90^\circ$)', linewidth = linewidth, color = 'tab:blue', linestyle = ':')
                             #ax1.plot(angles[nvals:, 0], mag[nvals:]/np.max(mag), label = r'Simulated ($\phi=0^\circ$)', linewidth = linewidth, color = 'tab:red', linestyle = '-')
                             
-                            #for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13), (8.0, 'tab:orange', 'v', 14)]: #(1.0, 'tab:orange') ## just plot the following cases
-                            for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13)]:
+                            for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13), (8.0, 'tab:orange', 'v', 14)]: #(1.0, 'tab:orange') ## just plot the following cases
+                            #for ho, color, marker, mev in [(3.5, 'tab:blue', 'o', 13)]:
                                 data = np.load(f'{self.dataFolder}_patchtesting_SimulatedFFs_hOverLamb{1/ho:.2e}.npz')
                                 FFs = data['farfields']
                                 mag = np.abs(FFs[b,:,0])**2 + np.abs(FFs[b,:,1])**2  
                                 ax1.plot(angles[:nvals, 0], 20*np.log10(mag[:nvals]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '--')#, marker=marker, markevery=mev, markersize=7)
-                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=fr'sim. ($\lambda/h={ho:.1f}$'+f')')#, marker=marker, markevery=mev, markersize=7)
+                                ax1.plot(angles[nvals:, 0], 20*np.log10(mag[nvals:]/np.max(mag)), linewidth = linewidth, color = color, linestyle = '-', label=fr'sim. ($\lambda_0/h={ho:.1f}$'+f')')#, marker=marker, markevery=mev, markersize=7)
                                 
                             fekof = 'TestStuff/FEKO patch gain lambdaover50.dat'
                             fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
@@ -1419,10 +1462,12 @@ class Scatt3DProblem():
                         ax1.plot(angles[:nvals, 0], np.abs(mag[:nvals] - mie[:nvals]), label = 'H-plane Error', linewidth = linewidth, color = 'blue', linestyle = ':')
                         ax1.plot(angles[:nvals, 0], np.abs(mag[nvals:] - mie[nvals:]), label = 'E-plane Error', linewidth = linewidth, color = 'red', linestyle = ':')
                         print(f'Forward-scattering intensity relative error: {np.abs(mag[int(nvals/2)] - mie[int(nvals/2)])/mie[int(nvals/2)]:.2e}, backward: {np.abs(mag[0] - mie[0])/mie[0]:.2e}')
-                        plt.title(fr'Scattered E-field Intensity Comparison ($\lambda/h=${lambdat/FEMm.meshInfo.h:.1f})')
+                        plt.title(fr'Scattered E-field Intensity Comparison ($\lambda_0/h=${lambdat/FEMm.meshInfo.h:.1f})')
                     else:
                         plt.title(f'Normalized Patch Antenna Gain')
                         plt.ylabel('Gain [dB]')
+                        #plt.xticks([-150, -100, -50, 0, 50, 100, 150], [150, 100, 50, 0, 50, 100, 150]) ## ACES does not believe in negative thetas
+                        plt.xlim(-190, 190)
                     if(plotFF):
                         first_legend = ax1.legend(framealpha=0.5, ncol=1, loc = 'upper left')
                         ##second legend to distinguish between dashed and regular lines (phi- and theta- pols)
@@ -1651,13 +1696,13 @@ class Scatt3DProblem():
                 ## plot magnitudes
                 ax2.plot(posvec, np.sqrt(np.abs(E_values[:, 0])**2+np.abs(E_values[:, 1])**2+np.abs(E_values[:, 2])**2), label='simulation')
                 ## plot real/imags
-                ax3.plot(posvec, np.real(E_values[:, 0]), label=r'sim. ($\lambda/h=$'+f'{FEMm.meshInfo.lambda0/FEMm.meshInfo.h:.1f})', linewidth=linewidth, linestyle = 'solid', color='tab:blue')
+                ax3.plot(posvec, np.real(E_values[:, 0]), label=r'sim. ($\lambda_0/h=$'+f'{FEMm.meshInfo.lambda0/FEMm.meshInfo.h:.1f})', linewidth=linewidth, linestyle = 'solid', color='tab:blue')
                 ax3.plot(posvec, np.imag(E_values[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color='tab:blue')
                 
                 ## also plot the result with other mesh sizes?
-                for ho, color in [(1/8, 'tab:orange')]: #(1/2, 'tab:orange')
-                    E_load = np.load(f'{self.dataFolder}{self.name}_SimulatedEs_{name}-axis_hOverLamb{ho:.2e}.npz')['E_values']
-                    ax3.plot(posvec, np.real(E_load[:, 0]), label=r'sim. ($\lambda/h=$'+f'{1/ho:.1f})', linewidth=linewidth, linestyle = 'solid', color=color)
+                for ho, color in [(8, 'tab:orange')]: #(1/2, 'tab:orange')
+                    E_load = np.load(f'{self.dataFolder}SpherehOverLamb{ho:.2e}_SimulatedEs_{name}-axis.npz')['E_values']
+                    ax3.plot(posvec, np.real(E_load[:, 0]), label=r'sim. ($\lambda_0/h=$'+f'{ho:.1f})', linewidth=linewidth, linestyle = 'solid', color=color)
                     ax3.plot(posvec, np.imag(E_load[:, 0]), label=None, linewidth=linewidth, linestyle = '--', color=color)
                     
                 if(name=='z'): ## different plane-wave directions, so switch for plotting

@@ -144,8 +144,15 @@ if __name__ == '__main__':
             data = np.load(folder+sim+'output.npz')
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
+            
+            if(sim == f'6GHzpatchnewnew_ho{3.5:.1f}'):
+                label3 = r'FEM Simulation ($\lambda_0/h = 3.5$)'
+            elif(sim == f'6GHzpatchnewnew_ho{8.0:.1f}'):
+                label3 = r'FEM Simulation ($\lambda_0/h = 8.0$)'
+            else:
+                label3=sim
              
-            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=sim, linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8, label=label3)
             i = i+1
         
         if(feko==''):
@@ -249,6 +256,216 @@ if __name__ == '__main__':
             print(f'max. ({h=})',np.max(magErrs)*100, np.max(np.abs(phaseErrs)*180/pi))
             print(f'mean ({h=})',np.mean(magErrs)*100, np.mean(phaseErrs)*180/pi)
             print(f'rms ({h=})',np.sqrt(np.mean(np.square(magErrs)))*100, np.sqrt(np.mean(np.square(phaseErrs)))*180/pi)
+            
+            
+    def someSsPlot(): ## for thesis, plot some S-paremeter differences between measurement and simulation
+        runName = f'meas_newnew2'
+        testrunName = f'{runName}dut_2.8fill_'
+        angle=0.0
+        simfnames = [f'{folder}{runName}_angle{angle:.1f}output.npz', f'{folder}{testrunName}_angle{angle:.1f}output.npz']
+        
+        
+            
+        for op2 in range(len(simfnames)):
+            sim=simfnames[op2]
+            data = np.load(sim)
+            simFs = data['fvec']
+            if('S_dut' in data.files):
+                simSdut = data['S_dut']
+            else:
+                simSref = data['S_ref']
+    
+        measSref = postProcessing.compileMeasuredSs('/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock', np.zeros(1, dtype=float)+angle, freqs=0, Srefsim=simSref)
+        measSref, measfreqs = measSref[0], measSref[2]
+        measSdut = postProcessing.compileMeasuredSs('/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock+hole_near_A2_filledwithPETG', np.zeros(1, dtype=float)+angle, freqs=0, Srefsim=simSref)[0]
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        plots = [('S11', '-'), ('S14', '--')]
+        for Sname, linestyle in plots:
+            Sidx1 = int(Sname[-2:-1])-1
+            Sidx2 = int(Sname[-1:])-1
+               
+             
+            ax1.set_title(r'Patch Antenna Reflection Coefficient')
+            ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(simSdut[:, Sidx1, Sidx2])), label=fr'Simulated $S^\mathrm{{test}}$', linewidth=2, linestyle=linestyle, color='tab:red')
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSdut[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:red')
+            ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(simSref[:, Sidx1, Sidx2])), label=fr'Simulated $S^\mathrm{{ref}}$', linewidth=2, linestyle=linestyle, color='tab:blue')
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSref[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:blue')
+             
+            ax1.plot(measfreqs/1e9, 180/pi*np.unwrap(np.angle(measSdut[:, Sidx1, Sidx2])), label=fr'Measured $S^\mathrm{{test}}$', linewidth=2, linestyle=linestyle, color='tab:green')
+            ax2.plot(measfreqs/1e9, 20*np.log10(np.abs(measSdut[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:green')
+            ax1.plot(measfreqs/1e9, 180/pi*np.unwrap(np.angle(measSref[:, Sidx1, Sidx2])), label=fr'Measured $S^\mathrm{{ref}}$', linewidth=2, linestyle=linestyle, color='tab:orange')
+            ax2.plot(measfreqs/1e9, 20*np.log10(np.abs(measSref[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:orange')
+             
+             
+            ax1.set_ylabel(r'Angle [deg.]')
+            ax2.set_ylabel(r'Mag. [dB]')
+            plt.xlabel(r'Frequency [GHz]')
+             
+            if(linestyle=='-'): # make legend
+                ##first legend
+                first_legend = ax1.legend(fontsize=14, loc='upper right')
+                ##second legend to distinguish
+                handleds = []
+                line1 = mlines.Line2D([], [], color='tab:blue', linestyle='-', label=fr'$S_{{{int(plots[0][0][-2:-1])}{int(plots[0][0][-1:])}}}$') ##fake lines to create second legend elements
+                line2 = mlines.Line2D([], [], color='tab:blue', linestyle='--', label=fr'$S_{{{int(plots[1][0][-2:-1])}{int(plots[1][0][-1:])}}}$') ##fake lines to create second legend elements
+                handleds.append(line1)
+                handleds.append(line2)
+                second_legend = ax1.legend(handles=handleds, fontsize=14, loc='lower left')
+                ax1.add_artist(first_legend)
+        ax1.grid()
+        ax2.grid()   
+        plt.tight_layout()
+        plt.show()
+        
+        
+        SdiffSim = simSdut-simSref
+        SdiffMeas = measSdut-measSref
+            
+        #=======================================================================
+        # fig, (ax1, ax2) = plt.subplots(2, 1)
+        # for Sname, linestyle in plots:
+        #     Sidx1 = int(Sname[-2:-1])-1
+        #     Sidx2 = int(Sname[-1:])-1
+        #       
+        #     
+        #     ax1.set_title(r'Patch Antenna Reflection Coefficient')
+        #     ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(SdiffSim[:, Sidx1, Sidx2])), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:blue')
+        #     ax2.plot(simFs/1e9, 20*np.log10(np.abs(SdiffSim[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:blue')
+        #     
+        #     ax1.plot(measfreqs/1e9, 180/pi*np.unwrap(np.angle(SdiffMeas[:, Sidx1, Sidx2])), label=fr'Measured', linewidth=2, linestyle=linestyle, color='tab:orange')
+        #     ax2.plot(measfreqs/1e9, 20*np.log10(np.abs(SdiffMeas[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:orange')
+        #     
+        #     ax1.set_ylabel(r'Angle [deg.]')
+        #     ax2.set_ylabel(r'Mag [dB]')
+        #     plt.xlabel(r'Frequency [GHz]')
+        #     
+        #     if(linestyle=='-'): # make legend
+        #         ##first legend
+        #         first_legend = ax1.legend(fontsize=14, loc='upper right')
+        #         ##second legend to distinguish
+        #         handleds = []
+        #         line1 = mlines.Line2D([], [], color='tab:blue', linestyle='-', label=fr'$S^\mathrm{{test}}_{{{int(plots[0][0][-2:-1])}{int(plots[0][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[0][0][-2:-1])}{int(plots[0][0][-1:])}}}$') ##fake lines to create second legend elements
+        #         line2 = mlines.Line2D([], [], color='tab:blue', linestyle='--', label=fr'$S^\mathrm{{test}}_{{{int(plots[1][0][-2:-1])}{int(plots[1][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[1][0][-2:-1])}{int(plots[1][0][-1:])}}}$') ##fake lines to create second legend elements
+        #         handleds.append(line1)
+        #         handleds.append(line2)
+        #         second_legend = ax1.legend(handles=handleds, fontsize=14, loc='lower left')
+        #         ax1.add_artist(first_legend)
+        #      
+        # ax1.grid()
+        # ax2.grid()     
+        # plt.tight_layout()
+        # plt.show()
+        #=======================================================================
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        for Sname, linestyle in plots:
+            Sidx1 = int(Sname[-2:-1])-1
+            Sidx2 = int(Sname[-1:])-1
+              
+            SdiffSim = simSdut[:, Sidx1, Sidx2]-simSref[:, Sidx2, Sidx1]
+            SdiffMeas = measSdut[:, Sidx1, Sidx2]-measSref[:, Sidx2, Sidx1]
+            
+            ax1.set_title(r'Patch Antenna Reflection Coefficient')
+            ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(SdiffSim)), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:blue')
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(SdiffSim)), linewidth=2, linestyle=linestyle, color='tab:blue')
+            
+            ax1.plot(measfreqs/1e9, 180/pi*np.unwrap(np.angle(SdiffMeas)), label=fr'Measured', linewidth=2, linestyle=linestyle, color='tab:orange')
+            ax2.plot(measfreqs/1e9, 20*np.log10(np.abs(SdiffMeas)), linewidth=2, linestyle=linestyle, color='tab:orange')
+            
+            ax1.set_ylabel(r'Angle [deg.]')
+            ax2.set_ylabel(r'Mag. [dB]')
+            plt.xlabel(r'Frequency [GHz]')
+            
+            if(linestyle=='-'): # make legend
+                ##first legend
+                first_legend = ax1.legend(fontsize=14, loc='upper right')
+                ##second legend to distinguish
+                handleds = []
+                line1 = mlines.Line2D([], [], color='tab:blue', linestyle='-', label=fr'$S^\mathrm{{test}}_{{{int(plots[0][0][-2:-1])}{int(plots[0][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[0][0][-1:])}{int(plots[0][0][-2:-1])}}}$') ##fake lines to create second legend elements
+                line2 = mlines.Line2D([], [], color='tab:blue', linestyle='--', label=fr'$S^\mathrm{{test}}_{{{int(plots[1][0][-2:-1])}{int(plots[1][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[1][0][-1:])}{int(plots[1][0][-2:-1])}}}$') ##fake lines to create second legend elements
+                handleds.append(line1)
+                handleds.append(line2)
+                second_legend = ax1.legend(handles=handleds, fontsize=14, loc='lower left')
+                ax1.add_artist(first_legend)
+                
+        ax1.grid()
+        ax2.grid()  
+        plt.tight_layout()
+        plt.show()
+        
+        
+        runName = f'meas_newnew' ## meshSize 1/4
+        runName2 = f'meas_newnew2' ## meshSize 1/4.2
+        angle=0.0
+        simfnames = [f'{folder}{runName}_angle{angle:.1f}output.npz', f'{folder}{runName2}_angle{angle:.1f}output.npz']
+        simFs = np.load(simfnames[0])['fvec']
+        simSref = np.load(simfnames[0])['S_ref']
+        simSref2 = np.load(simfnames[1])['S_ref']
+        
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        for Sname, linestyle in plots:
+            Sidx1 = int(Sname[-2:-1])-1
+            Sidx2 = int(Sname[-1:])-1
+             
+            ax1.set_title(r'Patch Antenna Reflection Coefficient')
+            ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(simSref[:, Sidx1, Sidx2])), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:blue')
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSref[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:blue')
+            ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(simSref2[:, Sidx1, Sidx2])), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:green')
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(simSref2[:, Sidx1, Sidx2])), linewidth=2, linestyle=linestyle, color='tab:green')
+             
+            ax1.set_ylabel(r'Angle [deg.]')
+            ax2.set_ylabel(r'Mag. [dB]')
+            plt.xlabel(r'Frequency [GHz]')
+             
+            if(linestyle=='-'): # make legend
+                ##first legend
+                first_legend = ax1.legend(fontsize=14, loc='upper right')
+                ##second legend to distinguish
+                handleds = []
+                line1 = mlines.Line2D([], [], color='tab:blue', linestyle='-', label=fr'$S^\mathrm{{test}}_{{{int(plots[0][0][-2:-1])}{int(plots[0][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[0][0][-1:])}{int(plots[0][0][-2:-1])}}}$') ##fake lines to create second legend elements
+                line2 = mlines.Line2D([], [], color='tab:blue', linestyle='--', label=fr'$S^\mathrm{{test}}_{{{int(plots[1][0][-2:-1])}{int(plots[1][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[1][0][-1:])}{int(plots[1][0][-2:-1])}}}$') ##fake lines to create second legend elements
+                handleds.append(line1)
+                handleds.append(line2)
+                second_legend = ax1.legend(handles=handleds, fontsize=14, loc='lower left')
+                ax1.add_artist(first_legend)
+                 
+        ax1.grid()
+        ax2.grid()  
+        plt.tight_layout()
+        plt.show()
+            
+        fig, (ax1, ax2) = plt.subplots(2, 1)
+        for Sname, linestyle in plots:
+            Sidx1 = int(Sname[-2:-1])-1
+            Sidx2 = int(Sname[-1:])-1
+              
+            SdiffSim = simSref[:, Sidx1, Sidx2]-simSref2[:, Sidx1, Sidx2]
+            
+            ax1.set_title(r'Patch Antenna Reflection Coefficient')
+            ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(SdiffSim)), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:blue')
+            ax2.plot(simFs/1e9, 20*np.log10(np.abs(SdiffSim)), linewidth=2, linestyle=linestyle, color='tab:blue')
+            
+            ax1.set_ylabel(r'Angle [deg.]')
+            ax2.set_ylabel(r'Mag. [dB]')
+            plt.xlabel(r'Frequency [GHz]')
+            
+            if(linestyle=='-'): # make legend
+                ##first legend
+                first_legend = ax1.legend(fontsize=14, loc='upper right')
+                ##second legend to distinguish
+                handleds = []
+                line1 = mlines.Line2D([], [], color='tab:blue', linestyle='-', label=fr'$S^\mathrm{{test}}_{{{int(plots[0][0][-2:-1])}{int(plots[0][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[0][0][-1:])}{int(plots[0][0][-2:-1])}}}$') ##fake lines to create second legend elements
+                line2 = mlines.Line2D([], [], color='tab:blue', linestyle='--', label=fr'$S^\mathrm{{test}}_{{{int(plots[1][0][-2:-1])}{int(plots[1][0][-1:])}}}-S^\mathrm{{ref}}_{{{int(plots[1][0][-1:])}{int(plots[1][0][-2:-1])}}}$') ##fake lines to create second legend elements
+                handleds.append(line1)
+                handleds.append(line2)
+                second_legend = ax1.legend(handles=handleds, fontsize=14, loc='lower left')
+                ax1.add_artist(first_legend)
+                
+        ax1.grid()
+        ax2.grid()  
+        plt.tight_layout()
+        plt.show()
         
     ###
     ###
@@ -260,20 +477,22 @@ if __name__ == '__main__':
     #runName = f'measurements_corrected_' ## using new FR4 epsr=4.3, accidentally overrode old one
     #runName = f'measurements_corrected_smallmesh_' ## made it to 240 degrees before seeming to time out
     #runName = f'meas_newnew'
-    runName = f'meas_newnew2' ## contains the 'cyl fill' defect in the mesh
+    #runName = f'meas_newnew2' ## contains the 'cyl fill' defect in the mesh
     #runName = f'meas_newnew_altmesh' ## h = 1/4.2 instead of 1/4, only has angle 0
+    runName = f'meas_postnew' ## h=1/5, no defect in the mesh. just 0 degrees
     
-    angles = np.arange(0, 360, 40, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
+    angles = np.arange(0, 20, 40, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
-    measurementScript(h=1/4, degree=3, runName=runName, angles=angles,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': False, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+    measurementScript(h=1/5, degree=3, runName=runName, angles=angles,
+                    mesh_settings={'viewGMSH': True, 'N_antennas': 4, 'f0': 6e9, 'reference': True, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     
     testrunName = f'measurements_noobject'
+    testrunName = f'meas_postnew_noobject' ## h=1/5, no object at all. just 0 degrees
     #===========================================================================
-    # measurementScript(h=1/3.5, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+    # measurementScript(h=1/5, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '', 'domain_height': 1, 'domain_radius': 4.2},
     #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     #===========================================================================
@@ -285,7 +504,7 @@ if __name__ == '__main__':
     #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [1.0 - .0j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     #===========================================================================
     
-    testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.5 cylinder
+    testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.8 cylinder
     #===========================================================================
     # measurementScript(h=1/4, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
@@ -318,21 +537,24 @@ if __name__ == '__main__':
     Ssangle = angles[0]
     measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}emptySetup/', f'{measFolder}emptySetup+foam/']
     #measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}solidPOMblock+hole_near_A1/', f'{measFolder}solidPOMblock+hole_near_A1_filledwithPLA/']
-    simfnames = [f'{folder}{runName}_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz']
+    simfnames = [f'{folder}{runName}_angle{Ssangle:.1f}output.npz', f'{folder}meas_newnew_altmesh_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz']
     
     ##diffs
-    measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}solidPOMblock+hole_near_A2_filledwithPOM']
-    simfnames = [f'{folder}{runName}_angle{Ssangle:.1f}output.npz', f'{folder}{runName}dut_POMfill__angle{Ssangle:.1f}output.npz']
+    measfnames = [f'{measFolder}solidPOMblock/', f'{measFolder}solidPOMblock+hole_near_A2_filledwithPLA']
+    simfnames = [f'{folder}{runName}_angle{Ssangle:.1f}output.npz', f'{folder}{runName}dut_2.8fill__angle{Ssangle:.1f}output.npz']
     
     ## empty vs ref
-    measfnames = [f'{measFolder}emptysetup/', f'{measFolder}solidPOMblock/']
-    simfnames = [f'{folder}measurements_noobject_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected__angle{Ssangle:.1f}output.npz']
-    #postProcessing.measCompareSs(simfnames, measfnames, diffs=False, angle=Ssangle)
+    #measfnames = [f'{measFolder}emptysetup/', f'{measFolder}solidPOMblock/']
+    #simfnames = [f'{folder}measurements_noobject_angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected_smallmesh__angle{Ssangle:.1f}output.npz', f'{folder}measurements_corrected__angle{Ssangle:.1f}output.npz']
+    #postProcessing.measCompareSs(simfnames, measfnames, diffs=True, angle=Ssangle)
     
     angles = [0.0, 40.0, 80.0, 120.0, 160.0, 200.0]#np.arange(0, 360, 80, dtype=float) ## try using only a few for analysis
     frequenciesToUse=[]#[i for i in np.arange(20) if i%2==0]
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', SparamMeas=[Sref, Stest, angles, freqs], includeRefl=True, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=True, frequenciesToUse=frequenciesToUse, returnResults=[3])
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}_regMesh', SparamMeas=[Sref, Stest, angles, freqs], extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], solutionName='', onlyAPriori=False, frequenciesToUse=frequenciesToUse, returnResults=[3, 4])
+    
+    ## with just one angle:
+    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', SparamMeas=[Sref, Stest, angles, freqs], includeRefl=True, solutionName='', onlyAPriori=True, frequenciesToUse=frequenciesToUse, returnResults=[3])
     
     
     #testPatchPattern(h=1/8, name=f'6GHzpatchPatternTest_ho{8:.1f}', degree=3, freqs = np.linspace(5e9, 7e9, 50), showPlots=False)
@@ -357,25 +579,12 @@ if __name__ == '__main__':
     
     #patchSsPlot([f'6GHzpatchnewnew_ho{3.5:.1f}', f'6GHzpatchnewnew_ho{8.0:.1f}']) ## plot S11 comp.
     
-    #cablePortTest(h=1/3.5, epsr1=141.1*(1-1.2j), epsr2=81.1*(1-1.5j), d=3e-3, L=1e-3)
+    #cablePortTest(h=1/10, epsr1=141.1*(1-1.2j), epsr2=81.1*(1-1.5j), d=3e-3, L=1e-3, runName='cablePortTest9')
     #cablePortRMSError(h=1/3.5, freqs=np.linspace(9e9, 11e9, 10))
     #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
     
     
-    
-    #===========================================================================
-    # m2 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/emptysetup+foam'
-    # m1 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/emptysetup'
-    # 
-    # m2 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock'
-    # m1 = '/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock+hole_near_A2_filledwithPOM+PETGring'
-    # 
-    # f1 = np.loadtxt(m1+'/angle0.00.csv', delimiter=',', skiprows=3, dtype=complex)
-    # f2 = np.loadtxt(m2+'/angle0.00.csv', delimiter=',', skiprows=3, dtype=complex)
-    # plt.plot(f1[:, 0], 20*np.log10(np.abs(np.abs(f1[:, 1]) - np.abs(f2[:, 1]))))
-    # plt.show()
-    #===========================================================================
-    
+    #someSsPlot()
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')

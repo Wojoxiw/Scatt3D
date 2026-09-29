@@ -111,11 +111,16 @@ def reconstructionError(delta_epsr_rec, epsr_ref, epsr_dut, cell_volumes, indice
     #zeroError = np.mean(np.abs(delta_epsr_actual/np.mean(np.abs(delta_epsr_actual) + 1e-16)) * cell_volumes)
     
     error = np.sum(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes)
+    #error = np.sqrt(np.sum(np.square(np.abs(delta_epsr_rec - delta_epsr_actual)*cell_volumes))) ## RMS
     zeroError = np.sum(np.abs(delta_epsr_actual)*cell_volumes)
     
     error = error/zeroError ## normalize so a guess of delta epsr = 0 gives an error of 1
     
     if(printIt):
+        try:
+            timestep
+        except NameError:
+            timestep = '?'
         if(indices=='defect'):
             print(f'Timestep {timestep} reconstruction error: {error:.3e} (noise figure: {noiseError:.3e})')
         else:
@@ -439,8 +444,7 @@ def measCompareSs(sims, meass, preCompiled=False, names=[], diffs=False, angle=0
     '''
     Compares measured S-parameters to simulated ones
     
-    :param sims:
-    :param sim: List of filenames of simulated data
+    :param sims: List of filenames of simulated data
     :param meass: List of measured data, compiled
     :param preCompiled: If True, sending in compiled meass. If false, just sending in the Sfolder
     :param names: Names of the meass, to label plots with. If empty, (should not be preCompiled), takes from meass
@@ -516,14 +520,16 @@ def addAmplitudePhaseNoise(Ss, amp, phase, random=True): ## add relative amplitu
         Ss = Ss*np.exp(1j*phase)*amp
     return Ss
 
-def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
+def compileMeasuredSs(Sfolder, angles, freqs, Srefsim, constantPhaseCorrection=None, linearPhaseCorrection=np.zeros(4)):
     '''
     Takes a folder of S-parameters as measured in my setup, returns a list of numpy arrays with the formatting expected of solveFromQs.
     Also tries to correct for phase-differences between the simulations and the measurement
     :param Sfolder: Measured S-parameter folder
     :param angles: The measured angles
-    :param freqs: Frequencies to use, since I measured more than needed
+    :param freqs: Frequencies to use, since I measured more than needed. If 0, use all
     :param Srefsim: Reference simulation to use for finding phase corrections. This just tries to correct for different physical length/reference plane from calibration
+    :param constantPhaseCorrection: If sent in, used as the constant phase correction. Should be the same for both test and ref. cases.
+    :param linearPhaseCorrection: As above, but for a frequency-dependent phase correction
     '''
     Ssextra=[]
     
@@ -532,10 +538,12 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
         angle = angles[k]
         fname = f'{Sfolder}/angle{angle:.2f}.csv'
         Sdata = np.transpose(np.loadtxt(fname, dtype=complex, delimiter=',', skiprows=3))
+        if(freqs==0):
+            freqs = np.real(Sdata[0])
         if(angle==angles[0]): # start the array
             S = np.zeros((len(freqs),4,4), dtype=complex) ## 16 S-parameters, for each frequency and angle
             measFreqs = np.real(Sdata[0])
-            ##since apparently the measurement script did not actually ensure I measured the right frequencies, find the nearest frequency for each point
+            ##since apparently the measurement script may not actually ensure I measured the right frequencies, find the nearest frequency for each point
             idxs=[]
             for freq in freqs:
                 idxs.append(np.argmin(np.abs(measFreqs-freq)))
@@ -549,7 +557,7 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
                 for i in range(4): ## each antenna
                     S[l][i][j] = Sdata[i+j*4, l]
         
-        if(angle==angles[0]): ## try correcting phase, constant (to deal with offset) and linear (to deal with potential length-related problems)
+        if((angle==angles[0]) and (constantPhaseCorrection is None)): ## try correcting phase, constant (to deal with offset) and linear (to deal with potential length-related problems). Just do this based on the first angle, as it shouldn't change
             constantPhaseCorrection=np.zeros(4); linearPhaseCorrection=np.zeros(4) ## 1 for each antenna
             for i in range(4): ## simply determine these by looking at the reflection coefficient
                 if(False): ## use linearPhaseCorrection
@@ -568,9 +576,9 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim):
         else:
             Ssextra.append(S)
     
-    return S_first, Ssextra
+    return S_first, Ssextra, freqs, constantPhaseCorrection
 
-def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraSparamNames=[], solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=0.7, includeRefl=True):
+def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraSparamNames=[], solutionName='', antennasToUse=[], frequenciesToUse=[], onlyNAntennas=0, onlyAPriori=True, returnResults=[], reconstructionMeshInfo=None, plotSs=False, maxRefl=1, includeRefl=True, rcond=-1.85):
     '''
     Try various solution methods... keeping everything on one process
     :param problemName: The filename, used to find/load-in data, and save files
@@ -588,6 +596,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
     :param plotSs: If True, just plots some Ss
     :param maxRefl: Maximum reflection coefficient of data to use
     :param includeRefl: If True, will use reflection coefficients (S11, S22, S33, S44)
+    :param rcond: Can specify for the TSVD threshold. In units of dB
     '''
     gc.collect()
     comm = MPI.COMM_WORLD
@@ -609,13 +618,12 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
         if('S_dut' in data.files):
             S_dut = data['S_dut']
         
-        extraS_refs=[]
-        extraS_duts=[]
+        extraS_refs=[]; extraS_duts=[]; constantPhaseCorrection=np.zeros(4)
         if(SparamMeas!=[]):
             freqs = SparamMeas[2]
             angles = SparamMeas[3]
-            S_ref, extraS_refs = compileMeasuredSs(SparamMeas[0], freqs, angles, S_ref)
-            S_dut, extraS_duts = compileMeasuredSs(SparamMeas[1], freqs, angles, S_ref)
+            S_ref, extraS_refs, measSfreqs, constantPhaseCorrection = compileMeasuredSs(SparamMeas[0], freqs, angles, S_ref)
+            S_dut, extraS_duts, _, _ = compileMeasuredSs(SparamMeas[1], freqs, angles, S_ref, constantPhaseCorrection=constantPhaseCorrection)
         elif(SparamName!=''): ## the other variables should be the same between runs
             data2 = np.load(SparamName+'output.npz')
             if('S_ref' in data2.files):
@@ -635,32 +643,48 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
         Np = S_ref.shape[-1]
         
         
-        if(plotSs):### PLOT S11 STUFF
-            print((c0/10e9)/data['meshSize'])
-            #print(S_ref)
-            for m in np.arange(N_antennas):
-                plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A_{m})') ## try plotting the Ss
-            #plt.plot(np.abs(S_dut.flatten()))
-            fekof = 'TestStuff/FEKO patch S11 new.dat'
-            fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
-            #plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
-            plt.grid()
-            plt.ylabel(r'S$_{11}$ [dB]')
-            plt.xlabel(r'Frequency [GHz]')
-            plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
-            plt.legend()
-            plt.show()
-            ## then plot the phase of S11, also
-            plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
-            plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
-            plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
-            plt.grid()
-            plt.ylabel(r'Phase of S$_{11}$ [radians]')
-            plt.xlabel(r'Frequency [GHz]')
-            plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
-            plt.legend()
-            plt.show()
-            return
+        if(plotSs):
+            if False:### PLOT S11 STUFF
+                print((c0/10e9)/data['meshSize'])
+                #print(S_ref)
+                for m in np.arange(N_antennas):
+                    plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, m, m])), label=f'FEM sim (A_{m})') ## try plotting the Ss
+                #plt.plot(np.abs(S_dut.flatten()))
+                fekof = 'TestStuff/FEKO patch S11 new.dat'
+                fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+                #plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+                plt.grid()
+                plt.ylabel(r'S$_{11}$ [dB]')
+                plt.xlabel(r'Frequency [GHz]')
+                plt.title(r'Simulated vs FEKO S$_{11}$ Mag.')
+                plt.legend()
+                plt.show()
+                ## then plot the phase of S11, also
+                plt.plot(fvec/1e9, np.angle(S_ref.flatten()), label='FEM sim')
+                plt.plot(fekoData[0]/1e9, np.angle(fekoData[1]+1j*fekoData[2]), label='FEKO')
+                plt.plot(fvec/1e9, np.angle(S_ref.flatten()) + (np.angle(fekoData[1]+1j*fekoData[2])[0]-np.angle(S_ref.flatten())[0]) , label='FEM sim (matched)')
+                plt.grid()
+                plt.ylabel(r'Phase of S$_{11}$ [radians]')
+                plt.xlabel(r'Frequency [GHz]')
+                plt.title(r'Simulated vs FEKO S$_{11}$ Phase')
+                plt.legend()
+                plt.show()
+                return
+            else: ### Plot S1n stuff
+                for m in np.arange(N_antennas):
+                    plt.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, 0, m])), label=r'FEM sim ($A_{{1'+str(m)+r'}}$)') ## try plotting the Ss
+                #plt.plot(np.abs(S_dut.flatten()))
+                fekof = 'TestStuff/FEKO patch S11 new.dat'
+                fekoData = np.transpose(np.loadtxt(fekof, skiprows = 2))
+                #plt.plot(fekoData[0]/1e9, 20*np.log10(np.abs(fekoData[1]+1j*fekoData[2])), label='FEKO')
+                plt.grid()
+                plt.ylabel(r'S$_{1m}$ [dB]')
+                plt.xlabel(r'Frequency [GHz]')
+                plt.title(r'Simulated vs FEKO S$_{1m}$ Mag.')
+                plt.legend()
+                plt.show()
+                return
+                
         
         
         ## mesh stuff on just one process?
@@ -781,11 +805,11 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
                                 ## create interpolation from the saved mesh to this one
                                 cellData.interpolate_nonmatching(AcellData, cells, interpolation_data=interpolation_data)
                                 cellData.x.scatter_forward()
-                                A[indexCount,:] = cellData.x.array[idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                A[indexCount,:] = cellData.x.array[idx_non_pml]*np.exp(1j*(constantPhaseCorrection[m]-constantPhaseCorrection[n])) ## possible phase correction for measured data
                                 Apart = None
                             else:
                                 Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
-                                A[indexCount,:] = Apart[idxOrig][idx_non_pml] ## idxOrig to order as in the mesh, non_pml to remove the pml
+                                A[indexCount,:] = Apart[idxOrig][idx_non_pml]*np.exp(1j*(constantPhaseCorrection[m]-constantPhaseCorrection[n])) ## possible phase correction for measured data
                                 
                             ## also assemble this part of b, since I may be using different S-parameters than used when saving qs
                             b[indexCount] = S_dut[nf, m, n] - S_ref[nf, n, m]
@@ -1034,10 +1058,17 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
     #         print(f'Timestep 2 reconstruction error: {reconstructionError(x_temp[idx_non_pml], epsr_ref[idx_non_pml], epsr_dut[idx_non_pml], cell_volumes[idx_non_pml]):.3e}')
     #     f.close() ## in case one of the solution methods ends in an error, close and reopen after each method
     #===========================================================================
+    
+    
+        #=======================================================================
+        # u, s, vt = np.linalg.svd(A_ap.conjugate(), full_matrices=False)
+        # np.savez('A_ErefEref.npz', s=s)
+        #=======================================================================
+    
         print()
         errs = [] ## in case I want to return errors
         print('Computing numpy solutions...') ## can either optimization for rcond, or just pick one
-        rcond = 10**-1.85 ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
+        rcond = 10**rcond ## based on some quick tests, an optimum is somewhere between 10**-1.2 and 10**-2.5
         f = dolfinx.io.XDMFFile(comm=commself, filename=solutionFile, file_mode='a')
         x_temp = np.zeros(N, dtype=complex)
         

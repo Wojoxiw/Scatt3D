@@ -194,7 +194,7 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         freqs = np.linspace(10e9, 12e9, 1)
-        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
+        prob = scatteringProblem.Scatt3DProblem(comm, refMesh, dataFolder=folder, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, excitation='planewave', freqs = freqs, material_epsrs=[2.0*(1-0.01j)], fem_degree=degree)
         if(showPlots):
             prob.calcNearField()
         prob.calcFarField(reference=True, compareToMie = True, showPlots=showPlots, returnConvergenceVals=False)
@@ -211,10 +211,10 @@ if __name__ == '__main__':
         #refMesh.plotMeshPartition()
         #prevRuns.memTimeEstimation(refMesh.ncells, doPrint=True, MPInum = comm.size)
         if(len(freqs) == 1): ## plot the given frequency, if there is only 1
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=False, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, dataFolder=folder, name=runName, MPInum=MPInum, makeOptVects=False, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
             prob.calcFarField(reference=True, plotFF=True, showPlots=showPlots)
         else: ## save Ss
-            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
+            prob = scatteringProblem.Scatt3DProblem(comm, refMesh, verbosity=verbosity, dataFolder=folder, name=runName, MPInum=MPInum, makeOptVects=True, freqs = freqs, fem_degree=degree, antenna_mat_epsrs=epsrs)
         prevRuns.memTimeAppend(prob)
  
     def convergenceTestPlots(convergence = 'meshsize', deg=1): ## Runs with reducing mesh size, for convergence plots. Uses the far-field surface test case. If showPlots, show them - otherwise just save them
@@ -735,7 +735,7 @@ if __name__ == '__main__':
             S11 = data['S_ref'][:, 0, 0]
             fvec = data['fvec']
             
-            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
+            plt.plot(fvec/1e9, 20*np.log10(np.abs(S11)), label=rf'sim. ($\lambda_0/h={ho:.1f}$'+f')', linewidth=2, color=colors[i], marker=markers[i], markevery=10-i, markersize=8)
             i = i+1
         
         fekof = 'TestStuff/FEKO patch S11 lambdaover50.dat'
@@ -861,7 +861,7 @@ if __name__ == '__main__':
             # ax2.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
             #===================================================================
             
-            ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
+            ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda_0 / h$)')
             plt.grid()
             plt.title(r'Error vs Mesh Size')
             fig.legend(fontsize=14)
@@ -896,7 +896,210 @@ if __name__ == '__main__':
                     prob.ErefEdut = True
                     prob.makeOptVectors(reconstructionMesh=True, saveName=runName+'ErefEdut')
                     postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName='', onlyAPriori=True)
+                    
+    def plotErrorsByNoise(): ## plots the errors vs noise, using the smallest mesh-size from plotMeshSizeByErrors
+        meshSize = 1/5 ## h/lambda - for plotting
+        runName = f'meshSizeErrRun_ho{meshSize:.3f}'
+        noises = np.linspace(-100, -40, 100) ## noise to be added, in dB
+        ErefErefErrs = []
+        ErefEdutErrs = []
+        for noiseAdd in noises:
+            print('\033[31m' + f'noise={noiseAdd:.3f} dB' + '\033[0m')
+            solNum = 3 ## 3 for TSVD, 25 for lasso solution
+            indices = ''
+            solutionName= f'_S+{noiseAdd}dBnoise' ## this is changed when using different S-parameters for the solution
+            ## then calculate the ErefEref err
+            if(not os.path.exists(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5')): ## if it doesn't exist, first create the new S-param save with errors, then compute this solution
+                ## load old S-param
+                data = np.load(f'{folder}{runName}ErefEdutoutput.npz') 
+                datas = {key: data[key] for key in data.files}
+                S_ref = data['S_ref']
+                S_dut = data['S_dut']
+                ## alter S-params to include noise
+                rng = np.random.default_rng()
+                datas['S_ref'] = S_ref + rng.normal(np.zeros(S_ref.shape), 10**(noiseAdd/20)) * np.exp(1j*( rng.uniform(np.zeros(S_ref.shape), np.ones(S_ref.shape))*2*pi ))
+                datas['S_dut'] = S_dut + rng.normal(np.zeros(S_ref.shape), 10**(noiseAdd/20)) * np.exp(1j*( rng.uniform(np.zeros(S_ref.shape), np.ones(S_ref.shape))*2*pi ))
+                ## save again
+                np.savez(folder+runName+'ErefEdut'+solutionName+'output.npz', **datas)
+                ## calculate solutions
+                postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}{runName}ErefEdut{solutionName}')
+            with h5py.File(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
+                cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+                epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+                epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+                depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze()
+                
+            ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=True))
+            ## then the ErefEdut err
+            if(not os.path.exists(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5')): ## if it doesn't exist, first compute this solution
+                ## load old S-param
+                data = np.load(f'{folder}{runName}ErefErefoutput.npz') 
+                datas = {key: data[key] for key in data.files}
+                S_ref = data['S_ref']
+                S_dut = data['S_dut']
+                ## alter S-params to include noise
+                rng = np.random.default_rng()
+                datas['S_ref'] = S_ref + rng.normal(np.zeros(S_ref.shape), 10**(noiseAdd/20)) * np.exp(1j*( rng.uniform(np.zeros(S_ref.shape), np.ones(S_ref.shape))*2*pi ))
+                datas['S_dut'] = S_dut + rng.normal(np.zeros(S_ref.shape), 10**(noiseAdd/20)) * np.exp(1j*( rng.uniform(np.zeros(S_ref.shape), np.ones(S_ref.shape))*2*pi ))
+                ## save again
+                np.savez(folder+runName+'ErefEref'+solutionName+'output.npz', **datas)
+                ## calculate solutions
+                postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName=solutionName, returnResults=[solNum], SparamName=f'{folder}{runName}ErefEref{solutionName}')
+            with h5py.File(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
+                cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+                epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+                epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+                depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze() 
+            ErefErefErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=True))
             
+        fig, ax1 = plt.subplots()
+        ax1.axhline(y=5, color = 'gray', linestyle = '--', alpha = 1, linewidth = 2)
+        ax1.plot(noises, ErefErefErrs, color='tab:red', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{ref}$')#, marker='o')
+        ax1.plot(noises, ErefEdutErrs, color='tab:red', linestyle='--', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{test}$')#, marker='o')
+        ax1.set_ylabel(r'Figure-of-Merit $F$', color='tab:red')
+        ax1.tick_params(axis='y', labelcolor='tab:red')
+        ax1.set_xlabel(r'Noise Added [dB]')
+        plt.grid()
+        plt.title(r'Error vs Synthetic Noise')
+        fig.legend(fontsize=14, loc='upper center', bbox_to_anchor=(0.25, 0.9))
+        plt.gca().set_ylim(bottom=1)
+        plt.yscale("log")
+        plt.grid(True, which="both")
+        plt.tight_layout()
+        plt.show()
+        
+    def plotErrorsByTSVDthreshold(): ## plots the errors vs threshold, using the smallest mesh-size from plotMeshSizeByErrors
+        meshSize = 1/5 ## h/lambda - for plotting
+        runName = f'meshSizeErrRun_ho{meshSize:.3f}'
+        thresholds = np.linspace(0, -10, 100) ## noise to be added, in dB
+        thresholds = thresholds[(thresholds > -5.4) & (thresholds < 0)] ## before -5 these are straight lines... 0 threshold includes nothing
+        ErefErefErrs = []
+        ErefEdutErrs = []
+        for threshold in thresholds:
+            print('\033[31m' + f'threshold=10**{threshold:.3f} dB' + '\033[0m')
+            solNum = 3 ## 3 for TSVD, 25 for lasso solution
+            indices = ''
+            solutionName= f'_TSVDt{threshold}' ## this is changed when using different S-parameters for the solution
+            ## then calculate the ErefEref err
+            if(not os.path.exists(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5')): ## if it doesn't exist, first create the new S-param save with errors, then compute this solution
+                postProcessing.solveFromQs(folder+runName+'ErefEdut', solutionName=solutionName, returnResults=[solNum], rcond=threshold)
+            with h5py.File(f'{folder}{runName}ErefEdutpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
+                cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+                epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+                epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+                depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze()
+                
+            ErefEdutErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=True))
+            ## then the ErefEdut err
+            if(not os.path.exists(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5')): ## if it doesn't exist, first compute this solution
+                postProcessing.solveFromQs(folder+runName+'ErefEref', solutionName=solutionName, returnResults=[solNum], rcond=threshold)
+            with h5py.File(f'{folder}{runName}ErefErefpost-process'+solutionName+'.h5', 'r') as f: ## read in the reconstruction and other needed data
+                cell_volumes = np.array(f['Function']['real_f']['-3']).squeeze()
+                epsr_ref = np.array(f['Function']['real_f']['-2']).squeeze() + 1j*np.array(f['Function']['imag_f']['-2']).squeeze()
+                epsr_dut = np.array(f['Function']['real_f']['-1']).squeeze() + 1j*np.array(f['Function']['imag_f']['-1']).squeeze()
+                depsr_rec = np.array(f['Function']['real_f'][f'{solNum}']).squeeze() + 1j*np.array(f['Function']['imag_f'][f'{solNum}']).squeeze() 
+            ErefErefErrs.append(postProcessing.reconstructionError(depsr_rec, epsr_ref, epsr_dut, cell_volumes, indices=indices, printIt=True))
+            
+        fig, ax1 = plt.subplots()
+        
+        ax1.plot(thresholds*10, ErefErefErrs, color='tab:red', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{ref}$')#, marker='o')
+        ax1.plot(thresholds*10, ErefEdutErrs, color='tab:red', linestyle='--', label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{test}$')#, marker='o')
+        ax1.set_ylabel(r'Figure-of-Merit $F$', color='tab:red')
+        ax1.tick_params(axis='y', labelcolor='tab:red')
+        ax1.axvline(x=-18.5, color = 'gray', linestyle = '--', alpha = 1, linewidth = 2)
+        
+        ax1.set_xlabel(r'TSVD Threshold $\tau$ [dB]')
+        plt.title(r'Error vs Truncation Threshold')
+        fig.legend(fontsize=14, loc='center right', bbox_to_anchor=(0.98, 0.48))
+        plt.gca().set_ylim(bottom=1)
+        plt.gca().invert_xaxis()
+        plt.yscale("log")
+        plt.grid(True, which="both")
+        plt.tight_layout()
+        plt.show()
+        
+        
+        srd = np.load('A_ErefEdut.npz')['s'] ## file with just the saved singular values
+        srr = np.load('A_ErefEref.npz')['s'] ## file with just the saved singular values
+        plt.figure(figsize=(4, 3), layout="constrained")
+        plt.axhline(y=10**(-1.85), color = 'black', linestyle = '-', alpha = 1, linewidth = 2)
+        plt.plot(np.arange(len(srr))+1, srr/np.max(srr), linewidth=2.3, label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{ref}$')#, color='tab:red')
+        plt.plot(np.arange(len(srd))+1, srd/np.max(srd), linewidth=2.3, label=r'$\mathbf{E}^\mathrm{ref}\cdot\mathbf{E}^\mathrm{test}$', linestyle='--')#, color='tab:red')
+        plt.title(r'Normalized Singular Values of $\mathbf{A}$')
+        plt.yscale("log")
+        plt.xscale("log")
+        plt.grid(True, which="both")
+        plt.ylim(5e-5, 1.2)
+        plt.xlim(0.9, 900)
+        plt.legend(fontsize=16)
+        plt.show()
+        
+    def plotS1mByMeshSize():
+        meshSizes = np.array([1/1, 1/1.5, 1/2, 1/2.5, 1/3, 1/3.5, 1/4, 1/4.5, 1/5]) ## h/lambda - for plotting
+        f_idx = 4; plots=[[0, 0, '-', r'$S_{11}$'], [0, 1, '--', r'$S_{12}$'], [0, 4, ':', r'$S_{15}$']]; Ss = [[] for i in range(len(plots))]; Ssdut = [[] for i in range(len(plots))]
+        for meshSize in meshSizes:
+            runName = f'meshSizeErrRun_ho{meshSize:.3f}'
+            data = np.load(f'{folder}{runName}ErefEdutoutput.npz')
+            S_ref = data['S_ref']
+            S_dut = data['S_dut']
+            fvec = data['fvec']
+            N_antennas = data['N_antennas']
+            for i in range(len(Ss)):
+                Ss[i].append(S_ref[f_idx, plots[i][0], plots[i][1]])
+                Ssdut[i].append(S_dut[f_idx, plots[i][0], plots[i][1]])
+        
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+        for i in range(len(Ss)):
+            ax1.plot(1/meshSizes, 20*np.log10(np.abs(Ss[i])), color='tab:red', marker='o', linestyle = plots[i][2], label=plots[i][3])
+            ax2.plot(1/meshSizes, np.unwrap(np.angle(Ss[i]))*180/pi, color='tab:blue', marker='^', linestyle = plots[i][2])
+            
+            ax1.plot(1/meshSizes, 20*np.log10(np.abs(Ssdut[i])), color='tab:red', marker='o', linestyle = plots[i][2], alpha=0.4)
+            ax2.plot(1/meshSizes, np.unwrap(np.angle(Ssdut[i]))*180/pi, color='tab:blue', marker='^', linestyle = plots[i][2], alpha=0.4)
+        
+        ax1.set_ylabel(r'S-Parameter Magnitude [dB]', color='tab:red')
+        ax2.set_ylabel('S-Paramater Angle [Degrees]', color='tab:blue')
+        ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
+        plt.title(r'S-parameter by Mesh Size (f='+f'{fvec[f_idx]/1e9:.1f}'+r'\,GHz)')
+        #fig.legend(fontsize=14, loc='upper center', bbox_to_anchor=(0.5, 0.92))
+        ##first legend
+        first_legend = ax1.legend(fontsize=14, loc='center right',  bbox_to_anchor=(0.75, 0.48))
+        ##second legend to distinguish
+        handleds = []
+        line1 = mlines.Line2D([], [], color='tab:red', linestyle='-', label=r'$S_{1m}^\mathrm{ref}$') ##fake lines to create second legend elements
+        line2 = mlines.Line2D([], [], color='tab:red', linestyle='-', alpha=0.4, label=r'$S_{1m}^\mathrm{test}$') ##fake lines to create second legend elements
+        handleds.append(line1)
+        handleds.append(line2)
+        second_legend = ax1.legend(handles=handleds, fontsize=14, loc='center right', bbox_to_anchor=(1, 0.48))
+        ax1.add_artist(first_legend)
+        ax1.grid()
+        #plt.gca().set_xlim(left=2)
+        plt.tight_layout()
+        plt.show()
+        
+        meshSize = meshSizes[-1]
+        runName = f'meshSizeErrRun_ho{meshSize:.3f}'
+        data = np.load(f'{folder}{runName}ErefErefoutput.npz')
+        S_ref = data['S_ref']
+        S_dut = data['S_dut']
+        fvec = data['fvec']
+        N_antennas = data['N_antennas']
+        
+        fig, ax1 = plt.subplots()
+        for i in range(N_antennas):
+            for j in range(N_antennas):
+                if(i!=j):
+                    ax1.plot(fvec/1e9, 20*np.log10(np.abs(S_ref[:, i, j])))
+        plt.grid()
+        ax1.set_ylabel(r'S-Parameter Magnitude [dB]', color='tab:red')
+        ax1.set_xlabel(r'Frequency [GHz]')
+        plt.title(r'Transmission $S_{ij}$ by frequency')
+        plt.tight_layout()
+        plt.show()
+        
+        
+        
+        
     #testRun(h=1/2)
     folder = 'data3DLUNARC/'
     #reconstructionErrorTestPlots()
@@ -908,6 +1111,11 @@ if __name__ == '__main__':
     
     #plotMeshSizeByErrors()
     #plotMeshSizeByErrors(True)
+    
+    ### some new plots for the revised paper
+    #plotErrorsByNoise()
+    #plotErrorsByTSVDthreshold()
+    #plotS1mByMeshSize()
     
     
     #testFullExample(h=1/6, degree=1, antennaType='patch')
@@ -962,10 +1170,12 @@ if __name__ == '__main__':
     
     #===========================================================================
     # runName = 'forPaper_D3LowerContrastagain'
-    # testFullExample(h=1/3.5, degree=3, runName=runName,
-    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
-    #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
-    # postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3, 23, 24, 25], plotSs=False)
+    # #===========================================================================
+    # # testFullExample(h=1/3.5, degree=3, runName=runName,
+    # #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
+    # #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
+    # #===========================================================================
+    # #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3, 23, 24, 25], plotSs=True)
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom2percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch2percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrom5percentsmaller', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patch5percentsmaller', returnResults=[3])
     # #postProcessing.solveFromQs(folder+runName, solutionName='_Ssfrompatchepsr4.2', onlyAPriori=True, SparamName=f'{folder}forPaper_D3LowerContrast_patchepsr4.2', returnResults=[3])
@@ -977,7 +1187,7 @@ if __name__ == '__main__':
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 9, 'antenna_type': 'patch', 'PMLSurfacePEC': True, 'object_geom': 'simple1', 'defect_geom': 'simple1', 'defect_radius': 0.475, 'object_radius': 4, 'domain_radius': 3, 'domain_height': 1.3, 'object_offset': np.array([.15, .1, 0]), 'defect_offset': np.array([-.04, .17, 0])},
     #                 prob_settings={'freqs': np.linspace(9e9, 11e9, 10), 'material_epsrs' : [3*(1 - 0.01j)], 'defect_epsrs' : [3.1*(1 - 0.01j)]})
     #===========================================================================
-    postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], plotSs=False)
+    #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, returnResults=[3], plotSs=False)
     
     #===========================================================================
     # runName = 'testmeas-like_sim'
@@ -1065,17 +1275,19 @@ if __name__ == '__main__':
     
     #patchConvergenceTestPlots(degree=1)
     
-    #testSphereScattering(h=1/3.5, degree=3, showPlots=False)
+    ho = 3.5
+    runName = f'SpherehOverLamb{ho:.2e}' ## this should be lambda/h
+    #testSphereScattering(h=1/ho, degree=3, showPlots=True)
     #convergenceTestPlots('pmlR0')
     #convergenceTestPlots('meshsize', deg=3)
     #convergenceTestPlots('dxquaddeg')
     #testSolverSettings(h=1/6)
     
-    runName = 'patchTests.newnew_ho3.5'#'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
+    runName = f'_patchtesting_SimulatedFFs_hOverLamb{1:.2e}'#'patchPatternTest_ho3.5' #'patchPatternTest_ho8.0' #patchPatternTestd2small', h=1/10 'patchPatternTestd2', h=1/5.6 #'patchPatternTestd1' , h=1/15  #'patchPatternTestd3'#, h=1/3.4 #'patchPatternTestd3smaller'#, h=1/6
     #testPatchPattern(h=1/3.5, degree=3, freqs = np.linspace(8e9, 12e9, 100), name=runName, showPlots=False)
-    runName = 'patchTests.newnew_ho8.0'
+    runName = 'patchTests.newnew_ho5testtest8'
     #testPatchPattern(h=1/8.0, degree=3, freqs = np.linspace(8e9, 12e9, 100), name=runName, showPlots=False)
-    #testPatchPattern(h=1/3.5, degree=3, name=runName, showPlots=True) ## plot the FF comp. with Feko
+    #testPatchPattern(h=1/5, degree=2, name=runName, showPlots=True) ## plot the FF comp. with Feko
     #postProcessing.solveFromQs(folder+runName, solutionName='', onlyAPriori=True, plotSs=True) ## inspect the S11
     
     #patchSsPlot([3.5, 8.0]) ## plot S11 comp. with Feko
