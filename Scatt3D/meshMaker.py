@@ -842,6 +842,20 @@ class MeshInfo():
                     gmsh.model.mesh.field.setNumber(objectMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(objectMeshField, 'VolumesList', [matDimTags[n][1]])
                     meshFields.append(objectMeshField)
+                ndefects = len(defectDimTags)
+                for n in np.arange(ndefects):
+                    defectMeshField = gmsh.model.mesh.field.add("Constant")
+                    if(len(self.defect_epsrs) == 1):
+                        epsr = np.real(self.defect_epsrs[0])
+                    elif(len(self.defect_epsrs) == 0):
+                        epsr = np.real(self.material_epsrs[-1])
+                    else:
+                        epsr = np.real(self.defect_epsrs[n])
+                    sf = max(1.8, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction, same as material
+                    gmsh.model.mesh.field.setNumber(defectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
+                    gmsh.model.mesh.field.setNumber(defectMeshField, "VOut", self.h)
+                    gmsh.model.mesh.field.setNumbers(defectMeshField, 'VolumesList', [defectDimTags[n][1]])
+                    meshFields.append(defectMeshField)
                 nAntmats = len(antennaMatDimTags)
                 for n in np.arange(nAntmats):
                     antennaDielectricMeshField = gmsh.model.mesh.field.add("Constant")
@@ -854,20 +868,6 @@ class MeshInfo():
                     gmsh.model.mesh.field.setNumber(antennaDielectricMeshField, "VOut", self.h)
                     gmsh.model.mesh.field.setNumbers(antennaDielectricMeshField, 'VolumesList', [antennaMatDimTags[n][1]])
                     meshFields.append(antennaDielectricMeshField)
-                ndefects = len(defectDimTags)
-                for n in np.arange(ndefects):
-                    defectMeshField = gmsh.model.mesh.field.add("Constant")
-                    if(len(self.defect_epsrs) == 1):
-                        epsr = np.real(self.defect_epsrs[0])
-                    elif(len(self.defect_epsrs) == 0):
-                        epsr = np.real(self.material_epsrs[-1])
-                    else:
-                        epsr = np.real(self.defect_epsrs[n])
-                    sf = max(2.5, np.sqrt(epsr)) ## so there is always at least some mesh-size reduction
-                    gmsh.model.mesh.field.setNumber(defectMeshField, "VIn", self.h/sf) ## I assume here that mur is always just one, for simplicity
-                    gmsh.model.mesh.field.setNumber(defectMeshField, "VOut", self.h)
-                    gmsh.model.mesh.field.setNumbers(defectMeshField, 'VolumesList', [defectDimTags[n][1]])
-                    meshFields.append(defectMeshField)
                 
                 ## then mesh fields for the antenna and PEC surfaces:
                 antennaSurfaceField = gmsh.model.mesh.field.add("Constant")

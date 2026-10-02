@@ -259,10 +259,23 @@ if __name__ == '__main__':
             
             
     def someSsPlot(): ## for thesis, plot some S-paremeter differences between measurement and simulation
-        runName = f'meas_newnew2'
-        testrunName = f'{runName}dut_2.8fill_'
         angle=0.0
-        simfnames = [f'{folder}{runName}_angle{angle:.1f}output.npz', f'{folder}{testrunName}_angle{angle:.1f}output.npz']
+        
+        #=======================================================================
+        # runName = f'meas_newnew2'
+        # testrunName = f'{runName}dut_2.8fill_'
+        # simfnames = [f'{folder}{runName}_angle{angle:.1f}output.npz', f'{folder}{testrunName}_angle{angle:.1f}output.npz'] ## first name will be called 'Sref', second 'Sdut'
+        #=======================================================================
+        
+        runName = f'meas_postnew'
+        testrunName = f'{runName}b'
+        simfnames = [f'{folder}{runName}_angle{angle:.1f}output.npz', f'{folder}{testrunName}_angle{angle:.1f}output.npz'] ## first name will be called 'Sref', second 'Sdut'
+        
+        #=======================================================================
+        # runName = f'meas_postnew'
+        # testrunName = f'{runName}_noobject'
+        # simfnames = [f'{folder}{runName}_angle{angle:.1f}output.npz', f'{folder}{testrunName}_angle{angle:.1f}output.npz'] ## first name will be called 'Sref', second 'Sdut'
+        #=======================================================================
         
         
             
@@ -271,9 +284,13 @@ if __name__ == '__main__':
             data = np.load(sim)
             simFs = data['fvec']
             if('S_dut' in data.files):
-                simSdut = data['S_dut']
+                dat = data['S_dut']
             else:
-                simSref = data['S_ref']
+                dat = data['S_ref']
+            if(op2==0):
+                simSref = dat
+            elif(op2==1):
+                simSdut = dat
     
         measSref = postProcessing.compileMeasuredSs('/mnt/c/Users/al8032pa/Work Folders/Documents/antenna measurements/Microwave Imaging/Datasets/Attempt 2 (4-5-2026)/solidPOMblock', np.zeros(1, dtype=float)+angle, freqs=0, Srefsim=simSref)
         measSref, measfreqs = measSref[0], measSref[2]
@@ -366,7 +383,7 @@ if __name__ == '__main__':
             SdiffSim = simSdut[:, Sidx1, Sidx2]-simSref[:, Sidx2, Sidx1]
             SdiffMeas = measSdut[:, Sidx1, Sidx2]-measSref[:, Sidx2, Sidx1]
             
-            ax1.set_title(r'Patch Antenna Reflection Coefficient')
+            ax1.set_title(r'Patch Antenna Reflection Coefficient Differences')
             ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(SdiffSim)), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:blue')
             ax2.plot(simFs/1e9, 20*np.log10(np.abs(SdiffSim)), linewidth=2, linestyle=linestyle, color='tab:blue')
             
@@ -442,7 +459,7 @@ if __name__ == '__main__':
               
             SdiffSim = simSref[:, Sidx1, Sidx2]-simSref2[:, Sidx1, Sidx2]
             
-            ax1.set_title(r'Patch Antenna Reflection Coefficient')
+            ax1.set_title(r'Patch Antenna Reflection Coefficient Differences')
             ax1.plot(simFs/1e9, 180/pi*np.unwrap(np.angle(SdiffSim)), label=fr'Simulated', linewidth=2, linestyle=linestyle, color='tab:blue')
             ax2.plot(simFs/1e9, 20*np.log10(np.abs(SdiffSim)), linewidth=2, linestyle=linestyle, color='tab:blue')
             
