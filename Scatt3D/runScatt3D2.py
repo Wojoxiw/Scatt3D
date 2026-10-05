@@ -611,7 +611,7 @@ if __name__ == '__main__':
     #cablePortRMSError(h=1/8, freqs=np.linspace(9e9, 11e9, 10))
     
     
-    someSsPlot()
+    #someSsPlot()
     
     if(comm.rank == model_rank):
         print(f'runScatt3D complete in {timer()-t1:.2f} s ({(timer()-t1)/3600:.2f} hours), exiting...')
