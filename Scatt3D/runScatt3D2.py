@@ -498,14 +498,14 @@ if __name__ == '__main__':
     #runName = f'meas_newnew_altmesh' ## h = 1/4.2 instead of 1/4, only has angle 0
     #runName = f'meas_postnew' ## h=1/5, no defect in the mesh. just 0 degrees
     #runName = f'meas_postnewb' ## h=1/5, defect in the mesh. just 0 degrees
-    runName = f'meas_postnewtry' ## h=1/5, no defect in the mesh
+    runName = f'meas_postnewtry' ## h=1/4.5, no defect in the mesh
     
     angles = np.arange(0, 360, 20, dtype=float) ## measured with 20-degree spacing, simulate 40 degree so its faster
     measFreqs = np.linspace(5.4e9, 7.2e9, 201) ## the measured frequencies
     freqs = [measFreqs[i] for i in np.arange(len(measFreqs)) if i%10==0] ## simulate these 21 frequencies
     
     #===========================================================================
-    # measurementScript(h=1/5, degree=3, runName=runName, angles=angles,
+    # measurementScript(h=1/4.5, degree=3, runName=runName, angles=angles,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': True, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
     #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     #===========================================================================
@@ -513,7 +513,7 @@ if __name__ == '__main__':
     
     #===========================================================================
     # runName = f'meas_postnewtry+defectinmesh' ## h=1/5, defect in the mesh. just 0 degrees
-    # measurementScript(h=1/5, degree=3, runName=runName, angles=angles,
+    # measurementScript(h=1/4.5, degree=3, runName=runName, angles=angles,
     #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': False, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
     #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     #===========================================================================
@@ -535,7 +535,7 @@ if __name__ == '__main__':
     #===========================================================================
     
     testrunName = f'{runName}dut_2.8fill_' ## the test case where there is a hole totally filled with a epsr=2.8 cylinder
-    measurementScript(h=1/5, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
+    measurementScript(h=1/4.5, degree=3, runName=testrunName, angles=angles, dutForSimSolution=True,
                     mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
                     prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.8*(1 - .01j)]}) 
     
