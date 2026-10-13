@@ -1071,10 +1071,6 @@ class Scatt3DProblem():
         solver.view(viewer)
         self.solver_its = solver.its
         self.solver_norm = solver.norm
-        ksp.destroy() ## need to manually destroy some stuff
-        if(manualMumpsSolve):
-            A_mat.destroy()
-            b_vec.destroy()
         if( (self.verbosity > 0 and self.comm.rank == self.model_rank)): ## print solver info for the final solve - presumably this is representative of all solves
             print(f'Converged for reason: {solver.reason}, after {solver.its} iterations. Norm: {solver.norm}') ## if reason is negative, it diverged (see https://petsc.org/release/manualpages/KSP/KSPConvergedReason/)
             if(self.solver_its == max_its):
@@ -1084,6 +1080,10 @@ class Scatt3DProblem():
                 for line in solver_output.readlines():
                     print(line)
             sys.stdout.flush()
+        ksp.destroy() ## need to manually destroy some stuff
+        if(manualMumpsSolve):
+            A_mat.destroy()
+            b_vec.destroy()
            
     #@profile
     def makeOptVectors(self, DUTMesh=False, skipQs=False, reconstructionMesh=False, justSaveNpz=False, saveName=''):
