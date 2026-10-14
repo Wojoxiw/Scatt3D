@@ -1080,7 +1080,10 @@ class Scatt3DProblem():
                 for line in solver_output.readlines():
                     print(line)
             sys.stdout.flush()
-        ksp.destroy() ## need to manually destroy some stuff
+        pc.reset()
+        viewer.destroy()
+        pc.destroy()
+        ksp.destroy() ## need to manually destroy some stuff... not sure how much if any of this is needed
         if(manualMumpsSolve):
             A_mat.destroy()
             b_vec.destroy()
