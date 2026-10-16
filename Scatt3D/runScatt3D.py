@@ -1058,7 +1058,7 @@ if __name__ == '__main__':
             ax2.plot(1/meshSizes, np.unwrap(np.angle(Ssdut[i]))*180/pi, color='tab:blue', marker='^', linestyle = plots[i][2], alpha=0.4)
         
         ax1.set_ylabel(r'S-Parameter Magnitude [dB]', color='tab:red')
-        ax2.set_ylabel('S-Paramater Angle [Degrees]', color='tab:blue')
+        ax2.set_ylabel('S-Parameter Angle [Degrees]', color='tab:blue')
         ax1.set_xlabel(r'Inverse of Maximum Mesh Size ($\lambda / h$)')
         plt.title(r'S-parameter by Mesh Size (f='+f'{fvec[f_idx]/1e9:.1f}'+r'\,GHz)')
         #fig.legend(fontsize=14, loc='upper center', bbox_to_anchor=(0.5, 0.92))
