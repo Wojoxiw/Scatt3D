@@ -511,10 +511,12 @@ if __name__ == '__main__':
     #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
     #===========================================================================
     
-    runName = f'meas_postnewtry+defectinmesh' ## h=1/5, defect in the mesh. just 0 degrees
-    measurementScript(h=1/4.7, degree=3, runName=runName, angles=angles,
-                    mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': False, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
-                    prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    #===========================================================================
+    # runName = f'meas_postnewtry+defectinmesh' ## h=1/5, defect in the mesh. just 0 degrees
+    # measurementScript(h=1/4.7, degree=3, runName=runName, angles=angles,
+    #                 mesh_settings={'viewGMSH': False, 'N_antennas': 4, 'f0': 6e9, 'reference': False, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2},
+    #                 prob_settings={'freqs': freqs, 'material_epsrs' : [2.73 - .014j], 'defect_epsrs' : [2.73 - .014j]}) # epsr of POM taken from Complex Permittivity Measurements of Common Plastics Over Variable Temperatures, Bill Riddle
+    #===========================================================================
     
     testrunName = f'measurements_noobject'
     testrunName = f'meas_postnew_noobject' ## h=1/4.7, no object at all. just 0 degrees
@@ -539,14 +541,15 @@ if __name__ == '__main__':
     #===========================================================================
     
     ## try the postprocessing with just sim. stuff:
-    #angles = [0.0]
+    #runName = f'meas_postnewtry+defectinmesh'
+    angles = [0.0, 20.0, 40.0, 60.0]
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', plotSs=False, maxRefl=1, solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
-    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', maxRefl=1, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
+    postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', maxRefl=1, extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3])
     ## and interpolating onto another mesh
     rec_mesh_settings = {'justInterpolationSubmesh': True, 'interpolationSubmeshSize': 1/10,'order': 1, 'N_antennas': 0, 'f0': 6e9, 'antenna_type': '6GHz measurement', 'antenna_radius': 0.18, 'object_geom': '6GHz measurement', 'defect_geom': '6GHz measurement cyl fill', 'domain_height': 1, 'domain_radius': 4.2} ## uses settings given before those specified here ## settings for the meshMaker
-    #recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', viewGMSH=False, reference = True, verbosity = verbosity, **rec_mesh_settings)
+    recMesh = meshMaker.MeshInfo(comm, folder+runName+'mesh.msh', viewGMSH=False, reference = True, verbosity = verbosity, **rec_mesh_settings)
     #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', plotSs=False, maxRefl=1, solutionName=f'_Sdutfrom{testrunName}_interpmesh', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3], reconstructionMeshInfo=recMesh)
-    #postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}_interpmesh', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3], reconstructionMeshInfo=recMesh, maxRefl=1)
+    postProcessing.solveFromQs(folder+runName+f'_angle{angles[0]}', extraProbs = [folder+runName+f'_angle{angle}' for angle in angles[1:]], extraSparamNames=[folder+testrunName+f'_angle{angle}' for angle in angles[1:]], solutionName=f'_Sdutfrom{testrunName}_interpmesh', onlyAPriori=True, SparamName=f'{folder}{testrunName}_angle{angles[0]}', returnResults=[3], reconstructionMeshInfo=recMesh, maxRefl=1)
     
     
     #######

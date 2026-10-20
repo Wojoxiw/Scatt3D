@@ -538,10 +538,10 @@ def compileMeasuredSs(Sfolder, angles, freqs, Srefsim, constantPhaseCorrection=N
         angle = angles[k]
         fname = f'{Sfolder}/angle{angle:.2f}.csv'
         Sdata = np.transpose(np.loadtxt(fname, dtype=complex, delimiter=',', skiprows=3))
+        S = np.zeros((len(freqs),4,4), dtype=complex) ## 16 S-parameters, for each frequency and angle
         if(freqs==0):
             freqs = np.real(Sdata[0])
         if(angle==angles[0]): # start the array
-            S = np.zeros((len(freqs),4,4), dtype=complex) ## 16 S-parameters, for each frequency and angle
             measFreqs = np.real(Sdata[0])
             ##since apparently the measurement script may not actually ensure I measured the right frequencies, find the nearest frequency for each point
             idxs=[]
@@ -793,7 +793,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
                     interpolation_data = dolfinx.fem.create_interpolation_data(rec_WSpace, AWSpace, cells, padding=1e-10)
                 
                     idxOrig = Amesh.topology.original_cell_index ## map from indices in the original cells to the current mesh cells
-            f = h5py.File(problemName+'output-qs.h5', 'r') ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
+            f = h5py.File(Afile+'output-qs.h5', 'r') ## read the information on the mesh with h5py (supposedly this is/will be deprecated in favour of another format)
             
             for nf in range(Nf):
                 for m in range(N_antennas): ## transmitting index
@@ -805,11 +805,11 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
                                 ## create interpolation from the saved mesh to this one
                                 cellData.interpolate_nonmatching(AcellData, cells, interpolation_data=interpolation_data)
                                 cellData.x.scatter_forward()
-                                A[indexCount,:] = cellData.x.array[idx_non_pml]*np.exp(1j*(constantPhaseCorrection[m]-constantPhaseCorrection[n])) ## possible phase correction for measured data
+                                A[indexCount,:] = cellData.x.array[idx_non_pml]#*np.exp(1j*(constantPhaseCorrection[m]-constantPhaseCorrection[n])) ## possible phase correction for measured data
                                 Apart = None
                             else:
                                 Apart = np.array(f['Function']['real_f'][str(i)]).squeeze() + 1j*np.array(f['Function']['imag_f'][str(i)]).squeeze()
-                                A[indexCount,:] = Apart[idxOrig][idx_non_pml]*np.exp(1j*(constantPhaseCorrection[m]-constantPhaseCorrection[n])) ## possible phase correction for measured data
+                                A[indexCount,:] = Apart[idxOrig][idx_non_pml]#*np.exp(1j*(constantPhaseCorrection[m]-constantPhaseCorrection[n])) ## possible phase correction for measured data
                                 
                             ## also assemble this part of b, since I may be using different S-parameters than used when saving qs
                             b[indexCount] = S_dut[nf, m, n] - S_ref[nf, n, m]
@@ -826,7 +826,7 @@ def solveFromQs(problemName, extraProbs=[], SparamMeas=[], SparamName='', extraS
         else:
             #idx_ap = np.nonzero(np.abs(epsr_ref) > 1)[0] ## indices of non-air - possibly change this to work on delta epsr, for interpolating between meshes
             idx_ap = np.nonzero(np.real(dofs_map) > 1)[0] ## basing it on the dofs map should be better, considering the possibility of a different DUT mesh
-        A_ap = A[:, idx_ap]#A[:, np.nonzero(np.real(dofs_map[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices
+        A_ap = A[:, np.nonzero(np.real(dofs_map[idx_non_pml]) > 1)[0]] ## using indices of non-air, but when already filtered for non-pml indices #A[:, idx_ap]
         print('shape of A:', np.shape(A), f'{N} cells, {N_non_pml} non-pml cells, {np.size(idx_ap)} in-object cells')
         print('shape of b:', np.shape(b))
         
