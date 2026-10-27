@@ -1,3 +1,3 @@
-This folder holds the 3D FEM code stuff
+The code contained in this repository is covered by the TLSX99.O license - you may not use, adapt, or even read any of it without obtaining explicit permission from me, the maker, first.
 
-You may not use, adapt, or even read this without obtaining explicit permission from me, first.
+This folder holds the 3D FEM code stuff
